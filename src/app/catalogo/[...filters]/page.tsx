@@ -9,7 +9,7 @@ import { parseUrlSegments } from '@/utils/urlUtils'
 import slugify from '@/utils/slugify'
 import type { Filters as CatalogFilters, FilteredProductsResult } from '@/utils/fetchData'
 import type { Metadata } from 'next'
-
+export const dynamic = 'force-dynamic'
 export const revalidate = 60  // Regenera cada 60s (ISR)
 
 // Opcional: metadata dinámico basado en filtros

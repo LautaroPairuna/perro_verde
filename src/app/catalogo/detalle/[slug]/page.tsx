@@ -10,8 +10,8 @@ import { PhotoSwipeInitializer } from '@/components/unProducto/PhotoSwipeInitial
 import ImageWithFallback from '@/components/ImageWithFallback'
 import type { ProductDetail } from '@/utils/fetchData'
 import type { Metadata } from 'next'
-
-export const revalidate = 60  // ISR cada 60 segundos
+export const dynamic = 'force-dynamic'
+export const revalidate = 60
 
 export async function generateMetadata({
   params,
