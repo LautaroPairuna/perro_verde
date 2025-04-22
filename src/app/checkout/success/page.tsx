@@ -1,32 +1,19 @@
 // src/app/checkout/success/page.tsx
-'use client';
 
-import { useSearchParams } from 'next/navigation';
-import useSWR from 'swr';
+export const dynamic = 'force-dynamic'
+export const revalidate = 60
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
+import dynamicImport from 'next/dynamic'
 
-export default function SuccessPage() {
-  const params = useSearchParams();
-  const orderId = params.get('order');
-  const { data, error } = useSWR(
-    orderId ? `/api/pedidos/${orderId}` : null,
-    fetcher,
-    { refreshInterval: 5000 }
-  );
+// cargamos el componente de cliente sin SSR y con un placeholder
+const SuccessPageClient = dynamicImport(
+  () => import('./SuccessPageClient'),
+  {
+    ssr: false,
+    loading: () => <p>Loading…</p>,
+  }
+)
 
-  if (error)    return <p>Error al verificar pago.</p>;
-  if (!data)    return <p>Consultando estado del pago…</p>;
-
-  return (
-    <div className="p-6 text-center">
-      {data.estado === 'approved' ? (
-        <h1 className="text-green-600 text-2xl">✅ Pago aprobado (Pedido #{data.id})</h1>
-      ) : data.estado === 'pending' ? (
-        <h1 className="text-yellow-600 text-2xl">⏳ Pago pendiente…</h1>
-      ) : (
-        <h1 className="text-red-600 text-2xl">❌ Pago rechazado o expirado</h1>
-      )}
-    </div>
-  );
+export default function SuccessPageWrapper() {
+  return <SuccessPageClient />
 }
