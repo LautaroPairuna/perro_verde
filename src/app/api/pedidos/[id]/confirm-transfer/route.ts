@@ -9,42 +9,39 @@ const schema = z.object({
   transferencia_ref: z.string().nonempty(),
 });
 
-export async function POST(
-  request: Request,
-  context: any      // <- usamos `any` para que sea compatible con lo que Next.js espera
-) {
-  // 1) Extraer y validar ID
-  const { id } = context.params as { id: string };
+export async function POST(request: Request, context: unknown) {
+  // Next.js infiere el tipo correcto para `context`.
+  // Hacemos un cast seguro solo de lo que necesitamos.
+  const { params } = context as { params: Promise<{ id: string }> };
+  const { id } = await params;
   const orderId = Number(id);
+
   if (Number.isNaN(orderId)) {
     return NextResponse.json(
       { success: false, message: 'ID de pedido inválido' },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
-  // 2) Parsear body
   let body: unknown;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json(
       { success: false, message: 'Cuerpo JSON inválido o vacío' },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
-  // 3) Validar con Zod
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { success: false, errors: parsed.error.flatten() },
-      { status: 422 }
+      { status: 422 },
     );
   }
   const { transferencia_ref } = parsed.data;
 
-  // 4) Lógica de negocio
   try {
     await new PedidoService().confirmTransfer(orderId, transferencia_ref);
     return NextResponse.json({ success: true });
@@ -53,7 +50,7 @@ export async function POST(
     const message = err instanceof Error ? err.message : 'Error interno desconocido';
     return NextResponse.json(
       { success: false, message },
-      { status: 400 }
+      { status: 400 },
     );
   }
 }
