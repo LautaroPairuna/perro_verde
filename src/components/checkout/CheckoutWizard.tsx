@@ -1,7 +1,7 @@
 // src/components/checkout/CheckoutWizard.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback, ChangeEvent } from 'react';
+import React, { useState, useEffect, ChangeEvent } from 'react';
 import Script from 'next/script';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -70,7 +70,7 @@ export default function CheckoutWizard() {
       mp.bricks().create('cardPayment', 'card-brick-container', {
         initialization: { amount: total },
         callbacks: {
-          onSubmit: (cardData: CardData) => setCardToken(cardData.token),
+          onSubmit: (cardData: { token: string }) => setCardToken(cardData.token),
           onError: console.error,
           onReady: () => console.log('MercadoPago Brick ready'),
         },
@@ -142,7 +142,7 @@ export default function CheckoutWizard() {
     }
   };
 
-  const handleConfirmTransfer = async () => {
+  const handleConfirmTransfer = async (): Promise<void> => {
     if (!orderId) return;
     setLoading(true);
     try {
@@ -151,7 +151,7 @@ export default function CheckoutWizard() {
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({ transferencia_ref: transferenciaRef }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error('Error confirmando transferencia');
       emptyCart();
       setStep(4);
     } catch {

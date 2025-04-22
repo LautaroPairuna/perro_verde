@@ -47,7 +47,7 @@ const Galeria: React.FC = () => {
       setImages(validated);
       setLoaded(true);
     });
-  }, []);
+  }, [imagesRaw]);
 
   useEffect(() => {
     // Inicializamos PhotoSwipe solo cuando la galería se ha cargado

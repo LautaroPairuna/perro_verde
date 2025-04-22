@@ -17,8 +17,8 @@ export default class ErrorBoundary extends Component<
 > {
   state: ErrorBoundaryState = { hasError: false };
 
-  static getDerivedStateFromError(_: Error): ErrorBoundaryState {
-    // Actualiza el estado para mostrar la UI de fallback
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    console.error('ErrorBoundary capturó:', error);
     return { hasError: true };
   }
 

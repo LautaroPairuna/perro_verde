@@ -5,6 +5,7 @@ import React, { useMemo, useState, ChangeEvent } from 'react';
 import ErrorBoundary from './ErrorBoundary';
 import { useCart } from '@/context/CartContext';
 import type { ProductDetail } from '@/utils/fetchData';
+import Link from 'next/link';
 
 interface ProductInfoProps {
   product: ProductDetail;
@@ -103,7 +104,7 @@ const ProductInfo: React.FC<ProductInfoProps> = ({ product }) => {
 
         {/* Botón para volver al catálogo */}
         <div>
-          <a
+          <Link
             href="/catalogo"
             className="w-full sm:w-auto px-6 py-3 border border-green-700 text-green-700 rounded-md shadow-md transition-all duration-300 hover:bg-green-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-green-500 flex items-center justify-center gap-2"
             aria-label="Volver al Catálogo"
@@ -118,7 +119,7 @@ const ProductInfo: React.FC<ProductInfoProps> = ({ product }) => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
             </svg>
             Volver al Catálogo
-          </a>
+          </Link>
         </div>
       </section>
     </ErrorBoundary>
