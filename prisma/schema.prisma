@@ -11,22 +11,26 @@ generator client {
 model CfgMarcas {
   id       Int       @id @default(autoincrement())
   marca    String
-  keywords String?   // Representa tinytext
-  foto     String?   // Representa tinytext
+  keywords String?   // tinytext
+  foto     String?   // tinytext
   activo   Boolean   @default(true)
-  // Relación: Una marca tiene muchos productos
+
   Producto Productos[]
+
+  @@map("cfgmarcas")
 }
 
 model CfgRubros {
-  id         Int       @id @default(autoincrement())
-  rubro      String
-  condiciones String?  
-  keywords   String?
-  foto       String?
-  activo     Boolean   @default(true)
-  // Relación: Un rubro tiene muchos productos
+  id          Int       @id @default(autoincrement())
+  rubro       String
+  condiciones String?
+  keywords    String?
+  foto        String?
+  activo      Boolean   @default(true)
+
   Producto Productos[]
+
+  @@map("cfgrubros")
 }
 
 model CfgFormasPagos {
@@ -35,24 +39,30 @@ model CfgFormasPagos {
   descripcion    String
   permite_cuotas Boolean @default(false)
   activo         Boolean @default(true)
+
+  @@map("cfgformaspagos")
 }
 
 model CfgMonedas {
-  id         Int       @id @default(autoincrement())
+  id         Int     @id @default(autoincrement())
   moneda     String
   moneda_des String
-  activo     Boolean   @default(true)
-  // Relación: Una moneda puede ser usada por muchos productos
+  activo     Boolean @default(true)
+
   Producto Productos[]
+
+  @@map("cfgmonedas")
 }
 
 model CfgSlider {
-  id     Int    @id @default(autoincrement())
+  id     Int     @id @default(autoincrement())
   titulo String
-  thumbs String?  // Representa tinytext
+  thumbs String? // tinytext
   foto   String
-  orden  Int    @default(5)
+  orden  Int     @default(5)
   activo Boolean @default(true)
+
+  @@map("cfgslider")
 }
 
 model Productos {
@@ -62,20 +72,21 @@ model Productos {
   moneda_id   Int
   producto    String
   descripcion String?
-  foto        String?                  // Imagen principal
+  foto        String?
   precio      Decimal                  @db.Decimal(10, 2)
-  stock       Int                      @default(0)
-  destacado   Boolean                  @default(false)
-  activo      Boolean                  @default(true)
-  visitas     Int                      @default(0)
+  stock       Int      @default(0)
+  destacado   Boolean  @default(false)
+  activo      Boolean  @default(true)
+  visitas     Int      @default(0)
 
-  // Relaciones
-  marca    CfgMarcas  @relation(fields: [marca_id], references: [id])
-  rubro    CfgRubros  @relation(fields: [rubro_id], references: [id])
-  moneda   CfgMonedas @relation(fields: [moneda_id], references: [id])
-  fotos    ProductoFotos[]
-  versiones ProductoVersiones[]
+  marca          CfgMarcas   @relation(fields: [marca_id], references: [id])
+  rubro          CfgRubros   @relation(fields: [rubro_id], references: [id])
+  moneda         CfgMonedas  @relation(fields: [moneda_id], references: [id])
+  fotos          ProductoFotos[]
+  versiones      ProductoVersiones[]
   especificaciones ProductoEspecificaciones[]
+
+  @@map("productos")
 }
 
 model ProductoFotos {
@@ -87,35 +98,41 @@ model ProductoFotos {
   activo      Boolean  @default(true)
 
   producto Productos @relation(fields: [producto_id], references: [id])
+
+  @@map("productofotos")
 }
 
 model ProductoVersiones {
-  id          Int      @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   producto_id Int
   version     String
-  detalle     String?  // Podés usarlo para almacenar descripción o algún detalle adicional
-  orden       Int      @default(5)
-  activo      Boolean  @default(true)
+  detalle     String? // null → ''
+  orden       Int     @default(5)
+  activo      Boolean @default(true)
 
   producto Productos @relation(fields: [producto_id], references: [id])
+
+  @@map("productoversiones")
 }
 
 model ProductoEspecificaciones {
-  id               Int      @id @default(autoincrement())
-  producto_id      Int
-  categoria        String    // Ej: "Nutrientes", "Ingredientes", etc.
-  especificaciones String
-  orden            Int       @default(1)
-  activo           Boolean   @default(true)
+  id                Int      @id @default(autoincrement())
+  producto_id       Int
+  categoria         String
+  especificaciones  String
+  orden             Int     @default(1)
+  activo            Boolean @default(true)
 
   producto Productos @relation(fields: [producto_id], references: [id])
+
+  @@map("productoespecificaciones")
 }
 
 model Pedidos {
-  id                     Int      @id @default(autoincrement())
+  id                     Int     @id @default(autoincrement())
   datos                  Json
-  total                  Decimal  @db.Decimal(10, 2)
-  estado                 String   @default("pendiente")
+  total                  Decimal @db.Decimal(10, 2)
+  estado                 String  @default("pendiente")
   metodo_pago            String
   comprador_nombre       String
   comprador_email        String
@@ -125,4 +142,6 @@ model Pedidos {
   transferencia_ref      String?
   tarjeta_last4          String?
   tarjeta_payment_method String?
+
+  @@map("pedidos")
 }
