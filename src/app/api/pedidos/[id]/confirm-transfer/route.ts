@@ -11,10 +11,11 @@ const schema = z.object({
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }  // <- anotación explícita para params
+  context: any      // <- usamos `any` para que sea compatible con lo que Next.js espera
 ) {
-  // 1) Parsear y validar ID
-  const orderId = Number(params.id);
+  // 1) Extraer y validar ID
+  const { id } = context.params as { id: string };
+  const orderId = Number(id);
   if (Number.isNaN(orderId)) {
     return NextResponse.json(
       { success: false, message: 'ID de pedido inválido' },
@@ -43,7 +44,7 @@ export async function POST(
   }
   const { transferencia_ref } = parsed.data;
 
-  // 4) Lógica de confirmación
+  // 4) Lógica de negocio
   try {
     await new PedidoService().confirmTransfer(orderId, transferencia_ref);
     return NextResponse.json({ success: true });
