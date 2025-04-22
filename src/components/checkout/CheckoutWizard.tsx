@@ -14,18 +14,6 @@ declare global {
   interface Window { MercadoPago: any; }
 }
 
-interface CardData {
-  token: string;
-  // otros campos que MercadoPago devuelva…
-}
-
-type ShippingInfo = {
-  nombre: string;
-  email: string;
-  telefono: string;
-  direccion: string;
-};
-
 const fadeIn = `
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(20px); }
@@ -47,7 +35,7 @@ export default function CheckoutWizard() {
   ];
 
   const [step, setStep] = useState(1);
-  const [shipping, setShipping] = useState<ShippingInfo>({
+  const [shipping, setShipping] = useState({
     nombre: '', email: '', telefono: '', direccion: ''
   });
   const [payment, setPayment] = useState<{ metodo: MetodoPago }>({ metodo: 'efectivo' });
@@ -60,18 +48,21 @@ export default function CheckoutWizard() {
   const CBU_EMPRESA = process.env.NEXT_PUBLIC_CBU_EMPRESA || '';
   const WPP_EMPRESA = process.env.NEXT_PUBLIC_WPP_NUMBER || '';
 
-  // Tipamos callback y contenedor
   useEffect(() => {
     if (payment.metodo !== 'tarjeta' || !mpLoaded) return;
     setTimeout(() => {
       const container = document.getElementById('card-brick-container');
       if (!container) return;
-      const mp = new window.MercadoPago(process.env.NEXT_PUBLIC_MP_PUBLIC_KEY!, { locale: 'es-AR' });
+      const MpConstructor = window.MercadoPago;
+      const mp = new MpConstructor(
+        process.env.NEXT_PUBLIC_MP_PUBLIC_KEY!,
+        { locale: 'es-AR' }
+      );
       mp.bricks().create('cardPayment', 'card-brick-container', {
         initialization: { amount: total },
         callbacks: {
           onSubmit: (cardData: { token: string }) => setCardToken(cardData.token),
-          onError: console.error,
+          onError: (err: unknown) => console.error(err),
           onReady: () => console.log('MercadoPago Brick ready'),
         },
       });
@@ -98,16 +89,24 @@ export default function CheckoutWizard() {
     setShipping(prev => ({ ...prev, [name]: value }));
   };
 
-  const submitOrder = async () => {
+  const submitOrder = async (): Promise<void> => {
     setLoading(true);
-    if (payment.metodo === 'tarjeta' && !cardToken) { alert('Completa los datos de la tarjeta.'); setLoading(false); return; }
-    if (payment.metodo === 'transferencia' && !transferenciaRef) { alert('Completa la referencia de transferencia.'); setLoading(false); return; }
+    if (payment.metodo === 'tarjeta' && !cardToken) {
+      alert('Completa los datos de la tarjeta.');
+      setLoading(false);
+      return;
+    }
+    if (payment.metodo === 'transferencia' && !transferenciaRef) {
+      alert('Completa la referencia de transferencia.');
+      setLoading(false);
+      return;
+    }
 
     const payload: CreatePedidoDTO = {
       datos: cart.map(i => ({
-        id:       Number(i.id),
-        name:     i.name,
-        price:    i.price,
+        id: Number(i.id),
+        name: i.name,
+        price: i.price,
         quantity: i.quantity,
       })),
       total,
@@ -122,20 +121,22 @@ export default function CheckoutWizard() {
 
     try {
       const res  = await fetch('/api/pedidos', {
-        method: 'POST',
-        headers:{ 'Content-Type': 'application/json' },
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error('Error creando pedido');
       setOrderId(data.orderId);
+
       if (payment.metodo === 'tarjeta' && data.init_point) {
         window.open(data.init_point, '_blank');
         router.push(`/checkout/success?order=${data.orderId}`);
       } else {
         setStep(3);
       }
-    } catch {
+    } catch (err: unknown) {
+      console.error(err);
       alert('Error procesando pedido.');
     } finally {
       setLoading(false);
@@ -146,15 +147,19 @@ export default function CheckoutWizard() {
     if (!orderId) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/pedidos/${orderId}/confirm-transfer`, {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({ transferencia_ref: transferenciaRef }),
-      });
+      const res = await fetch(
+        `/api/pedidos/${orderId}/confirm-transfer`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transferencia_ref: transferenciaRef }),
+        }
+      );
       if (!res.ok) throw new Error('Error confirmando transferencia');
       emptyCart();
       setStep(4);
-    } catch {
+    } catch (err: unknown) {
+      console.error(err);
       alert('No se pudo confirmar la transferencia.');
     } finally {
       setLoading(false);
