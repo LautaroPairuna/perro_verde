@@ -1,5 +1,5 @@
 // src/app/api/pedidos/[id]/confirm-transfer/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { PedidoService } from '@/services/PedidoService';
 
@@ -10,9 +10,10 @@ const schema = z.object({
 });
 
 export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }  // solo aquí desestructuramos
+  request: Request,
+  { params }: { params: { id: string } }  // <- anotación explícita para params
 ) {
+  // 1) Parsear y validar ID
   const orderId = Number(params.id);
   if (Number.isNaN(orderId)) {
     return NextResponse.json(
@@ -21,6 +22,7 @@ export async function POST(
     );
   }
 
+  // 2) Parsear body
   let body: unknown;
   try {
     body = await request.json();
@@ -31,6 +33,7 @@ export async function POST(
     );
   }
 
+  // 3) Validar con Zod
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -40,10 +43,12 @@ export async function POST(
   }
   const { transferencia_ref } = parsed.data;
 
+  // 4) Lógica de confirmación
   try {
     await new PedidoService().confirmTransfer(orderId, transferencia_ref);
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
+    console.error('Error en confirm-transfer:', err);
     const message = err instanceof Error ? err.message : 'Error interno desconocido';
     return NextResponse.json(
       { success: false, message },
