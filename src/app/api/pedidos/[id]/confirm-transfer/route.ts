@@ -1,22 +1,26 @@
 // src/app/api/pedidos/[id]/confirm-transfer/route.ts
-
-export const runtime = 'nodejs';
-
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { PedidoService } from '@/services/PedidoService';
+
+export const runtime = 'nodejs';
 
 const schema = z.object({
   transferencia_ref: z.string().nonempty(),
 });
 
 export async function POST(
-  request: Request,
-  context: { params: { id: string } }
-): Promise<NextResponse> {
-  const { id } = context.params;
+  request: NextRequest,
+  { params }: { params: { id: string } }  // solo aquí desestructuramos
+) {
+  const orderId = Number(params.id);
+  if (Number.isNaN(orderId)) {
+    return NextResponse.json(
+      { success: false, message: 'ID de pedido inválido' },
+      { status: 400 }
+    );
+  }
 
-  // 1) Parsear JSON del body
   let body: unknown;
   try {
     body = await request.json();
@@ -27,7 +31,6 @@ export async function POST(
     );
   }
 
-  // 2) Validar contra nuestro esquema Zod
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -37,22 +40,10 @@ export async function POST(
   }
   const { transferencia_ref } = parsed.data;
 
-  // 3) Convertir y validar el ID de la URL
-  const orderId = Number(id);
-  if (Number.isNaN(orderId)) {
-    return NextResponse.json(
-      { success: false, message: 'ID de pedido inválido' },
-      { status: 400 }
-    );
-  }
-
-  // 4) Ejecutar la lógica de confirmación
   try {
-    const svc = new PedidoService();
-    await svc.confirmTransfer(orderId, transferencia_ref);
+    await new PedidoService().confirmTransfer(orderId, transferencia_ref);
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
-    console.error('Error en confirm-transfer:', err);
     const message = err instanceof Error ? err.message : 'Error interno desconocido';
     return NextResponse.json(
       { success: false, message },
