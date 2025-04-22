@@ -95,7 +95,7 @@ export default async function CatalogListing({
     return (
       <section className="p-10 text-center">
         <p className="text-red-600">
-          Error cargando productos. Intenta nuevamente más tarde.
+          Error cargando productosss. Intenta nuevamente más tarde.
         </p>
       </section>
     )
