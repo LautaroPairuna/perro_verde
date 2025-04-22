@@ -1,3 +1,4 @@
+// src/app/checkout/success/SuccessPageClient.tsx
 'use client';
 
 import { useSearchParams } from 'next/navigation';
@@ -26,9 +27,7 @@ export default function SuccessPageClient() {
       ) : data.estado === 'pending' ? (
         <h1 className="text-yellow-600 text-2xl">⏳ Pago pendiente…</h1>
       ) : (
-        <h1 className="text-red-600 text-2xl">
-          ❌ Pago rechazado o expirado
-        </h1>
+        <h1 className="text-red-600 text-2xl">❌ Pago rechazado o expirado</h1>
       )}
     </div>
   );
