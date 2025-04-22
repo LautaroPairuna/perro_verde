@@ -1,7 +1,7 @@
 // src/components/checkout/CheckoutWizard.tsx
 'use client';
 
-import React, { useState, useEffect, ChangeEvent } from 'react';
+import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react';
 import Script from 'next/script';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -11,21 +11,55 @@ import { PaymentMethodSelector } from './PaymentMethodSelector';
 import { CreatePedidoDTO, MetodoPago } from '@/types/payment';
 
 declare global {
-  interface Window { MercadoPago: any; }
+  interface Window {
+    MercadoPago: MercadoPagoConstructor;
+  }
 }
 
-const fadeIn = `
+interface MercadoPagoConstructor {
+  new (publicKey: string, options: { locale: string }): MercadoPagoInstance;
+}
+
+interface MercadoPagoInstance {
+  bricks(): {
+    create(
+      name: 'cardPayment',
+      containerId: string,
+      options: {
+        initialization: { amount: number };
+        callbacks: {
+          onSubmit: (cardData: CardData) => void;
+          onError: (err: unknown) => void;
+          onReady: () => void;
+        };
+      }
+    ): void;
+  };
+}
+
+interface CardData {
+  token: string;
+}
+
+interface ShippingInfo {
+  nombre: string;
+  email: string;
+  telefono: string;
+  direccion: string;
+}
+
+const fadeInKeyframes = `
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(20px); }
     to   { opacity: 1; transform: translateY(0); }
   }
 `;
 
-export default function CheckoutWizard() {
+export default function CheckoutWizard(): React.JSX.Element {
   const router = useRouter();
   const { cart, updateCart } = useCart();
-  const total = cart.reduce((sum, i) => sum + i.price * i.quantity, 0);
-  const emptyCart = () => updateCart([]);
+  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const emptyCart = (): void => updateCart([]);
 
   const steps = [
     { label: 'Envío',    icon: <MapPin size={20} /> },
@@ -34,59 +68,71 @@ export default function CheckoutWizard() {
     { label: 'Gracias',  icon: <CheckCircle2 size={20} /> },
   ];
 
-  const [step, setStep] = useState(1);
-  const [shipping, setShipping] = useState({
-    nombre: '', email: '', telefono: '', direccion: ''
+  const [step, setStep] = useState<number>(1);
+  const [shipping, setShipping] = useState<ShippingInfo>({
+    nombre: '',
+    email: '',
+    telefono: '',
+    direccion: '',
   });
   const [payment, setPayment] = useState<{ metodo: MetodoPago }>({ metodo: 'efectivo' });
-  const [transferenciaRef, setTransferenciaRef] = useState('');
-  const [cardToken, setCardToken] = useState('');
+  const [transferenciaRef, setTransferenciaRef] = useState<string>('');
+  const [cardToken, setCardToken] = useState<string>('');
   const [orderId, setOrderId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [mpLoaded, setMpLoaded] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [mpLoaded, setMpLoaded] = useState<boolean>(false);
 
-  const CBU_EMPRESA = process.env.NEXT_PUBLIC_CBU_EMPRESA || '';
-  const WPP_EMPRESA = process.env.NEXT_PUBLIC_WPP_NUMBER || '';
+  const CBU_EMPRESA = process.env.NEXT_PUBLIC_CBU_EMPRESA ?? '';
+  const WPP_EMPRESA = process.env.NEXT_PUBLIC_WPP_NUMBER ?? '';
 
   useEffect(() => {
     if (payment.metodo !== 'tarjeta' || !mpLoaded) return;
-    setTimeout(() => {
+
+    const timeoutId = setTimeout(() => {
       const container = document.getElementById('card-brick-container');
-      if (!container) return;
-      const MpConstructor = window.MercadoPago;
-      const mp = new MpConstructor(
-        process.env.NEXT_PUBLIC_MP_PUBLIC_KEY!,
+      if (!container || typeof window.MercadoPago !== 'function') return;
+
+      const mpInstance = new window.MercadoPago(
+        process.env.NEXT_PUBLIC_MP_PUBLIC_KEY as string,
         { locale: 'es-AR' }
       );
-      mp.bricks().create('cardPayment', 'card-brick-container', {
+      mpInstance.bricks().create('cardPayment', 'card-brick-container', {
         initialization: { amount: total },
         callbacks: {
-          onSubmit: (cardData: { token: string }) => setCardToken(cardData.token),
-          onError: (err: unknown) => console.error(err),
-          onReady: () => console.log('MercadoPago Brick ready'),
+          onSubmit: (data: CardData) => setCardToken(data.token),
+          onError: (err) => console.error('MP Error:', err),
+          onReady: () => console.log('MercadoPago Brick listo'),
         },
       });
     }, 0);
+
+    return () => clearTimeout(timeoutId);
   }, [payment.metodo, total, mpLoaded]);
 
-  const validateShipping = () => {
+  const validateShipping = (): boolean => {
     const { nombre, email, direccion } = shipping;
-    if (!nombre || !email || !direccion) {
+    if (!nombre.trim() || !email.trim() || !direccion.trim()) {
       alert('Completa todos los datos de envío.');
       return false;
     }
     return true;
   };
 
-  const next = () => {
+  const next = (): void => {
     if (step === 1 && !validateShipping()) return;
-    setStep(s => Math.min(s + 1, steps.length));
+    setStep((s) => Math.min(s + 1, steps.length));
   };
-  const back = () => setStep(s => Math.max(s - 1, 1));
 
-  const handleShipping = (e: ChangeEvent<HTMLInputElement>) => {
+  const back = (): void => {
+    setStep((s) => Math.max(s - 1, 1));
+  };
+
+  const handleShipping = (e: ChangeEvent<HTMLInputElement>): void => {
     const { name, value } = e.target;
-    setShipping(prev => ({ ...prev, [name]: value }));
+    setShipping((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
   const submitOrder = async (): Promise<void> => {
@@ -96,37 +142,37 @@ export default function CheckoutWizard() {
       setLoading(false);
       return;
     }
-    if (payment.metodo === 'transferencia' && !transferenciaRef) {
+    if (payment.metodo === 'transferencia' && !transferenciaRef.trim()) {
       alert('Completa la referencia de transferencia.');
       setLoading(false);
       return;
     }
 
     const payload: CreatePedidoDTO = {
-      datos: cart.map(i => ({
-        id: Number(i.id),
-        name: i.name,
-        price: i.price,
-        quantity: i.quantity,
+      datos: cart.map((item) => ({
+        id: Number(item.id),
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
       })),
       total,
-      metodo_pago:        payment.metodo,
-      comprador_nombre:   shipping.nombre,
-      comprador_email:    shipping.email,
+      metodo_pago: payment.metodo,
+      comprador_nombre: shipping.nombre,
+      comprador_email: shipping.email,
       comprador_telefono: shipping.telefono,
-      direccion_envio:    shipping.direccion,
-      ...(payment.metodo === 'tarjeta'      && { cardToken }),
+      direccion_envio: shipping.direccion,
+      ...(payment.metodo === 'tarjeta' && { cardToken }),
       ...(payment.metodo === 'transferencia' && { transferencia_ref: transferenciaRef }),
     };
 
     try {
-      const res  = await fetch('/api/pedidos', {
-        method:  'POST',
+      const res = await fetch('/api/pedidos', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(payload),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error('Error creando pedido');
+      if (!res.ok) throw new Error(`Error: ${data.message || res.statusText}`);
       setOrderId(data.orderId);
 
       if (payment.metodo === 'tarjeta' && data.init_point) {
@@ -135,8 +181,8 @@ export default function CheckoutWizard() {
       } else {
         setStep(3);
       }
-    } catch (err: unknown) {
-      console.error(err);
+    } catch (error) {
+      console.error('Submit order error:', error);
       alert('Error procesando pedido.');
     } finally {
       setLoading(false);
@@ -147,19 +193,16 @@ export default function CheckoutWizard() {
     if (!orderId) return;
     setLoading(true);
     try {
-      const res = await fetch(
-        `/api/pedidos/${orderId}/confirm-transfer`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transferencia_ref: transferenciaRef }),
-        }
-      );
-      if (!res.ok) throw new Error('Error confirmando transferencia');
+      const res = await fetch(`/api/pedidos/${orderId}/confirm-transfer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transferencia_ref: transferenciaRef }),
+      });
+      if (!res.ok) throw new Error(res.statusText);
       emptyCart();
       setStep(4);
-    } catch (err: unknown) {
-      console.error(err);
+    } catch (error) {
+      console.error('Confirm transfer error:', error);
       alert('No se pudo confirmar la transferencia.');
     } finally {
       setLoading(false);
@@ -170,7 +213,6 @@ export default function CheckoutWizard() {
 
   return (
     <>
-      {/* Carga el SDK de MercadoPago y marca mpLoaded=true cuando esté listo */}
       <Script
         src="https://sdk.mercadopago.com/js/v2"
         onLoad={() => setMpLoaded(true)}
@@ -183,8 +225,8 @@ export default function CheckoutWizard() {
           {/* Pasos e íconos */}
           <ul className="flex justify-between items-center mb-4">
             {steps.map((s, i) => {
-              const idx    = i + 1;
-              const done   = step > idx;
+              const idx = i + 1;
+              const done = step > idx;
               const active = step === idx;
               return (
                 <li key={i} className="flex-1 flex flex-col items-center">
@@ -213,18 +255,18 @@ export default function CheckoutWizard() {
 
           {/* Paso 1: Envío */}
           {step === 1 && (
-            <form onSubmit={e => { e.preventDefault(); next(); }} className="space-y-4 animate-fade">
-              {(['nombre','email','telefono','direccion'] as const).map(f => (
-                <div key={f}>
+            <form onSubmit={(e: FormEvent) => { e.preventDefault(); next(); }} className="space-y-4 animate-fade">
+              {(Object.keys(shipping) as (keyof ShippingInfo)[]).map((field) => (
+                <div key={field}>
                   <label className="block text-sm font-medium mb-1">
-                    {f.charAt(0).toUpperCase() + f.slice(1)}
+                    {field.charAt(0).toUpperCase() + field.slice(1)}
                   </label>
                   <input
-                    name={f}
-                    type={f === 'email' ? 'email' : 'text'}
-                    value={(shipping as any)[f] || ''}
+                    name={field}
+                    type={field === 'email' ? 'email' : 'text'}
+                    value={shipping[field]}
                     onChange={handleShipping}
-                    required={f !== 'telefono'}
+                    required={field !== 'telefono'}
                     className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
                   />
                 </div>
@@ -243,7 +285,7 @@ export default function CheckoutWizard() {
               <span className="block text-sm font-medium mb-2">Método de pago</span>
               <PaymentMethodSelector
                 selected={payment.metodo}
-                onChange={method => {
+                onChange={(method) => {
                   setPayment({ metodo: method as MetodoPago });
                   setCardToken('');
                   setTransferenciaRef('');
@@ -276,7 +318,7 @@ export default function CheckoutWizard() {
                       type="text"
                       placeholder="Por ejemplo: PEDIDO1234"
                       value={transferenciaRef}
-                      onChange={e => setTransferenciaRef(e.target.value)}
+                      onChange={(e) => setTransferenciaRef(e.target.value)}
                       className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
                     />
                   </div>
@@ -355,8 +397,9 @@ export default function CheckoutWizard() {
             </div>
           )}
         </div>
-        <style jsx>{fadeIn}</style>
       </div>
+
+      <style jsx>{fadeInKeyframes}</style>
     </>
   );
 }
