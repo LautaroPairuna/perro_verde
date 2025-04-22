@@ -1,6 +1,5 @@
 // src/utils/fetchData.ts
 import { PrismaClient, Prisma } from '@prisma/client';
-import slugify from './slugify';
 
 const prisma = new PrismaClient();
 
@@ -12,6 +11,24 @@ export interface Filters {
   producto_slug: string;
   marca_id?: number;
   categoria_id?: number;
+}
+
+// 1) Definimos el tipo del producto para el listado (getFilteredProducts)
+export type ProductSummary = Prisma.ProductosGetPayload<{
+  include: {
+    marca: { select: { id: true; marca: true } };
+    rubro: { select: { id: true; rubro: true } };
+    fotos: true;
+    versiones: true;
+    especificaciones: true;
+  };
+}>;
+
+// 2) Tipo de retorno para getFilteredProducts
+export interface FilteredProductsResult {
+  products: ProductSummary[];
+  totalProducts: number;
+  totalPages: number;
 }
 
 export async function getFiltersData(): Promise<{
@@ -29,16 +46,16 @@ export async function getFiltersData(): Promise<{
   return { marcas, rubros };
 }
 
-export async function getFilteredProducts(filters: Filters, itemsPerPage: number) {
-  const where: Prisma.ProductosWhereInput = {
-    activo: true,
-  };
+export async function getFilteredProducts(
+  filters: Filters,
+  itemsPerPage: number
+): Promise<FilteredProductsResult> {
+  const where: Prisma.ProductosWhereInput = { activo: true };
 
   if (filters.keywords) {
-    const kw = filters.keywords.trim().toLowerCase();
-    if (kw.length > 0) {
-      const tokens = kw.split(/\s+/);
-      where.AND = tokens.map((token: string) => ({
+    const tokens = filters.keywords.trim().toLowerCase().split(/\s+/);
+    if (tokens.length) {
+      where.AND = tokens.map(token => ({
         OR: [
           { producto: { contains: token } },
           { descripcion: { contains: token } },
@@ -47,16 +64,10 @@ export async function getFilteredProducts(filters: Filters, itemsPerPage: number
     }
   }
 
-  if (filters.marca_id) {
-    where.marca_id = filters.marca_id;
-  }
-  if (filters.categoria_id) {
-    where.rubro_id = filters.categoria_id;
-  }
+  if (filters.marca_id) where.marca_id = filters.marca_id;
+  if (filters.categoria_id) where.rubro_id = filters.categoria_id;
 
-  console.log('getFilteredProducts - Where:', where);
-
-  const [count, rows] = await Promise.all([
+  const [totalProducts, rows] = await Promise.all([
     prisma.productos.count({ where }),
     prisma.productos.findMany({
       where,
@@ -72,14 +83,31 @@ export async function getFilteredProducts(filters: Filters, itemsPerPage: number
     }),
   ]);
 
+  // Convertimos a JSON para librarnos de los Decimals al serializar
+  const products = JSON.parse(JSON.stringify(rows)) as ProductSummary[];
+
   return {
-    products: JSON.parse(JSON.stringify(rows)),
-    totalProducts: count,
-    totalPages: Math.ceil(count / itemsPerPage),
+    products,
+    totalProducts,
+    totalPages: Math.ceil(totalProducts / itemsPerPage),
   };
 }
 
-export async function getSingleProduct(productId: number) {
+// 3) Definimos el tipo para el detalle de producto (getSingleProduct)
+export type ProductDetail = Prisma.ProductosGetPayload<{
+  include: {
+    marca: { select: { id: true; marca: true } };
+    rubro: { select: { id: true; rubro: true } };
+    moneda: { select: { id: true; moneda: true; moneda_des: true } };
+    fotos: true;
+    versiones: true;
+    especificaciones: true;
+  };
+}>;
+
+export async function getSingleProduct(
+  productId: number
+): Promise<ProductDetail> {
   await prisma.productos.update({
     where: { id: productId },
     data: { visitas: { increment: 1 } },
@@ -90,15 +118,16 @@ export async function getSingleProduct(productId: number) {
     include: {
       marca: { select: { id: true, marca: true } },
       rubro: { select: { id: true, rubro: true } },
+      moneda: { select: { id: true, moneda: true, moneda_des: true } },
       fotos: true,
       versiones: true,
       especificaciones: true,
-      moneda: { select: { id: true, moneda: true, moneda_des: true } },
     },
   });
 
   if (!product) {
     throw new Error(`Producto con ID ${productId} no encontrado.`);
   }
-  return JSON.parse(JSON.stringify(product));
+
+  return JSON.parse(JSON.stringify(product)) as ProductDetail;
 }

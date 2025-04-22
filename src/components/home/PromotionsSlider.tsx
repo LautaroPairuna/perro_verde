@@ -31,7 +31,7 @@ export default function PromotionsSlider({ images }: PromotionsSliderProps) {
   useEffect(() => {
     startAutoPlay();
     return () => stopAutoPlay();
-  }, []);
+  }, [startAutoPlay]);
 
   const handleNext = () => setCurrentIndex((prev) => (prev + 1) % totalSlides);
   const handlePrev = () => setCurrentIndex((prev) => (prev - 1 + totalSlides) % totalSlides);

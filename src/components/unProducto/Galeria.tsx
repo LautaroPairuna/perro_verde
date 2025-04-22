@@ -3,7 +3,6 @@
 
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import dynamic from 'next/dynamic';
 
 const PLACEHOLDER_THUMB = '/images/productos/thumbs/placeholder.jpg';
 

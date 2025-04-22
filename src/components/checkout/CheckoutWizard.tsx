@@ -6,7 +6,7 @@ import Script from 'next/script';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useCart } from '@/context/CartContext';
-import { MapPin, CreditCard, QrCode, DollarSign, CheckCircle2 } from 'lucide-react';
+import { MapPin, CreditCard, CheckCircle2 } from 'lucide-react';
 import { PaymentMethodSelector } from './PaymentMethodSelector';
 import { CreatePedidoDTO, MetodoPago } from '@/types/payment';
 

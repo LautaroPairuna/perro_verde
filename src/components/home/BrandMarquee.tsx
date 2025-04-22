@@ -2,6 +2,8 @@
 import React from 'react';
 import slugify from '@/utils/slugify';
 import { prisma } from '../../lib/prisma';
+import Image from 'next/image';
+import Link from 'next/link';
 
 export default async function BrandMarquee() {
   const brands = await prisma.cfgMarcas.findMany({
@@ -28,16 +30,18 @@ export default async function BrandMarquee() {
           <div className="inline-block animate-marquee">
             {[...brands, ...brands].map((brand, idx) => (
               <div key={idx} className="inline-block align-middle w-36 my-4 mx-10">
-                <a href={`/catalogo/marca-${slugify(brand.marca)}/pagina-1`}>
+                <Link href={`/catalogo/marca-${slugify(brand.marca)}/pagina-1`}>
                   <div className="relative aspect-square w-full">
-                    <img
+                    <Image
                       src={`/images/marcas/thumbs/${brand.foto || 'placeholder.jpg'}`}
                       alt={`Logo de ${brand.marca}`}
                       loading="lazy"
+                      fill
+                      sizes="9rem"
                       className="absolute inset-0 w-full h-full object-contain"
                     />
                   </div>
-                </a>
+                </Link>
               </div>
             ))}
           </div>

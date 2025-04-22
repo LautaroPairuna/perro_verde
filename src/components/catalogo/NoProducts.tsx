@@ -1,5 +1,6 @@
 // src/components/catalogo/NoProducts.tsx
 import React from 'react';
+import Link from 'next/link';
 
 interface NoProductsProps {
   message: string;
@@ -29,12 +30,12 @@ const NoProducts: React.FC<NoProductsProps> = ({ message }) => {
       <p className="text-xl text-gray-600 mb-10 text-center max-w-xl">
         {message || "Parece que no hay productos disponibles para tu búsqueda."}
       </p>
-      <a
+      <Link
         href="/catalogo"
         className="inline-flex items-center justify-center px-10 py-4 bg-green-600 text-white text-xl font-semibold rounded-full shadow-lg hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-300 transition-all duration-300"
       >
         Volver al Catálogo
-      </a>
+      </Link>
     </div>
   );
 };

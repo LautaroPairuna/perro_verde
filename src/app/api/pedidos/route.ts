@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     const service = new PedidoService();
     const result  = await service.procesarPedido(dto);
     return NextResponse.json(result, { status: 201 });
-  } catch (err: any) {
+  } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: err.errors }, { status: 422 });
     }

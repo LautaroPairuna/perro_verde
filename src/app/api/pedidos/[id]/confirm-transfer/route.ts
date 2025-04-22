@@ -1,5 +1,8 @@
 // src/app/api/pedidos/[id]/confirm-transfer/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+
+export const runtime = 'nodejs';
+
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { PedidoService } from '@/services/PedidoService';
 
@@ -8,14 +11,15 @@ const schema = z.object({
 });
 
 export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  // ————————————————————————————
-  // 1) Tratar JSON vacío o inválido
+  request: Request,
+  context: { params: { id: string } }
+): Promise<NextResponse> {
+  const { id } = context.params;
+
+  // 1) Parsear JSON del body
   let body: unknown;
   try {
-    body = await req.json();
+    body = await request.json();
   } catch {
     return NextResponse.json(
       { success: false, message: 'Cuerpo JSON inválido o vacío' },
@@ -23,7 +27,7 @@ export async function POST(
     );
   }
 
-  // 2) Validar con Zod
+  // 2) Validar contra nuestro esquema Zod
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -33,8 +37,8 @@ export async function POST(
   }
   const { transferencia_ref } = parsed.data;
 
-  // 3) Parsear y validar el ID
-  const orderId = Number(params.id);
+  // 3) Convertir y validar el ID de la URL
+  const orderId = Number(id);
   if (Number.isNaN(orderId)) {
     return NextResponse.json(
       { success: false, message: 'ID de pedido inválido' },
@@ -42,7 +46,7 @@ export async function POST(
     );
   }
 
-  // 4) Ejecutar la confirmación
+  // 4) Ejecutar la lógica de confirmación
   try {
     const svc = new PedidoService();
     await svc.confirmTransfer(orderId, transferencia_ref);
@@ -50,6 +54,9 @@ export async function POST(
   } catch (err: unknown) {
     console.error('Error en confirm-transfer:', err);
     const message = err instanceof Error ? err.message : 'Error interno desconocido';
-    return NextResponse.json({ success: false, message }, { status: 400 });
+    return NextResponse.json(
+      { success: false, message },
+      { status: 400 }
+    );
   }
 }

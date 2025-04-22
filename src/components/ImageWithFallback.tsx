@@ -1,40 +1,30 @@
-"use client";
-import React, { useState } from "react";
+'use client';
 
-type FallbackErrorHandler = (event: React.SyntheticEvent<HTMLImageElement, Event>) => void;
+import Image, { ImageProps } from 'next/image';
+import { useState } from 'react';
 
-interface ImageWithFallbackProps
-  extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, "src" | "onError"> {
+interface ImageWithFallbackProps extends Omit<ImageProps, 'src'> {
   src: string;
   fallbackSrc?: string;
-  onFallbackError?: FallbackErrorHandler;
 }
 
-const ImageWithFallback: React.FC<ImageWithFallbackProps> = (props) => {
-  const {
-    src,
-    alt,
-    fallbackSrc = "/images/productos/thumbs/placeholder.jpg",
-    onFallbackError,
-    ...rest
-  } = props;
-
+const ImageWithFallback: React.FC<ImageWithFallbackProps> = ({
+  src,
+  fallbackSrc = '/images/productos/thumbs/placeholder.jpg',
+  alt,
+  ...rest
+}) => {
   const [imgSrc, setImgSrc] = useState(src);
 
-  const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    setImgSrc(fallbackSrc);
-    // si el usuario definió onFallbackError, llamarlo también
-    if (onFallbackError) {
-      onFallbackError(e);
-    }
-  };
-
   return (
-    <img
-      {...rest} // className, style, etc.
+    <Image
+      {...rest}
       src={imgSrc}
       alt={alt}
-      onError={handleError}
+      onError={() => setImgSrc(fallbackSrc)}
+      // Si no quieres especificar width/height, usa layout="fill" y envuelve en un contenedor position:relative
+      width={300}
+      height={300}
     />
   );
 };
