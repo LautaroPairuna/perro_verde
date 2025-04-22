@@ -1,28 +1,30 @@
 // src/components/unProducto/ErrorBoundary.tsx
 'use client';
 
-import React, { ErrorInfo } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
 
 interface ErrorBoundaryState {
   hasError: boolean;
 }
 
-interface ErrorBoundaryProps {
-  children: React.ReactNode;
-}
+export default class ErrorBoundary extends Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
+  state: ErrorBoundaryState = { hasError: false };
 
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(_: Error): ErrorBoundaryState {
+    // Actualiza el estado para mostrar la UI de fallback
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('ErrorBoundary caught an error', error, errorInfo);
+  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    // Puedes enviar el error a un servicio de logging aquí
+    console.error('ErrorBoundary capturó un error:', error, errorInfo);
   }
 
   render() {
@@ -35,8 +37,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
         </div>
       );
     }
+
     return this.props.children;
   }
 }
-
-export default ErrorBoundary;

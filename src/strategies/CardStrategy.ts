@@ -1,6 +1,6 @@
 // src/strategies/CardStrategy.ts
 import type { PrismaClient } from '@prisma/client';
-import { CreatePedidoDTO, PaymentResponse } from '@/types/payment';
+import { CreatePedidoDTO } from '@/types/payment';
 import { PaymentStrategy } from './PaymentStrategy';
 
 export class CardStrategy implements PaymentStrategy {

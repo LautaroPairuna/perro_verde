@@ -1,6 +1,6 @@
 // src/strategies/TransferStrategy.ts
 import type { PrismaClient } from '@prisma/client';
-import { CreatePedidoDTO, PaymentResponse } from '@/types/payment';
+import { CreatePedidoDTO } from '@/types/payment';
 import { PaymentStrategy } from './PaymentStrategy';
 
 export class TransferStrategy implements PaymentStrategy {
@@ -11,7 +11,6 @@ export class TransferStrategy implements PaymentStrategy {
       responseToClient: {
         orderId: pedido.id,
         status: 'iniciado',
-        // opcional: devolver un objeto con instrucciones
       }
     };
   }

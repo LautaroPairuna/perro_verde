@@ -4,60 +4,50 @@
 import React, { useMemo, useState, ChangeEvent } from 'react';
 import ErrorBoundary from './ErrorBoundary';
 import { useCart } from '@/context/CartContext';
+import type { ProductDetail } from '@/utils/fetchData';
 
 interface ProductInfoProps {
-  product: any; // Puedes tiparlo más específicamente según tu modelo
+  product: ProductDetail;
 }
 
 const ProductInfo: React.FC<ProductInfoProps> = ({ product }) => {
   const { cart, updateCart } = useCart();
 
-  // Sanitizamos los datos del producto para asegurarnos que "precio" es un número primitivo
   const sanitizedProduct = useMemo(() => ({
     ...product,
-    precio: parseFloat(String(product.precio || '0')),
+    precio: parseFloat(String(product.precio ?? 0)),
   }), [product]);
 
-  const formatoMoneda = useMemo(() => {
-    return new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: 'ARS',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  }, []);
+  const formatoMoneda = useMemo(() => new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }), []);
 
-  // Estado local para manejar la cantidad a agregar
-  const [quantity, setQuantity] = useState<number>(1);
+  const [quantity, setQuantity] = useState(1);
 
   const handleQuantityChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const qty = parseInt(e.target.value, 10);
-    setQuantity(qty < 1 ? 1 : qty);
+    const qty = Math.max(1, parseInt(e.target.value, 10) || 1);
+    setQuantity(qty);
   };
 
-  // Función para agregar el producto al carrito usando el contexto
   const handleAddToCart = () => {
     const newCart = [...cart];
-    // Convertimos el id a string para evitar discrepancias de tipo
-    const productIdStr = sanitizedProduct.id.toString();
-    const index = newCart.findIndex((item) => item.id === productIdStr);
-    if (index === -1) {
+    const idStr = sanitizedProduct.id.toString();
+    const idx = newCart.findIndex(item => item.id === idStr);
+    if (idx === -1) {
       newCart.push({
-        id: productIdStr,
+        id: idStr,
         name: sanitizedProduct.producto,
         price: sanitizedProduct.precio,
-        thumbnail: `/images/productos/thumbs/${sanitizedProduct.foto || "placeholder.jpg"}`,
-        quantity, // Utilizamos la cantidad seleccionada
+        thumbnail: `/images/productos/thumbs/${sanitizedProduct.foto ?? 'placeholder.jpg'}`,
+        quantity,
       });
     } else {
-      // Si ya existe en el carrito, incrementamos su cantidad en la cantidad seleccionada
-      newCart[index] = {
-        ...newCart[index],
-        quantity: newCart[index].quantity + quantity,
-      };
+      newCart[idx].quantity += quantity;
     }
     updateCart(newCart);
-    // Reiniciamos la cantidad a 1 luego de agregar el producto
     setQuantity(1);
   };
 

@@ -1,4 +1,4 @@
-// app/catalogo/[...filters]/page.tsx
+// src/app/catalogo/[...filters]/page.tsx
 import Head from 'next/head';
 import AdvancedSearchForm from '@/components/catalogo/AdvancedSearchForm';
 import ProductCard, { Product as ProductCardType } from '@/components/catalogo/ProductCard';
@@ -7,7 +7,7 @@ import NoProducts from '@/components/catalogo/NoProducts';
 import { getFilteredProducts, getFiltersData } from '@/utils/fetchData';
 import { parseUrlSegments } from '@/utils/urlUtils';
 import slugify from '@/utils/slugify';
-import type { Filters as CatalogFilters, FilteredProductsResult, ProductSummary } from '@/utils/fetchData';
+import type { Filters as CatalogFilters, FilteredProductsResult } from '@/utils/fetchData';
 
 interface PageProps {
   params: { filters?: string[] };
@@ -17,36 +17,31 @@ export default async function CatalogListing({ params }: PageProps) {
   const safeParams = await Promise.resolve(params);
   const slugArray = safeParams.filters || [];
 
-  // Parseamos URL
   const pathname = '/catalogo/' + slugArray.join('/');
   const filtersFromUrl = parseUrlSegments(pathname) as CatalogFilters;
   filtersFromUrl.page ||= 1;
 
   const itemsPerPage = 4;
-
-  // Cargamos opciones
   const { marcas, rubros } = await getFiltersData();
 
-  // Construimos filtros con IDs
   const mappedFilters: CatalogFilters = {
     ...filtersFromUrl,
     marca_id: undefined,
     categoria_id: undefined,
   };
   if (filtersFromUrl.marca_slug) {
-    const fm = marcas.find(m => slugify(m.marca) === filtersFromUrl.marca_slug);
-    if (fm) mappedFilters.marca_id = fm.id;
+    const m = marcas.find(m => slugify(m.marca) === filtersFromUrl.marca_slug);
+    if (m) mappedFilters.marca_id = m.id;
   }
   if (filtersFromUrl.categoria_slug) {
-    const fr = rubros.find(r => slugify(r.rubro) === filtersFromUrl.categoria_slug);
-    if (fr) mappedFilters.categoria_id = fr.id;
+    const r = rubros.find(r => slugify(r.rubro) === filtersFromUrl.categoria_slug);
+    if (r) mappedFilters.categoria_id = r.id;
   }
 
-  // Obtenemos datos
   const { products: rawProducts, totalPages }: FilteredProductsResult =
     await getFilteredProducts(mappedFilters, itemsPerPage);
 
-  // Mapeamos a la forma que espera ProductCard (Decimal→number, null→undefined)
+  // Mapeo final a ProductCardType
   const products: ProductCardType[] = rawProducts.map(p => ({
     id: p.id,
     producto: p.producto,

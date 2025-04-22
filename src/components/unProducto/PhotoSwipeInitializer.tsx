@@ -1,21 +1,21 @@
+// src/components/unProducto/PhotoSwipeInitializer.tsx
 'use client';
 
 import { useEffect } from 'react';
 import 'photoswipe/style.css';
+import type PhotoSwipeLightbox from 'photoswipe/lightbox';
 
 export const PhotoSwipeInitializer: React.FC = () => {
   useEffect(() => {
-    let lightbox: any;
+    let lightbox: PhotoSwipeLightbox | undefined;
 
     (async () => {
       try {
-        const PhotoSwipeLightbox = (await import('photoswipe/lightbox')).default;
-        const pswpModule = () => import('photoswipe');
-
-        lightbox = new PhotoSwipeLightbox({
+        const { default: PSLightbox } = await import('photoswipe/lightbox');
+        lightbox = new PSLightbox({
           gallery: '#gallery',
           children: 'a',
-          pswpModule,
+          pswpModule: () => import('photoswipe'),
         });
         lightbox.init();
       } catch (error) {
@@ -23,11 +23,8 @@ export const PhotoSwipeInitializer: React.FC = () => {
       }
     })();
 
-    // Cleanup al desmontar el componente
     return () => {
-      if (lightbox && typeof lightbox.destroy === 'function') {
-        lightbox.destroy();
-      }
+      if (lightbox) lightbox.destroy();
     };
   }, []);
 

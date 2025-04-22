@@ -1,11 +1,11 @@
 // src/components/home/PromotionsSlider.tsx
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 
 interface PromotionsSliderProps {
-  images: string[]; // Arreglo de URLs de las imágenes de promoción
+  images: string[];
 }
 
 export default function PromotionsSlider({ images }: PromotionsSliderProps) {
@@ -13,43 +13,40 @@ export default function PromotionsSlider({ images }: PromotionsSliderProps) {
   const totalSlides = images.length;
   const autoPlayInterval = useRef<NodeJS.Timeout | null>(null);
 
-  const startAutoPlay = () => {
+  const startAutoPlay = useCallback(() => {
     if (!autoPlayInterval.current) {
       autoPlayInterval.current = setInterval(() => {
-        setCurrentIndex((prevIndex) => (prevIndex + 1) % totalSlides);
+        setCurrentIndex(prev => (prev + 1) % totalSlides);
       }, 5000);
     }
-  };
+  }, [totalSlides]);
 
-  const stopAutoPlay = () => {
+  const stopAutoPlay = useCallback(() => {
     if (autoPlayInterval.current) {
       clearInterval(autoPlayInterval.current);
       autoPlayInterval.current = null;
     }
-  };
+  }, []);
 
   useEffect(() => {
     startAutoPlay();
     return () => stopAutoPlay();
-  }, [startAutoPlay]);
+  }, [startAutoPlay, stopAutoPlay]);
 
-  const handleNext = () => setCurrentIndex((prev) => (prev + 1) % totalSlides);
-  const handlePrev = () => setCurrentIndex((prev) => (prev - 1 + totalSlides) % totalSlides);
+  const handleNext = () => setCurrentIndex(prev => (prev + 1) % totalSlides);
+  const handlePrev = () => setCurrentIndex(prev => (prev - 1 + totalSlides) % totalSlides);
   const goToSlide = (index: number) => setCurrentIndex(index);
 
-  // Manejo simple de gestos en móviles
-  const touchStartX = useRef<number>(0);
-  const touchEndX = useRef<number>(0);
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
   const minSwipeDistance = 50;
 
   const onTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.changedTouches[0].screenX;
   };
-
   const onTouchMove = (e: React.TouchEvent) => {
     touchEndX.current = e.changedTouches[0].screenX;
   };
-
   const onTouchEnd = () => {
     if (touchStartX.current - touchEndX.current > minSwipeDistance) {
       handleNext();
@@ -90,7 +87,6 @@ export default function PromotionsSlider({ images }: PromotionsSliderProps) {
         ))}
       </div>
 
-      {/* Botón Anterior */}
       <button
         onClick={handlePrev}
         className="absolute top-1/2 left-4 transform -translate-y-1/2 bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-2 rounded-full focus:outline-none"
@@ -98,8 +94,6 @@ export default function PromotionsSlider({ images }: PromotionsSliderProps) {
       >
         ‹
       </button>
-
-      {/* Botón Siguiente */}
       <button
         onClick={handleNext}
         className="absolute top-1/2 right-4 transform -translate-y-1/2 bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-2 rounded-full focus:outline-none"
@@ -108,7 +102,6 @@ export default function PromotionsSlider({ images }: PromotionsSliderProps) {
         ›
       </button>
 
-      {/* Indicadores */}
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
         {images.map((_, idx) => (
           <button
@@ -118,7 +111,7 @@ export default function PromotionsSlider({ images }: PromotionsSliderProps) {
               currentIndex === idx ? 'bg-white' : 'bg-gray-400'
             }`}
             aria-label={`Ir a promoción ${idx + 1}`}
-          ></button>
+          />
         ))}
       </div>
     </section>

@@ -1,7 +1,7 @@
 // src/components/checkout/CheckoutWizard.tsx
 'use client';
 
-import React, { useState, useEffect, ChangeEvent } from 'react';
+import React, { useState, useEffect, useCallback, ChangeEvent } from 'react';
 import Script from 'next/script';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -13,6 +13,18 @@ import { CreatePedidoDTO, MetodoPago } from '@/types/payment';
 declare global {
   interface Window { MercadoPago: any; }
 }
+
+interface CardData {
+  token: string;
+  // otros campos que MercadoPago devuelva…
+}
+
+type ShippingInfo = {
+  nombre: string;
+  email: string;
+  telefono: string;
+  direccion: string;
+};
 
 const fadeIn = `
   @keyframes fadeIn {
@@ -34,39 +46,31 @@ export default function CheckoutWizard() {
     { label: 'Gracias',  icon: <CheckCircle2 size={20} /> },
   ];
 
-  const [step, setStep]                         = useState(1);
-  const [shipping, setShipping]                 = useState({ nombre: '', email: '', telefono: '', direccion: '' });
-  const [payment, setPayment]                   = useState<{ metodo: MetodoPago }>({ metodo: 'efectivo' });
+  const [step, setStep] = useState(1);
+  const [shipping, setShipping] = useState<ShippingInfo>({
+    nombre: '', email: '', telefono: '', direccion: ''
+  });
+  const [payment, setPayment] = useState<{ metodo: MetodoPago }>({ metodo: 'efectivo' });
   const [transferenciaRef, setTransferenciaRef] = useState('');
-  const [cardToken, setCardToken]               = useState('');
-  const [orderId, setOrderId]                   = useState<number | null>(null);
-  const [loading, setLoading]                   = useState(false);
-
-  // 1) Estado para saber cuándo cargó el SDK
+  const [cardToken, setCardToken] = useState('');
+  const [orderId, setOrderId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
   const [mpLoaded, setMpLoaded] = useState(false);
 
   const CBU_EMPRESA = process.env.NEXT_PUBLIC_CBU_EMPRESA || '';
   const WPP_EMPRESA = process.env.NEXT_PUBLIC_WPP_NUMBER || '';
 
-  // 2) Hook para montar el Brick de tarjeta cuando SDK y contenedor estén listos
+  // Tipamos callback y contenedor
   useEffect(() => {
     if (payment.metodo !== 'tarjeta' || !mpLoaded) return;
-
     setTimeout(() => {
       const container = document.getElementById('card-brick-container');
-      if (!container) {
-        console.warn('card-brick-container aún no existe');
-        return;
-      }
-
-      const mp = new window.MercadoPago(
-        process.env.NEXT_PUBLIC_MP_PUBLIC_KEY!,
-        { locale: 'es-AR' }
-      );
+      if (!container) return;
+      const mp = new window.MercadoPago(process.env.NEXT_PUBLIC_MP_PUBLIC_KEY!, { locale: 'es-AR' });
       mp.bricks().create('cardPayment', 'card-brick-container', {
         initialization: { amount: total },
         callbacks: {
-          onSubmit: (cardData: any) => setCardToken(cardData.token),
+          onSubmit: (cardData: CardData) => setCardToken(cardData.token),
           onError: console.error,
           onReady: () => console.log('MercadoPago Brick ready'),
         },
@@ -75,7 +79,8 @@ export default function CheckoutWizard() {
   }, [payment.metodo, total, mpLoaded]);
 
   const validateShipping = () => {
-    if (!shipping.nombre || !shipping.email || !shipping.direccion) {
+    const { nombre, email, direccion } = shipping;
+    if (!nombre || !email || !direccion) {
       alert('Completa todos los datos de envío.');
       return false;
     }
@@ -88,21 +93,15 @@ export default function CheckoutWizard() {
   };
   const back = () => setStep(s => Math.max(s - 1, 1));
 
-  const handleShipping = (e: ChangeEvent<HTMLInputElement>) =>
-    setShipping({ ...shipping, [e.target.name]: e.target.value });
+  const handleShipping = (e: ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setShipping(prev => ({ ...prev, [name]: value }));
+  };
 
   const submitOrder = async () => {
     setLoading(true);
-    if (payment.metodo === 'tarjeta' && !cardToken) {
-      alert('Completa los datos de la tarjeta.');
-      setLoading(false);
-      return;
-    }
-    if (payment.metodo === 'transferencia' && !transferenciaRef) {
-      alert('Completa la referencia de transferencia.');
-      setLoading(false);
-      return;
-    }
+    if (payment.metodo === 'tarjeta' && !cardToken) { alert('Completa los datos de la tarjeta.'); setLoading(false); return; }
+    if (payment.metodo === 'transferencia' && !transferenciaRef) { alert('Completa la referencia de transferencia.'); setLoading(false); return; }
 
     const payload: CreatePedidoDTO = {
       datos: cart.map(i => ({
@@ -123,19 +122,17 @@ export default function CheckoutWizard() {
 
     try {
       const res  = await fetch('/api/pedidos', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers:{ 'Content-Type': 'application/json' },
         body:    JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error();
       setOrderId(data.orderId);
-
       if (payment.metodo === 'tarjeta' && data.init_point) {
         window.open(data.init_point, '_blank');
         router.push(`/checkout/success?order=${data.orderId}`);
-      }
-      if (payment.metodo === 'efectivo' || payment.metodo === 'transferencia') {
+      } else {
         setStep(3);
       }
     } catch {
@@ -150,8 +147,8 @@ export default function CheckoutWizard() {
     setLoading(true);
     try {
       const res = await fetch(`/api/pedidos/${orderId}/confirm-transfer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({ transferencia_ref: transferenciaRef }),
       });
       if (!res.ok) throw new Error();
