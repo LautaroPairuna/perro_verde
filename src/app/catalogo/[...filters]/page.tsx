@@ -9,14 +9,12 @@ import { parseUrlSegments } from '@/utils/urlUtils';
 import slugify from '@/utils/slugify';
 import type { Filters as CatalogFilters, FilteredProductsResult } from '@/utils/fetchData';
 
-interface PageProps {
-  params: { filters?: string[] };
-}
-
-export default async function CatalogListing({ params }: PageProps) {
-  const safeParams = await Promise.resolve(params);
-  const slugArray = safeParams.filters || [];
-
+export default async function CatalogListing({
+  params,
+}: {
+  params: { filters: string[] };
+}) {
+  const slugArray = params.filters;            // ya es string[]
   const pathname = '/catalogo/' + slugArray.join('/');
   const filtersFromUrl = parseUrlSegments(pathname) as CatalogFilters;
   filtersFromUrl.page ||= 1;
@@ -41,7 +39,6 @@ export default async function CatalogListing({ params }: PageProps) {
   const { products: rawProducts, totalPages }: FilteredProductsResult =
     await getFilteredProducts(mappedFilters, itemsPerPage);
 
-  // Mapeo final a ProductCardType
   const products: ProductCardType[] = rawProducts.map(p => ({
     id: p.id,
     producto: p.producto,
