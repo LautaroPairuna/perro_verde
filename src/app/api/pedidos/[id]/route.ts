@@ -1,11 +1,15 @@
 // src/app/api/pedidos/[id]/route.ts
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+export const runtime = 'nodejs'
+
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  _req: Request,
+  context: unknown
 ) {
+  // Extraemos solo lo que necesitamos de context
+  const { params } = context as { params: { id: string } }
   const pedidoId = Number(params.id)
   if (isNaN(pedidoId)) {
     return NextResponse.json({ error: 'invalid_id' }, { status: 400 })
@@ -29,7 +33,7 @@ export async function GET(
       return NextResponse.json({ error: 'not_found' }, { status: 404 })
     }
     return NextResponse.json(pedido, { status: 200 })
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('Error fetching pedido:', err)
     return NextResponse.json({ error: 'internal_error' }, { status: 500 })
   }
