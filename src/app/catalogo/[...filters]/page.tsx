@@ -10,29 +10,31 @@ import { parseUrlSegments } from '@/utils/urlUtils';
 import slugify from '@/utils/slugify';
 import type { Filters as CatalogFilters, FilteredProductsResult } from '@/utils/fetchData';
 
-export const revalidate = 60;  // Vuelve a generar la página cada 60 segundos
+export const revalidate = 60; // ISR cada 60s
 
-export default async function CatalogListing({ params }: { params: { filters?: string[] } }) {
-  // 1. Asegurarnos de que `filters` es un array
-  const slugArray: string[] = Array.isArray(params.filters) ? params.filters : [];
+export default async function CatalogListing(props: any) {
+  // Next.js App Router puede tipar `props.params` como Promise<...>
+  const { filters } = (await props.params) as { filters?: string[] };
 
-  // 2. Reconstruir la ruta para parsear los segmentos
+  // 1. Garantizar array de segmentos
+  const slugArray: string[] = Array.isArray(filters) ? filters : [];
+
+  // 2. Reconstruir la ruta para parseo
   const pathname = slugArray.length > 0
     ? `/catalogo/${slugArray.join('/')}`
     : '/catalogo';
 
-  // 3. Extraer filtros tipados
+  // 3. Extraer filtros y normalizar página
   const filtersFromUrl = parseUrlSegments(pathname) as CatalogFilters;
-  // Garantizar un número de página válido
   const pageNum = Number(filtersFromUrl.page);
   filtersFromUrl.page = Number.isInteger(pageNum) && pageNum > 0 ? pageNum : 1;
 
-  // 4. Obtener datos de marcas y rubros (filtros)
+  // 4. Cargar datos de filtros (marcas/rubros)
   let marcas, rubros;
   try {
     ({ marcas, rubros } = await getFiltersData());
   } catch (err: unknown) {
-    console.error('Error loading filter data:', err);
+    console.error('Error cargando filtros:', err);
     return (
       <section className="p-10 text-center">
         <p className="text-red-600">Error cargando filtros. Intenta nuevamente más tarde.</p>
@@ -40,7 +42,7 @@ export default async function CatalogListing({ params }: { params: { filters?: s
     );
   }
 
-  // 5. Construir filtros finales para la consulta
+  // 5. Mapear slugs a IDs
   const mappedFilters: CatalogFilters = {
     ...filtersFromUrl,
     marca_id: undefined,
@@ -55,7 +57,7 @@ export default async function CatalogListing({ params }: { params: { filters?: s
     if (r) mappedFilters.categoria_id = r.id;
   }
 
-  // 6. Petición de productos filtrados y paginación
+  // 6. Cargar productos filtrados
   const itemsPerPage = 4;
   let rawProducts, totalPages;
   try {
@@ -63,7 +65,7 @@ export default async function CatalogListing({ params }: { params: { filters?: s
     rawProducts = result.products;
     totalPages = result.totalPages;
   } catch (err: unknown) {
-    console.error('Error loading products:', err);
+    console.error('Error cargando productos:', err);
     return (
       <section className="p-10 text-center">
         <p className="text-red-600">Error cargando productos. Intenta nuevamente más tarde.</p>
@@ -71,7 +73,7 @@ export default async function CatalogListing({ params }: { params: { filters?: s
     );
   }
 
-  // 7. Mapear al tipo que espera ProductCard
+  // 7. Adaptar al tipo de ProductCard
   const products: ProductCardType[] = rawProducts.map(p => ({
     id: p.id,
     producto: p.producto,
@@ -97,16 +99,8 @@ export default async function CatalogListing({ params }: { params: { filters?: s
           <h1 className="text-3xl font-bold text-green-800">Catálogo de Productos</h1>
 
           <AdvancedSearchForm
-            marcas={marcas.map(m => ({
-              id: m.id,
-              name: m.marca,
-              slug: slugify(m.marca),
-            }))}
-            rubros={rubros.map(r => ({
-              id: r.id,
-              name: r.rubro,
-              slug: slugify(r.rubro),
-            }))}
+            marcas={marcas.map(m => ({ id: m.id, name: m.marca, slug: slugify(m.marca) }))}
+            rubros={rubros.map(r => ({ id: r.id, name: r.rubro, slug: slugify(r.rubro) }))}
             marca_slug={filtersFromUrl.marca_slug}
             categoria_slug={filtersFromUrl.categoria_slug}
             keywords={filtersFromUrl.keywords}
