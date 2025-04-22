@@ -1,4 +1,5 @@
 // src/app/catalogo/[...filters]/page.tsx
+
 import Head from 'next/head';
 import AdvancedSearchForm from '@/components/catalogo/AdvancedSearchForm';
 import ProductCard, { Product as ProductCardType } from '@/components/catalogo/ProductCard';
@@ -9,19 +10,37 @@ import { parseUrlSegments } from '@/utils/urlUtils';
 import slugify from '@/utils/slugify';
 import type { Filters as CatalogFilters, FilteredProductsResult } from '@/utils/fetchData';
 
-export default async function CatalogListing({
-  params,
-}: {
-  params: { filters: string[] };
-}) {
-  const slugArray = params.filters;            // ya es string[]
-  const pathname = '/catalogo/' + slugArray.join('/');
+export const revalidate = 60;  // Vuelve a generar la página cada 60 segundos
+
+export default async function CatalogListing({ params }: { params: { filters?: string[] } }) {
+  // 1. Asegurarnos de que `filters` es un array
+  const slugArray: string[] = Array.isArray(params.filters) ? params.filters : [];
+
+  // 2. Reconstruir la ruta para parsear los segmentos
+  const pathname = slugArray.length > 0
+    ? `/catalogo/${slugArray.join('/')}`
+    : '/catalogo';
+
+  // 3. Extraer filtros tipados
   const filtersFromUrl = parseUrlSegments(pathname) as CatalogFilters;
-  filtersFromUrl.page ||= 1;
+  // Garantizar un número de página válido
+  const pageNum = Number(filtersFromUrl.page);
+  filtersFromUrl.page = Number.isInteger(pageNum) && pageNum > 0 ? pageNum : 1;
 
-  const itemsPerPage = 4;
-  const { marcas, rubros } = await getFiltersData();
+  // 4. Obtener datos de marcas y rubros (filtros)
+  let marcas, rubros;
+  try {
+    ({ marcas, rubros } = await getFiltersData());
+  } catch (err: unknown) {
+    console.error('Error loading filter data:', err);
+    return (
+      <section className="p-10 text-center">
+        <p className="text-red-600">Error cargando filtros. Intenta nuevamente más tarde.</p>
+      </section>
+    );
+  }
 
+  // 5. Construir filtros finales para la consulta
   const mappedFilters: CatalogFilters = {
     ...filtersFromUrl,
     marca_id: undefined,
@@ -36,9 +55,23 @@ export default async function CatalogListing({
     if (r) mappedFilters.categoria_id = r.id;
   }
 
-  const { products: rawProducts, totalPages }: FilteredProductsResult =
-    await getFilteredProducts(mappedFilters, itemsPerPage);
+  // 6. Petición de productos filtrados y paginación
+  const itemsPerPage = 4;
+  let rawProducts, totalPages;
+  try {
+    const result: FilteredProductsResult = await getFilteredProducts(mappedFilters, itemsPerPage);
+    rawProducts = result.products;
+    totalPages = result.totalPages;
+  } catch (err: unknown) {
+    console.error('Error loading products:', err);
+    return (
+      <section className="p-10 text-center">
+        <p className="text-red-600">Error cargando productos. Intenta nuevamente más tarde.</p>
+      </section>
+    );
+  }
 
+  // 7. Mapear al tipo que espera ProductCard
   const products: ProductCardType[] = rawProducts.map(p => ({
     id: p.id,
     producto: p.producto,
@@ -53,15 +86,27 @@ export default async function CatalogListing({
     <>
       <Head>
         <title>Catálogo de Productos</title>
-        <meta name="description" content="Explora nuestra amplia gama de productos disponibles para ti." />
+        <meta
+          name="description"
+          content="Explora nuestra amplia gama de productos disponibles para ti."
+        />
       </Head>
 
       <section className="p-10 text-center bg-green-50">
         <div className="max-w-screen-xl mx-auto">
           <h1 className="text-3xl font-bold text-green-800">Catálogo de Productos</h1>
+
           <AdvancedSearchForm
-            marcas={marcas.map(m => ({ id: m.id, name: m.marca, slug: slugify(m.marca) }))}
-            rubros={rubros.map(r => ({ id: r.id, name: r.rubro, slug: slugify(r.rubro) }))}
+            marcas={marcas.map(m => ({
+              id: m.id,
+              name: m.marca,
+              slug: slugify(m.marca),
+            }))}
+            rubros={rubros.map(r => ({
+              id: r.id,
+              name: r.rubro,
+              slug: slugify(r.rubro),
+            }))}
             marca_slug={filtersFromUrl.marca_slug}
             categoria_slug={filtersFromUrl.categoria_slug}
             keywords={filtersFromUrl.keywords}
@@ -76,6 +121,7 @@ export default async function CatalogListing({
                   <ProductCard key={product.id} product={product} />
                 ))}
               </div>
+
               {totalPages > 1 && (
                 <Pagination
                   totalPages={totalPages}
