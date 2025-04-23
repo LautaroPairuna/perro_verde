@@ -22,7 +22,7 @@ interface ShippingInfo {
 export default function CheckoutWizard(): React.JSX.Element {
   const router = useRouter();
   const { cart, updateCart } = useCart();
-  const total = cart.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const emptyCart = () => updateCart([]);
 
   const steps = [
@@ -39,18 +39,16 @@ export default function CheckoutWizard(): React.JSX.Element {
     telefono: '',
     direccion: '',
   });
-  const [payment, setPayment] = useState<{ metodo: MetodoPago }>({
-    metodo: 'efectivo',
-  });
-  const [transferenciaRef, setTransferenciaRef] = useState('');
+  const [payment, setPayment] = useState<{ metodo: MetodoPago }>({ metodo: 'efectivo' });
+  const [transferenciaRef, setTransferenciaRef] = useState<string>('');
   const [orderId, setOrderId] = useState<number | null>(null);
   const [preferenceId, setPreferenceId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
 
   const CBU_EMPRESA = process.env.NEXT_PUBLIC_CBU_EMPRESA ?? '';
   const WPP_EMPRESA = process.env.NEXT_PUBLIC_WPP_NUMBER ?? '';
 
-  const validateShipping = () => {
+  const validateShipping = (): boolean => {
     const { nombre, email, direccion } = shipping;
     if (!nombre || !email || !direccion) {
       toast.error('Completa los datos de envío');
@@ -59,38 +57,39 @@ export default function CheckoutWizard(): React.JSX.Element {
     return true;
   };
 
-  const next = () => {
+  const next = (): void => {
     if (step === 1 && !validateShipping()) return;
-    setStep((s) => Math.min(s + 1, steps.length));
+    setStep((prev) => Math.min(prev + 1, steps.length));
   };
-  const back = () => setStep((s) => Math.max(s - 1, 1));
+  const back = (): void => setStep((prev) => Math.max(prev - 1, 1));
 
-  const generarPreference = async () => {
+  const generarPreference = async (): Promise<void> => {
     setLoading(true);
     try {
-      const res = await fetch('/api/mp/preferences', {
+      const response = await fetch('/api/mp/preferences', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount: total }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error');
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Error');
       setPreferenceId(data.preferenceId);
-    } catch {
-      toast.error('No se pudo crear preferencia de pago');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'No se pudo crear preferencia de pago';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   };
 
-  const submitOrder = async () => {
+  const submitOrder = async (): Promise<void> => {
     setLoading(true);
     const payload: CreatePedidoDTO = {
-      datos: cart.map((i) => ({
-        id: Number(i.id),
-        name: i.name,
-        price: i.price,
-        quantity: i.quantity,
+      datos: cart.map((item) => ({
+        id: Number(item.id),
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
       })),
       total,
       metodo_pago: payment.metodo,
@@ -98,9 +97,7 @@ export default function CheckoutWizard(): React.JSX.Element {
       comprador_email: shipping.email,
       comprador_telefono: shipping.telefono,
       direccion_envio: shipping.direccion,
-      ...(payment.metodo === 'transferencia' && {
-        transferencia_ref: transferenciaRef,
-      }),
+      ...(payment.metodo === 'transferencia' && { transferencia_ref: transferenciaRef }),
     };
     try {
       const res = await fetch('/api/pedidos', {
@@ -109,21 +106,22 @@ export default function CheckoutWizard(): React.JSX.Element {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Error');
+      if (!res.ok) throw new Error(data.message || 'Error al crear pedido');
       setOrderId(data.orderId);
       if (payment.metodo !== 'tarjeta') {
         setStep(3);
         emptyCart();
       }
       toast.success('Pedido creado. Completa el pago.');
-    } catch {
-      toast.error('Error al crear pedido');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al crear pedido';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (): Promise<void> => {
     if (!orderId) return;
     setLoading(true);
     try {
@@ -140,12 +138,13 @@ export default function CheckoutWizard(): React.JSX.Element {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error('Error al confirmar pago');
       emptyCart();
       setStep(4);
       toast.success('Pago confirmado');
-    } catch {
-      toast.error('No se pudo confirmar pago');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'No se pudo confirmar pago';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -156,90 +155,58 @@ export default function CheckoutWizard(): React.JSX.Element {
   return (
     <>
       <Toaster position="top-center" />
-      {/* Carga del SDK de MercadoPago */}
       <Script src="https://sdk.mercadopago.com/js/v2" />
 
       <div className="bg-green-50 flex items-center justify-center p-4">
         <div className="w-full max-w-xl bg-white p-6 space-y-6 rounded-2xl shadow-lg">
-          <h1 className="text-2xl text-center font-bold text-green-700">
-            Checkout
-          </h1>
+          <h1 className="text-2xl text-center font-bold text-green-700">Checkout</h1>
 
-          {/* Barra de pasos */}
+          {/* Steps */}
           <ul className="flex justify-between mb-4">
             {steps.map((s, i) => (
               <li key={i} className="flex-1 text-center">
                 <div
                   className={`inline-block p-2 border-2 rounded-full ${
-                    step > i + 1
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-200 text-gray-500'
+                    step > i + 1 ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-500'
                   }`}
                 >
                   {s.icon}
                 </div>
-                <p
-                  className={`mt-1 text-xs ${
-                    step >= i + 1 ? 'text-green-700' : 'text-gray-500'
-                  }`}
-                >
+                <p className={`mt-1 text-xs ${step >= i + 1 ? 'text-green-700' : 'text-gray-500'}`}>
                   {s.label}
                 </p>
               </li>
             ))}
           </ul>
 
-          {/* Barra de progreso */}
+          {/* Progress bar */}
           <div className="h-1 bg-gray-200 rounded-full overflow-hidden mb-6">
-            <motion.div
-              className="h-full bg-green-600 rounded-full"
-              style={{ width: `${progress}%` }}
-            />
+            <motion.div className="h-full bg-green-600 rounded-full" style={{ width: `${progress}%` }} />
           </div>
 
-          {/* Paso 1: Envío */}
+          {/* Step 1: Shipping */}
           {step === 1 && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                next();
-              }}
-              className="space-y-4 animate-fade"
-            >
-              {(['nombre', 'email', 'telefono', 'direccion'] as const).map(
-                (field) => (
-                  <div key={field}>
-                    <label className="block text-sm font-medium mb-1">
-                      {field.toUpperCase()}
-                    </label>
-                    <input
-                      name={field}
-                      type={field === 'email' ? 'email' : 'text'}
-                      value={(shipping as any)[field]}
-                      onChange={(e) =>
-                        setShipping({
-                          ...shipping,
-                          [field]: e.target.value,
-                        })
-                      }
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
-                      required={field !== 'telefono'}
-                    />
-                  </div>
-                )
-              )}
+            <form onSubmit={(e) => { e.preventDefault(); next(); }} className="space-y-4 animate-fade">
+              {(['nombre', 'email', 'telefono', 'direccion'] as const).map((field) => (
+                <div key={field}>
+                  <label className="block text-sm font-medium mb-1">{field.toUpperCase()}</label>
+                  <input
+                    name={field}
+                    type={field === 'email' ? 'email' : 'text'}
+                    value={shipping[field]}
+                    onChange={(e) => setShipping({ ...shipping, [field]: e.target.value })}
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
+                    required={field !== 'telefono'}
+                  />
+                </div>
+              ))}
               <div className="text-right">
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-green-600 text-white rounded-md"
-                >
-                  Siguiente
-                </button>
+                <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-md">Siguiente</button>
               </div>
             </form>
           )}
 
-          {/* Paso 2: Pago */}
+          {/* Step 2: Payment */}
           {step === 2 && (
             <div className="space-y-4 animate-fade">
               <p className="text-sm font-medium">Método de pago</p>
@@ -252,29 +219,26 @@ export default function CheckoutWizard(): React.JSX.Element {
                 }}
               />
 
-              {/* Pago con Tarjeta */}
+              {/* Card Payment */}
               {payment.metodo === 'tarjeta' && (
-                <>
-                  {!preferenceId ? (
-                    <button
-                      onClick={generarPreference}
-                      disabled={loading}
-                      className="px-4 py-2 bg-green-600 text-white rounded-md"
-                    >
+                !preferenceId
+                  ? (
+                    <button onClick={generarPreference} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md">
                       {loading ? 'Cargando...' : 'Pagar con Tarjeta'}
                     </button>
-                  ) : (
+                  )
+                  : (
                     <CardPaymentForm
                       preferenceId={preferenceId}
                       onApprove={async (cardData: CardData) => {
                         setLoading(true);
                         try {
                           const payload: CreatePedidoDTO = {
-                            datos: cart.map((i) => ({
-                              id: Number(i.id),
-                              name: i.name,
-                              price: i.price,
-                              quantity: i.quantity,
+                            datos: cart.map((item) => ({
+                              id: Number(item.id),
+                              name: item.name,
+                              price: item.price,
+                              quantity: item.quantity,
                             })),
                             total,
                             metodo_pago: 'tarjeta',
@@ -286,36 +250,31 @@ export default function CheckoutWizard(): React.JSX.Element {
                           };
                           const res = await fetch('/api/pedidos', {
                             method: 'POST',
-                            headers: {
-                              'Content-Type': 'application/json',
-                            },
+                            headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(payload),
                           });
                           const data = await res.json();
-                          if (!res.ok) throw new Error(data.message || 'Error');
+                          if (!res.ok) throw new Error(data.message || 'Error al procesar pago');
                           setOrderId(data.orderId);
                           emptyCart();
                           setStep(4);
                           toast.success('Pago con tarjeta exitoso');
-                        } catch {
-                          toast.error('Falló el pago con tarjeta');
+                        } catch (err: unknown) {
+                          const message = err instanceof Error ? err.message : 'Falló el pago con tarjeta';
+                          toast.error(message);
                         } finally {
                           setLoading(false);
                         }
                       }}
                     />
-                  )}
-                </>
+                  )
               )}
 
-              {/* Pago por Transferencia */}
+              {/* Bank Transfer */}
               {payment.metodo === 'transferencia' && (
                 <div className="space-y-2">
                   <p className="text-sm">
-                    CBU:{' '}
-                    <code className="font-mono bg-gray-100 px-2 py-1">
-                      {CBU_EMPRESA}
-                    </code>
+                    CBU: <code className="font-mono bg-gray-100 px-2 py-1">{CBU_EMPRESA}</code>
                   </p>
                   <input
                     type="text"
@@ -326,12 +285,7 @@ export default function CheckoutWizard(): React.JSX.Element {
                   />
                   <p className="text-sm">
                     Envía comprobante por{' '}
-                    <a
-                      href={`https://wa.me/${WPP_EMPRESA}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline text-green-600"
-                    >
+                    <a href={`https://wa.me/${WPP_EMPRESA}`} target="_blank" rel="noreferrer" className="underline text-green-600">
                       WhatsApp
                     </a>
                   </p>
@@ -339,18 +293,9 @@ export default function CheckoutWizard(): React.JSX.Element {
               )}
 
               <div className="flex justify-between">
-                <button
-                  onClick={back}
-                  className="px-4 py-2 border rounded-md"
-                >
-                  Atrás
-                </button>
+                <button onClick={back} className="px-4 py-2 border rounded-md">Atrás</button>
                 {payment.metodo !== 'tarjeta' && (
-                  <button
-                    onClick={submitOrder}
-                    disabled={loading}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md"
-                  >
+                  <button onClick={submitOrder} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md">
                     {loading ? 'Procesando...' : 'Continuar'}
                   </button>
                 )}
@@ -358,41 +303,24 @@ export default function CheckoutWizard(): React.JSX.Element {
             </div>
           )}
 
-          {/* Paso 3: Revisión */}
+          {/* Step 3: Review */}
           {step === 3 && (
             <div className="text-center space-y-4 animate-fade">
-              <p className="text-sm">
-                <strong>Envío:</strong> {shipping.direccion}
-              </p>
-              <p className="text-sm">
-                <strong>Método:</strong> {payment.metodo}
-              </p>
-              <p className="text-lg font-bold">
-                Total: ${total.toFixed(2)}
-              </p>
-              <button
-                onClick={handleConfirm}
-                disabled={loading}
-                className="px-4 py-2 bg-green-600 text-white rounded-md"
-              >
+              <p className="text-sm"><strong>Envío:</strong> {shipping.direccion}</p>
+              <p className="text-sm"><strong>Método:</strong> {payment.metodo}</p>
+              <p className="text-lg font-bold">Total: ${total.toFixed(2)}</p>
+              <button onClick={handleConfirm} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md">
                 {loading ? 'Confirmando...' : 'He completado el pago'}
               </button>
             </div>
           )}
 
-          {/* Paso 4: Gracias */}
+          {/* Step 4: Thank You */}
           {step === 4 && (
             <div className="text-center space-y-4 animate-fade">
-              <h2 className="text-xl font-semibold text-green-700">
-                ¡Gracias!
-              </h2>
+              <h2 className="text-xl font-semibold text-green-700">¡Gracias!</h2>
               <p>Tu pedido está confirmado.</p>
-              <button
-                onClick={() => router.push('/')}
-                className="px-4 py-2 bg-green-600 text-white rounded-md"
-              >
-                Inicio
-              </button>
+              <button onClick={() => router.push('/')} className="px-4 py-2 bg-green-600 text-white rounded-md">Inicio</button>
             </div>
           )}
         </div>
@@ -400,18 +328,10 @@ export default function CheckoutWizard(): React.JSX.Element {
 
       <style jsx>{`
         @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(20px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
-        .animate-fade {
-          animation: fadeIn 0.5s ease-out;
-        }
+        .animate-fade { animation: fadeIn 0.5s ease-out; }
       `}</style>
     </>
   );
