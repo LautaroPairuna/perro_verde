@@ -23,14 +23,16 @@ declare global {
           containerId: string,
           options: {
             initialization: { amount: number };
+            customization?: { visual: { hidePaymentButton: boolean } };
             callbacks: {
               onReady: () => void;
-              onSubmit: (data: { token: string }) => void;
               onError: (error: Error) => void;
+              onSubmit: () => void;
             };
           }
-        ): void;
+        ): any;
         unmount(name: string): void;
+        createCardToken?(): Promise<{ token: string; error?: any }>;
       };
     };
   }
@@ -48,7 +50,6 @@ export default function CheckoutWizard(): React.ReactElement {
   const { cart, updateCart } = useCart();
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-  // Stable callback to empty the cart
   const emptyCart = useCallback(() => {
     updateCart([]);
   }, [updateCart]);
@@ -68,14 +69,10 @@ export default function CheckoutWizard(): React.ReactElement {
     direccion: '',
   });
   const [paymentMethod, setPaymentMethod] = useState<MetodoPago>('efectivo');
-  const [transferRef, setTransferRef] = useState<string>('');
   const [orderId, setOrderId] = useState<number | null>(null);
   const [mpLoaded, setMpLoaded] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [cardTokenValue, setCardTokenValue] = useState<string | null>(null);
-
-  const CBU = process.env.NEXT_PUBLIC_CBU_EMPRESA ?? '';
-  const WPP = process.env.NEXT_PUBLIC_WPP_NUMBER ?? '';
 
   const validateShipping = (): boolean => {
     if (!shipping.nombre || !shipping.email || !shipping.direccion) {
@@ -95,7 +92,7 @@ export default function CheckoutWizard(): React.ReactElement {
   };
 
   const submitOrder = useCallback(
-    async (cardToken?: string) => {
+    async (cardToken?: string, idempotencyKey?: string) => {
       setLoading(true);
       try {
         const payload: CreatePedidoDTO = {
@@ -111,9 +108,10 @@ export default function CheckoutWizard(): React.ReactElement {
           comprador_email: shipping.email,
           comprador_telefono: shipping.telefono,
           direccion_envio: shipping.direccion,
-          ...(paymentMethod === 'transferencia' && { transferencia_ref: transferRef }),
           ...(cardToken && { cardToken }),
+          ...(idempotencyKey && { idempotencyKey }),
         };
+
         const res = await fetch('/api/pedidos', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -121,6 +119,7 @@ export default function CheckoutWizard(): React.ReactElement {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'Error creando pedido');
+
         setOrderId(data.data.orderId);
         setStep(3);
         emptyCart();
@@ -128,7 +127,7 @@ export default function CheckoutWizard(): React.ReactElement {
         toast.success(
           paymentMethod === 'tarjeta'
             ? 'Pago con tarjeta registrado'
-            : 'Pedido creado. Completa el pago.'
+            : 'Pedido creado y pago en efectivo registrado'
         );
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Error procesando pedido';
@@ -138,10 +137,10 @@ export default function CheckoutWizard(): React.ReactElement {
         setLoading(false);
       }
     },
-    [cart, paymentMethod, shipping, transferRef, total, emptyCart]
+    [cart, paymentMethod, shipping, total, emptyCart]
   );
 
-  // Montar/desmontar MercadoPago Brick para tarjeta
+  // Montar Brick de tarjeta ocultando su botón interno
   useEffect(() => {
     if (step !== 2 || paymentMethod !== 'tarjeta' || !mpLoaded) return;
 
@@ -149,43 +148,51 @@ export default function CheckoutWizard(): React.ReactElement {
       process.env.NEXT_PUBLIC_MP_PUBLIC_KEY as string,
       { locale: 'es-AR' }
     );
-    mp.bricks().create('cardPayment', 'card-brick-container', {
-      initialization: { amount: total },
-      callbacks: {
-        onReady: () => toast.success('Formulario listo'),
-        onSubmit: ({ token }) => submitOrder(token),
-        onError: (error) => {
-          console.error('MP Brick error:', error);
-          toast.error('Error en formulario de tarjeta');
+    mp.bricks().create(
+      'cardPayment',
+      'card-brick-container',
+      {
+        initialization: { amount: total },
+        customization: { visual: { hidePaymentButton: true } },
+        callbacks: {
+          onReady: () => toast.success('Formulario listo'),
+          onError: (error) => {
+            console.error('MP Brick error:', error);
+            toast.error('Error en formulario de tarjeta');
+          },
+          onSubmit: () => {
+            /* no usamos */
+          },
         },
-      },
-    });
+      }
+    );
 
     return () => {
       try {
         mp.bricks().unmount('cardPayment');
       } catch {}
     };
-  }, [step, paymentMethod, mpLoaded, total, submitOrder]);
+  }, [step, paymentMethod, mpLoaded, total]);
 
   const handleConfirm = async (): Promise<void> => {
     if (!orderId) return;
     setLoading(true);
     try {
-      const endpoint =
-        paymentMethod === 'tarjeta'
-          ? `/api/pedidos/${orderId}/confirm-card`
-          : `/api/pedidos/${orderId}/confirm-transfer`;
+      // Confirmación para efectivo o tarjeta (si ya tiene token)
+      const endpoint = `/api/pedidos/${orderId}/${
+        paymentMethod === 'tarjeta' ? 'confirm-card' : 'confirm-transfer'
+      }`;
       const bodyData =
         paymentMethod === 'tarjeta'
           ? { cardToken: cardTokenValue! }
-          : { transferencia_ref: transferRef };
-      const res = await fetch(endpoint, {
+          : {};
+      const res2 = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyData),
       });
-      if (!res.ok) throw new Error('No se pudo confirmar pago');
+      if (!res2.ok) throw new Error('No se pudo confirmar pago');
+
       toast.success('Pago confirmado');
       setStep(4);
     } catch (err: unknown) {
@@ -245,17 +252,51 @@ export default function CheckoutWizard(): React.ReactElement {
           {/* Step 1: Shipping */}
           {step === 1 && (
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                next();
-              }}
+              onSubmit={(e) => { e.preventDefault(); next(); }}
               className="space-y-4 animate-fade"
             >
-              {/* ... campos de envío ... */}
-              <div className="text-right">
-                <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-md">
-                  Siguiente
-                </button>
+              <div>
+                <label className="block text-sm font-medium">Nombre</label>
+                <input
+                  type="text"
+                  value={shipping.nombre}
+                  onChange={(e) => setShipping({ ...shipping, nombre: e.target.value })}
+                  required
+                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Email</label>
+                <input
+                  type="email"
+                  value={shipping.email}
+                  onChange={(e) => setShipping({ ...shipping, email: e.target.value })}
+                  required
+                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Teléfono</label>
+                <input
+                  type="text"
+                  value={shipping.telefono}
+                  onChange={(e) => setShipping({ ...shipping, telefono: e.target.value })}
+                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Dirección</label>
+                <input
+                  type="text"
+                  value={shipping.direccion}
+                  onChange={(e) => setShipping({ ...shipping, direccion: e.target.value })}
+                  required
+                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
+                />
+              </div>
+              <div className="flex justify-between">
+                <button onClick={back} type="button" className="px-4 py-2 border rounded-md">Atrás</button>
+                <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-md">Siguiente</button>
               </div>
             </form>
           )}
@@ -269,35 +310,56 @@ export default function CheckoutWizard(): React.ReactElement {
                 onChange={(m) => setPaymentMethod(m as MetodoPago)}
               />
 
-              {paymentMethod === 'tarjeta' && <div id="card-brick-container" style={{ minHeight: 200 }} />} 
+              {paymentMethod === 'tarjeta' && (
+                <>
+                  <div id="card-brick-container" style={{ minHeight: 200 }} />
+                  <div className="flex justify-between">
+                    <button onClick={back} className="px-4 py-2 border rounded-md">Atrás</button>
+                    <button
+                      disabled={!mpLoaded || loading}
+                      onClick={() => {
+                        const key = crypto.randomUUID();
+                        const mp = new window.MercadoPago!(process.env.NEXT_PUBLIC_MP_PUBLIC_KEY as string, { locale: 'es-AR' });
+                        mp.bricks().createCardToken!()
+                          .then(({ token, error }) => {
+                            if (error || !token) throw error || new Error('Token error');
+                            submitOrder(token, key);
+                          })
+                          .catch(e => { console.error(e); toast.error('No se pudo generar token'); });
+                      }}
+                      className="px-6 py-2 bg-green-600 text-white rounded-md"
+                    >
+                      {loading ? 'Procesando…' : 'Pagar con tarjeta'}
+                    </button>
+                  </div>
+                </>
+              )}
 
-              {paymentMethod === 'transferencia' && (
-                <div className="space-y-2">
-                  {/* ... transferencia UI ... */}
+              {paymentMethod === 'efectivo' && (
+                <div className="flex justify-between">
+                  <button onClick={back} className="px-4 py-2 border rounded-md">Atrás</button>
+                  <button
+                    onClick={() => submitOrder()}
+                    disabled={loading}
+                    className="px-6 py-2 bg-green-600 text-white rounded-md"
+                  >
+                    {loading ? 'Procesando…' : 'Confirmar y pagar en efectivo'}
+                  </button>
                 </div>
               )}
             </div>
           )}
 
-          {/* Step 3: Review & Confirm */}
+          {/* Step 3: Confirmation */}
           {step === 3 && (
             <div className="text-center space-y-4 animate-fade">
-              {paymentMethod === 'tarjeta' ? (
-                <button
-                  onClick={handleConfirm}
-                  disabled={loading}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md"
-                >
-                  {loading ? 'Confirmando...' : 'He completado el pago'}
-                </button>
-              ) : (
-                <button
-                  onClick={() => router.push('/')}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md"
-                >
-                  Finalizar
-                </button>
-              )}
+              <button
+                onClick={handleConfirm}
+                disabled={loading}
+                className="px-6 py-2 bg-green-600 text-white rounded-md"
+              >
+                {loading ? 'Confirmando pago…' : 'Confirmar pago'}
+              </button>
             </div>
           )}
 
@@ -306,10 +368,7 @@ export default function CheckoutWizard(): React.ReactElement {
             <div className="text-center space-y-4 animate-fade">
               <h2 className="text-xl font-semibold text-green-700">¡Gracias!</h2>
               <p>Tu pedido está confirmado.</p>
-              <button
-                onClick={() => router.push('/')}
-                className="px-4 py-2 bg-green-600 text-white rounded-md"
-              >
+              <button onClick={() => router.push('/')} className="px-4 py-2 bg-green-600 text-white rounded-md">
                 Inicio
               </button>
             </div>
@@ -319,18 +378,10 @@ export default function CheckoutWizard(): React.ReactElement {
 
       <style jsx>{`
         @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-        .animate-fade {
-          animation: fadeIn 0.5s ease-out;
-        }
+        .animate-fade { animation: fadeIn 0.5s ease-out; }
       `}</style>
     </>
   );
