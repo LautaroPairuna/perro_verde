@@ -1,4 +1,5 @@
 // src/services/PedidoService.ts
+
 import { PrismaClient, Prisma } from '@prisma/client'
 import { CreatePedidoDTO, PaymentResponse } from '../types/payment'
 import { CashStrategy } from '../strategies/CashStrategy'
@@ -25,7 +26,7 @@ export class PedidoService {
         metodo_pago:        dto.metodo_pago,
         comprador_nombre:   dto.comprador_nombre,
         comprador_email:    dto.comprador_email,
-        comprador_telefono: dto.comprador_telefono,
+        comprador_telefono: dto.comprador_telefono ?? null,
         direccion_envio:    dto.direccion_envio,
         estado:             'pendiente',
       },
@@ -42,10 +43,10 @@ export class PedidoService {
       await this.prisma.pedidos.update({
         where: { id: pedido.id },
         data: {
-          mp_payment_id:          pago.mpId,
-          transferencia_ref:      pago.transferenciaRef,
-          tarjeta_last4:          pago.cardLast4,
-          tarjeta_payment_method: pago.cardLast4 ? dto.cardToken : undefined,
+          mp_payment_id:          pago.mpId!.toString(),               // ← aseguramos que mpId no es undefined
+          transferencia_ref:      pago.transferenciaRef ?? null,
+          tarjeta_last4:          pago.cardLast4 ?? null,
+          tarjeta_payment_method: pago.cardLast4 ? dto.cardToken! : null,
           estado:                 pago.status,
           mp_response:            pago.responseToClient as unknown as Prisma.InputJsonValue,
         },
@@ -53,7 +54,6 @@ export class PedidoService {
 
       return pago.responseToClient
     } catch (err: unknown) {
-      // Definimos un tipo para el error de MP sin usar any
       interface MPError {
         cause?: { error?: string; message?: string }
         error?: string
@@ -61,8 +61,8 @@ export class PedidoService {
         message?: string
       }
       const e = err as MPError
-      const mpCode = e.cause?.error ?? e.error ?? e.name ?? 'unknown_error'
-      const mpMessage = e.cause?.message ?? e.message ?? 'Error desconocido'
+      const mpCode    = e.cause?.error   ?? e.error ?? e.name ?? 'unknown_error'
+      const mpMessage = e.cause?.message ?? e.message             ?? 'Error desconocido'
       const errorData = { code: mpCode, message: mpMessage }
 
       await this.prisma.pedidos.update({
@@ -108,9 +108,7 @@ export class PedidoService {
 
   /** Confirma pago con tarjeta para un pedido existente. */
   async confirmCard(orderId: number, cardToken: string): Promise<void> {
-    const pedido = await this.prisma.pedidos.findUnique({
-      where: { id: orderId },
-    })
+    const pedido = await this.prisma.pedidos.findUnique({ where: { id: orderId } })
     if (!pedido) {
       throw new Error(`Pedido con id ${orderId} no encontrado`)
     }
@@ -118,17 +116,20 @@ export class PedidoService {
       throw new Error(`El pedido ${orderId} no usa pago con tarjeta`)
     }
 
-    // Construye un DTO completo partiendo de los datos del pedido
+    // Reconstruimos el DTO desde lo almacenado
     const dto: CreatePedidoDTO = {
       datos:              pedido.datos as unknown as CreatePedidoDTO['datos'],
       total:              Number(pedido.total),
       metodo_pago:        pedido.metodo_pago,
       comprador_nombre:   pedido.comprador_nombre,
       comprador_email:    pedido.comprador_email,
-      comprador_telefono: pedido.comprador_telefono || '',
-      direccion_envio:    pedido.direccion_envio || '',
+      comprador_telefono: pedido.comprador_telefono ?? undefined,
+      direccion_envio:    pedido.direccion_envio ?? '',            // ← nos aseguramos string
       cardToken,
+      payment_method_id:  undefined,
+      installments:       undefined,
       transferencia_ref:  undefined,
+      idempotencyKey:     undefined,
     }
 
     const strategy: PaymentStrategy = new CardStrategy()
@@ -142,9 +143,9 @@ export class PedidoService {
       await this.prisma.pedidos.update({
         where: { id: orderId },
         data: {
-          mp_payment_id:          pago.mpId,
-          tarjeta_last4:          pago.cardLast4,
-          tarjeta_payment_method: pago.cardLast4 ? cardToken : undefined,
+          mp_payment_id:          pago.mpId!.toString(),            // ← no más Int
+          tarjeta_last4:          pago.cardLast4 ?? null,
+          tarjeta_payment_method: pago.cardLast4 ? cardToken : null,
           estado:                 pago.status,
           mp_response:            pago.responseToClient as unknown as Prisma.InputJsonValue,
         },
@@ -157,8 +158,8 @@ export class PedidoService {
         message?: string
       }
       const e = err as MPError
-      const mpCode = e.cause?.error ?? e.error ?? e.name ?? 'unknown_error'
-      const mpMessage = e.cause?.message ?? e.message ?? 'Error desconocido'
+      const mpCode    = e.cause?.error   ?? e.error ?? e.name ?? 'unknown_error'
+      const mpMessage = e.cause?.message ?? e.message             ?? 'Error desconocido'
 
       await this.prisma.pedidos.update({
         where: { id: orderId },
