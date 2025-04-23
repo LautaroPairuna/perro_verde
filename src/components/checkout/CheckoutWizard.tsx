@@ -1,19 +1,30 @@
 // src/components/checkout/CheckoutWizard.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, {
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+  ChangeEvent,
+} from 'react';
 import Script from 'next/script';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
+import { motion } from 'framer-motion';
+import {
+  MapPin,
+  ClipboardCheck,
+  CreditCard,
+  CheckCircle2,
+} from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { PaymentMethodSelector } from './PaymentMethodSelector';
-import { MapPin, CreditCard, CheckCircle2 } from 'lucide-react';
 import { CreatePedidoDTO, MetodoPago } from '@/types/payment';
 
-/** Controlador del Brick de tarjeta */
 interface CardBrickController {
-  createCardToken(): Promise<{ token: string; error?: unknown }>;
+  getFormData(): Promise<{ token: string }>;
+  unmount(): void;
 }
 
 interface ShippingInfo {
@@ -26,16 +37,22 @@ interface ShippingInfo {
 export default function CheckoutWizard(): React.ReactElement {
   const router = useRouter();
   const { cart, updateCart } = useCart();
-  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  /* ---------- DERIVED DATA ---------- */
+  const total = useMemo(
+    () => cart.reduce((acc, item) => acc + item.price * item.quantity, 0),
+    [cart],
+  );
 
   const steps = [
     { label: 'Envío', icon: <MapPin size={20} /> },
+    { label: 'Revisión', icon: <ClipboardCheck size={20} /> },
     { label: 'Pago', icon: <CreditCard size={20} /> },
     { label: 'Gracias', icon: <CheckCircle2 size={20} /> },
   ];
 
-  // Estados
-  const [step, setStep] = useState<number>(1);
+  /* ---------- STATE ---------- */
+  const [step, setStep] = useState(1);
   const [shipping, setShipping] = useState<ShippingInfo>({
     nombre: '',
     email: '',
@@ -43,83 +60,83 @@ export default function CheckoutWizard(): React.ReactElement {
     direccion: '',
   });
   const [paymentMethod, setPaymentMethod] = useState<MetodoPago>('efectivo');
-  const [transferRef, setTransferRef] = useState<string>('');
+  const [transferRef, setTransferRef] = useState('');
   const [orderId, setOrderId] = useState<number | null>(null);
-  const [mpLoaded, setMpLoaded] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [cardController, setCardController] = useState<CardBrickController | null>(null);
 
-  // Vaciar carrito (memoizado)
-  const emptyCart = useCallback(() => {
-    updateCart([]);
-  }, [updateCart]);
+  const [mpReady, setMpReady] = useState(false);
+  const [cardCtrl, setCardCtrl] = useState<CardBrickController | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const validateShipping = (): boolean => {
-    if (!shipping.nombre || !shipping.email || !shipping.direccion) {
-      toast.error('Completa los datos de envío');
-      return false;
-    }
-    return true;
-  };
+  /* ---------- HELPERS ---------- */
+  const emptyCart = useCallback(() => updateCart([]), [updateCart]);
+
+  const validateShipping = (): boolean =>
+    !!shipping.nombre && !!shipping.email && !!shipping.direccion;
 
   const next = (): void => {
-    if (step === 1 && !validateShipping()) return;
-    setStep((prev) => Math.min(prev + 1, steps.length));
+    if (step === 1 && !validateShipping()) {
+      toast.error('Completa los datos de envío');
+      return;
+    }
+    setStep((s) => Math.min(s + 1, steps.length));
   };
+  const back = (): void => setStep((s) => Math.max(s - 1, 1));
 
-  const back = (): void => {
-    setStep((prev) => Math.max(prev - 1, 1));
-  };
-
-  // Montar/desmontar Brick de tarjeta, ocultando su botón interno
+  /* ---------- MERCADO PAGO BRICK ---------- */
   useEffect(() => {
-    if (step !== 2 || paymentMethod !== 'tarjeta' || !mpLoaded) return;
-
+    if (step !== 3 || paymentMethod !== 'tarjeta' || !mpReady) return;
+  
     const mp = new window.MercadoPago(
       process.env.NEXT_PUBLIC_MP_PUBLIC_KEY as string,
-      { locale: 'es-AR' }
+      { locale: 'es-AR' },
     );
-
-    const controller = mp.bricks().create(
-      'cardPayment',
-      'card-brick-container',
-      {
-        initialization: { amount: total },
-        customization: { visual: { hidePaymentButton: true } },
-        callbacks: {
-          onReady: () => toast.success('Formulario listo'),
-          onError: (error) => {
-            console.error('MP Brick error:', error);
-            toast.error('Error en formulario de tarjeta');
-          },
-          onSubmit: () => {
-            /* ignoramos la llamada interna */
-          },
-        },
-      }
-    );
-
-    setCardController(controller);
-
-    return () => {
+  
+    let activeCtrl: CardBrickController | null = null;
+  
+    (async () => {
       try {
-        mp.bricks().unmount('cardPayment');
-      } catch {}
-      setCardController(null);
+        // 1. Obtenemos el resultado bruto
+        const rawCtrl = await mp.bricks().create(
+          'cardPayment',
+          'card-brick-container',
+          {
+            initialization: { amount: total },
+            customization: { visual: { hidePaymentButton: true } },
+            callbacks: {
+              onReady: () => toast.success('Formulario listo'),
+              onError: (error: unknown) => {
+                console.error(error);
+                toast.error('Error en el formulario');
+              },
+            },
+          },
+        );
+        // 2. Cast doble: primero a unknown, luego a CardBrickController
+        activeCtrl = rawCtrl as unknown as CardBrickController;
+        setCardCtrl(activeCtrl);
+      } catch (error: unknown) {
+        console.error(error);
+        toast.error('No se pudo cargar el Brick');
+      }
+    })();
+  
+    return () => {
+      activeCtrl?.unmount();
+      setCardCtrl(null);
     };
-  }, [step, paymentMethod, mpLoaded, total]);
+  }, [step, paymentMethod, mpReady, total]);
 
-  // Función que procesa el pedido (tarjeta, transferencia o efectivo)
+  /* ---------- ORDER CREATION ---------- */
   const submitOrder = useCallback(
-    async (cardToken?: string, idempotencyKey?: string) => {
+    async (cardToken?: string): Promise<void> => {
       setLoading(true);
       try {
         const payload: CreatePedidoDTO = {
-          datos: cart.map((item) => ({
-            id: Number(item.id),
-            name: item.name,
-            price: item.price,
-            quantity: item.quantity,
+          datos: cart.map(({ id, name, price, quantity }) => ({
+            id: Number(id),
+            name,
+            price,
+            quantity,
           })),
           total,
           metodo_pago: paymentMethod,
@@ -127,9 +144,10 @@ export default function CheckoutWizard(): React.ReactElement {
           comprador_email: shipping.email,
           comprador_telefono: shipping.telefono,
           direccion_envio: shipping.direccion,
-          ...(paymentMethod === 'transferencia' && { transferencia_ref: transferRef }),
+          ...(paymentMethod === 'transferencia' && {
+            transferencia_ref: transferRef,
+          }),
           ...(cardToken && { cardToken }),
-          ...(idempotencyKey && { idempotencyKey }),
         };
 
         const res = await fetch('/api/pedidos', {
@@ -137,68 +155,74 @@ export default function CheckoutWizard(): React.ReactElement {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Error creando pedido');
+        const { data, message } = await res.json();
+        if (!res.ok) throw new Error(message ?? 'Error creando pedido');
 
-        setOrderId(data.data.orderId);
+        setOrderId(data.orderId);
         emptyCart();
-        toast.success(
-          paymentMethod === 'tarjeta'
-            ? 'Pago con tarjeta registrado'
-            : paymentMethod === 'transferencia'
-            ? 'Pago por transferencia registrado'
-            : 'Pago en efectivo registrado'
+        toast.success('Pedido confirmado');
+        setStep(4);
+      } catch (error: unknown) {
+        toast.error(
+          error instanceof Error ? error.message : 'Error procesando pedido',
         );
-        setStep(3);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Error procesando pedido';
-        console.error('submitOrder error:', err);
-        toast.error(message);
       } finally {
         setLoading(false);
       }
     },
-    [cart, paymentMethod, shipping, transferRef, total, emptyCart]
+    [cart, emptyCart, paymentMethod, shipping, total, transferRef],
   );
 
   const progress = ((step - 1) / (steps.length - 1)) * 100;
 
+  /* ---------- RENDER ---------- */
   return (
     <>
       <Toaster position="top-center" />
       <Script
         src="https://sdk.mercadopago.com/js/v2"
-        onLoad={() => setMpLoaded(true)}
+        onLoad={() => setMpReady(true)}
       />
 
       <div className="bg-green-50 flex justify-center p-4">
         <div className="w-full max-w-xl bg-white p-6 space-y-6 rounded-2xl shadow-lg">
-          <h1 className="text-2xl font-bold text-center text-green-700">Checkout</h1>
+          <h1 className="text-2xl font-bold text-center text-green-700">
+            Checkout
+          </h1>
 
-          {/* Pasos */}
+          {/* PASOS */}
           <ul className="flex justify-between mb-4">
             {steps.map((s, i) => (
-              <li key={i} className="flex-1 text-center">
+              <li key={s.label} className="flex-1 text-center">
                 <div
                   className={`inline-block p-2 border-2 rounded-full ${
-                    step > i + 1 ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-500'
+                    step > i + 1
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-200 text-gray-500'
                   }`}
                 >
                   {s.icon}
                 </div>
-                <p className={`mt-1 text-xs ${step >= i + 1 ? 'text-green-700' : 'text-gray-500'}`}>
+                <p
+                  className={`mt-1 text-xs ${
+                    step >= i + 1 ? 'text-green-700' : 'text-gray-500'
+                  }`}
+                >
                   {s.label}
                 </p>
               </li>
             ))}
           </ul>
 
-          {/* Barra de progreso */}
+          {/* PROGRESO */}
           <div className="h-1 bg-gray-200 rounded-full overflow-hidden mb-6">
-            <motion.div className="h-full bg-green-600 rounded-full" style={{ width: `${progress}%` }} />
+            <motion.div
+              className="h-full bg-green-600 rounded-full"
+              style={{ width: `${progress}%` }}
+            />
           </div>
 
-          {/* Step 1: Datos de envío */}
+          {/* ---------- STEP 1 : ENVÍO ---------- */}
           {step === 1 && (
             <form
               onSubmit={(e) => {
@@ -207,80 +231,95 @@ export default function CheckoutWizard(): React.ReactElement {
               }}
               className="space-y-4 animate-fadeIn"
             >
-              <div>
-                <label className="block text-sm font-medium">Nombre</label>
-                <input
-                  type="text"
-                  value={shipping.nombre}
-                  onChange={(e) => setShipping({ ...shipping, nombre: e.target.value })}
-                  required
-                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Email</label>
-                <input
-                  type="email"
-                  value={shipping.email}
-                  onChange={(e) => setShipping({ ...shipping, email: e.target.value })}
-                  required
-                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Teléfono</label>
-                <input
-                  type="text"
-                  value={shipping.telefono}
-                  onChange={(e) => setShipping({ ...shipping, telefono: e.target.value })}
-                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Dirección</label>
-                <input
-                  type="text"
-                  value={shipping.direccion}
-                  onChange={(e) => setShipping({ ...shipping, direccion: e.target.value })}
-                  required
-                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
-                />
-              </div>
+              {(['nombre', 'email', 'telefono', 'direccion'] as const).map(
+                (field) => (
+                  <div key={field}>
+                    <label className="block text-sm font-medium capitalize">
+                      {field}
+                    </label>
+                    <input
+                      type={field === 'email' ? 'email' : 'text'}
+                      value={shipping[field]}
+                      onChange={(
+                        e: ChangeEvent<HTMLInputElement>,
+                      ): void =>
+                        setShipping((s) => ({ ...s, [field]: e.target.value }))
+                      }
+                      required={field !== 'telefono'}
+                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
+                    />
+                  </div>
+                ),
+              )}
               <div className="text-right">
-                <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-md">
+                <button className="px-4 py-2 bg-green-600 text-white rounded-md">
                   Siguiente
                 </button>
               </div>
             </form>
           )}
 
-          {/* Step 2: Pago */}
+          {/* ---------- STEP 2 : REVISIÓN ---------- */}
           {step === 2 && (
-            <div className="space-y-6 animate-fadeIn">
-              <p className="text-sm font-medium">Método de pago</p>
-              <PaymentMethodSelector selected={paymentMethod} onChange={(m) => setPaymentMethod(m as MetodoPago)} />
+            <div className="space-y-4 animate-fadeIn">
+              <h2 className="text-lg font-semibold">Revisa tu pedido</h2>
 
-              {/* Tarjeta */}
+              <ul className="divide-y">
+                {cart.map((p) => (
+                  <li key={p.id} className="flex justify-between py-2 text-sm">
+                    <span>
+                      {p.name} x{p.quantity}
+                    </span>
+                    <span>${(p.price * p.quantity).toFixed(2)}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="text-right font-semibold">
+                Total: ${total.toFixed(2)}
+              </div>
+
+              <button
+                onClick={next}
+                className="w-full px-4 py-3 bg-green-600 text-white rounded-md"
+              >
+                Continuar al pago
+              </button>
+              <button
+                onClick={back}
+                className="w-full px-4 py-2 border mt-2 rounded-md"
+              >
+                Atrás
+              </button>
+            </div>
+          )}
+
+          {/* ---------- STEP 3 : PAGO ---------- */}
+          {step === 3 && (
+            <div className="space-y-6 animate-fadeIn">
+              <PaymentMethodSelector
+                selected={paymentMethod}
+                onChange={(m) => setPaymentMethod(m as MetodoPago)}
+              />
+
+              {/* TARJETA */}
               {paymentMethod === 'tarjeta' && (
                 <div className="space-y-4">
                   <div id="card-brick-container" style={{ minHeight: 200 }} />
                   <button
-                    disabled={!cardController || loading}
-                    onClick={() => {
-                      if (!cardController) return;
-                      const key = crypto.randomUUID();
-                      setLoading(true);
-                      cardController
-                        .createCardToken()
-                        .then(({ token, error }: { token: string; error?: unknown }) => {
-                          if (error || !token) throw error || new Error('No se creó el token');
-                          submitOrder(token, key);
-                        })
-                        .catch((e: unknown) => {
-                          console.error('Token Error:', e);
-                          toast.error('No se pudo generar token');
-                        })
-                        .finally(() => setLoading(false));
+                    disabled={!cardCtrl || loading}
+                    onClick={async (): Promise<void> => {
+                      if (!cardCtrl) return;
+                      try {
+                        setLoading(true);
+                        const { token } = await cardCtrl.getFormData();
+                        await submitOrder(token);
+                      } catch (error: unknown) {
+                        console.error(error);
+                        toast.error('No se pudo generar el token');
+                      } finally {
+                        setLoading(false);
+                      }
                     }}
                     className="w-full px-4 py-3 bg-green-600 text-white rounded-md"
                   >
@@ -289,15 +328,16 @@ export default function CheckoutWizard(): React.ReactElement {
                 </div>
               )}
 
-              {/* Transferencia */}
+              {/* TRANSFERENCIA */}
               {paymentMethod === 'transferencia' && (
                 <div className="space-y-4">
-                  <p className="text-sm">Ingresa tu referencia de transferencia:</p>
                   <input
                     type="text"
-                    placeholder="Referencia"
+                    placeholder="Referencia de transferencia"
                     value={transferRef}
-                    onChange={(e) => setTransferRef(e.target.value)}
+                    onChange={(e: ChangeEvent<HTMLInputElement>): void =>
+                      setTransferRef(e.target.value)
+                    }
                     className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
                   />
                   <button
@@ -305,39 +345,37 @@ export default function CheckoutWizard(): React.ReactElement {
                     onClick={() => submitOrder()}
                     className="w-full px-4 py-3 bg-green-600 text-white rounded-md"
                   >
-                    {loading ? 'Procesando…' : 'Pagar por transferencia'}
+                    {loading ? 'Procesando…' : 'Registrar pago'}
                   </button>
                 </div>
               )}
 
-              {/* Efectivo */}
+              {/* EFECTIVO */}
               {paymentMethod === 'efectivo' && (
-                <div className="space-y-4">
-                  <p className="text-sm text-gray-700">Pagarás en efectivo a la entrega.</p>
-                  <button
-                    disabled={loading}
-                    onClick={() => submitOrder()}
-                    className="w-full px-4 py-3 bg-green-600 text-white rounded-md"
-                  >
-                    {loading ? 'Procesando…' : 'Confirmar y pagar en efectivo'}
-                  </button>
-                </div>
+                <button
+                  disabled={loading}
+                  onClick={() => submitOrder()}
+                  className="w-full px-4 py-3 bg-green-600 text-white rounded-md"
+                >
+                  {loading ? 'Procesando…' : 'Confirmar pago en efectivo'}
+                </button>
               )}
 
-              <div className="flex justify-between">
-                <button onClick={back} className="px-4 py-2 border rounded-md">
-                  Atrás
-                </button>
-              </div>
+              <button onClick={back} className="px-4 py-2 border rounded-md">
+                Atrás
+              </button>
             </div>
           )}
 
-          {/* Step 3: Gracias */}
-          {step === 3 && (
+          {/* ---------- STEP 4 : GRACIAS ---------- */}
+          {step === 4 && (
             <div className="text-center space-y-4 animate-fadeIn">
               <h2 className="text-xl font-semibold text-green-700">¡Gracias!</h2>
               <p>Tu pedido (ID: {orderId}) ha sido confirmado.</p>
-              <button onClick={() => router.push('/')} className="px-4 py-2 bg-green-600 text-white rounded-md">
+              <button
+                onClick={() => router.push('/')}
+                className="px-4 py-2 bg-green-600 text-white rounded-md"
+              >
                 Volver al inicio
               </button>
             </div>
@@ -345,7 +383,7 @@ export default function CheckoutWizard(): React.ReactElement {
         </div>
       </div>
 
-      {/* Animación */}
+      {/* ANIMACIÓN */}
       <style jsx>{`
         @keyframes fadeIn {
           from {
