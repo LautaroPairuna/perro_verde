@@ -36,7 +36,7 @@ declare global {
               initialization: { amount: number };
               callbacks: {
                 onSubmit: (data: CardData) => void;
-                onError: (err: unknown) => void;
+                onError: () => void;
                 onReady: () => void;
               };
             }
@@ -71,6 +71,7 @@ export default function CheckoutWizard(): React.JSX.Element {
   const CBU_EMPRESA = process.env.NEXT_PUBLIC_CBU_EMPRESA ?? '';
   const WPP_EMPRESA = process.env.NEXT_PUBLIC_WPP_NUMBER ?? '';
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (payment.metodo !== 'tarjeta' || !mpLoaded) return;
     const id = setTimeout(() => {
@@ -87,7 +88,7 @@ export default function CheckoutWizard(): React.JSX.Element {
             setCardToken(data.token);
             submitOrder();
           },
-          onError: (_err: unknown) => toast.error('Error MercadoPago'),
+          onError: () => toast.error('Error MercadoPago'),
           onReady: () => toast.success('Formulario de tarjeta listo'),
         },
       });
@@ -201,7 +202,6 @@ export default function CheckoutWizard(): React.JSX.Element {
               transition={{ type: 'spring', stiffness: 120 }}
             />
           </div>
-
           {step === 1 && (
             <form onSubmit={(e: FormEvent) => { e.preventDefault(); next(); }} className="space-y-4 animate-fade">
               {(['nombre','email','telefono','direccion'] as (keyof ShippingInfo)[]).map(field => (
@@ -222,12 +222,11 @@ export default function CheckoutWizard(): React.JSX.Element {
               </div>
             </form>
           )}
-
           {step === 2 && (
             <div className="space-y-4 animate-fade">
               <span className="block text-sm font-medium mb-2">Método de pago</span>
               <PaymentMethodSelector selected={payment.metodo} onChange={(method: string) => { setPayment({ metodo: method as MetodoPago }); setCardToken(''); setTransferenciaRef(''); }} />
-              {payment.metodo === 'tarjeta' && <div id="card-brick-container" style={{ minHeight: 200 }} />}              
+              {payment.metodo === 'tarjeta' && <div id="card-brick-container" style={{ minHeight: 200 }} />}
               {payment.metodo === 'transferencia' && (
                 <div className="space-y-4">
                   <p className="text-sm">Transfiere al CBU:<br/><code className="font-mono bg-gray-100 px-2 py-1 rounded">{CBU_EMPRESA}</code></p>
@@ -250,7 +249,6 @@ export default function CheckoutWizard(): React.JSX.Element {
               )}
             </div>
           )}
-
           {step === 3 && (
             <div className="space-y-4 text-center animate-fade">
               <p><strong>Envío:</strong> {shipping.direccion}</p>
@@ -259,7 +257,6 @@ export default function CheckoutWizard(): React.JSX.Element {
               <button onClick={handleConfirmTransfer} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md">{loading ? 'Confirmando...' : 'He realizado la transferencia'}</button>
             </div>
           )}
-
           {step === 4 && (
             <div className="text-center space-y-4 animate-fade">
               <h2 className="text-xl font-semibold text-green-700">¡Gracias por tu compra!</h2>
