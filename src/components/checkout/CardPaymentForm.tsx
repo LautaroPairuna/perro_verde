@@ -1,6 +1,7 @@
+// src/components/checkout/CardPaymentForm.tsx
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useMercadoPago } from '@/hooks/useMercadoPago';
 
@@ -16,7 +17,7 @@ interface CardPaymentFormProps {
 }
 
 export function CardPaymentForm({ preferenceId, onApprove }: CardPaymentFormProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerId = `mp-wallet-container-${preferenceId}`;
   const { mp, error } = useMercadoPago(
     process.env.NEXT_PUBLIC_MP_PUBLIC_KEY!,
     preferenceId
@@ -27,7 +28,7 @@ export function CardPaymentForm({ preferenceId, onApprove }: CardPaymentFormProp
       toast.error(error);
       return;
     }
-    if (!mp || !containerRef.current) return;
+    if (!mp) return;
 
     const config = {
       initialization: { preferenceId },
@@ -38,14 +39,18 @@ export function CardPaymentForm({ preferenceId, onApprove }: CardPaymentFormProp
       },
     };
 
-    // Monta el brick “wallet”
-    mp.bricks().create('wallet', containerRef.current, config);
+    const container = document.getElementById(containerId);
+    if (!container) {
+      toast.error('Contenedor de pago no encontrado');
+      return;
+    }
+
+    mp.bricks().create('wallet', container, config);
 
     return () => {
-      // Desmonta el brick
       mp.bricks().unmount('wallet');
     };
-  }, [mp, preferenceId, error, onApprove]);
+  }, [mp, preferenceId, error, onApprove, containerId]);
 
-  return <div ref={containerRef} style={{ minHeight: 300 }} />;
+  return <div id={containerId} style={{ minHeight: 300 }} />;
 }
