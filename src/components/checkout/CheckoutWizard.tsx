@@ -4,10 +4,10 @@
 import React, { useState } from 'react';
 import Script from 'next/script';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
-import { useCart } from '@/context/CartContext';
+import { motion } from 'framer-motion';
 import { MapPin, CreditCard, CheckCircle2 } from 'lucide-react';
+import { useCart } from '@/context/CartContext';
 import { PaymentMethodSelector } from './PaymentMethodSelector';
 import { CreatePedidoDTO, MetodoPago } from '@/types/payment';
 import { CardPaymentForm, CardData } from './CardPaymentForm';
@@ -15,20 +15,19 @@ import { CardPaymentForm, CardData } from './CardPaymentForm';
 interface ShippingInfo {
   nombre: string;
   email: string;
-  telefono: string;
+  telefono?: string;
   direccion: string;
 }
 
 export default function CheckoutWizard(): React.JSX.Element {
   const router = useRouter();
   const { cart, updateCart } = useCart();
-  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const emptyCart = () => updateCart([]);
+  const total = cart.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
   const steps = [
     { label: 'Envío', icon: <MapPin size={20} /> },
     { label: 'Pago', icon: <CreditCard size={20} /> },
-    { label: 'Revisión', icon: <CheckCircle2 size={20} /> },
     { label: 'Gracias', icon: <CheckCircle2 size={20} /> },
   ];
 
@@ -39,14 +38,10 @@ export default function CheckoutWizard(): React.JSX.Element {
     telefono: '',
     direccion: '',
   });
-  const [payment, setPayment] = useState<{ metodo: MetodoPago }>({ metodo: 'efectivo' });
-  const [transferenciaRef, setTransferenciaRef] = useState<string>('');
-  const [orderId, setOrderId] = useState<number | null>(null);
-  const [preferenceId, setPreferenceId] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
-
-  const CBU_EMPRESA = process.env.NEXT_PUBLIC_CBU_EMPRESA ?? '';
-  const WPP_EMPRESA = process.env.NEXT_PUBLIC_WPP_NUMBER ?? '';
+  const [method, setMethod] = useState<MetodoPago>('efectivo');
+  const [transferRef, setTransferRef] = useState('');
+  const [prefId, setPrefId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const validateShipping = (): boolean => {
     const { nombre, email, direccion } = shipping;
@@ -57,49 +52,49 @@ export default function CheckoutWizard(): React.JSX.Element {
     return true;
   };
 
-  const next = (): void => {
+  const nextStep = (): void => {
     if (step === 1 && !validateShipping()) return;
-    setStep((prev) => Math.min(prev + 1, steps.length));
+    setStep((s) => Math.min(s + 1, steps.length));
   };
-  const back = (): void => setStep((prev) => Math.max(prev - 1, 1));
+  const prevStep = (): void => setStep((s) => Math.max(s - 1, 1));
 
-  const generarPreference = async (): Promise<void> => {
+  async function generatePreference() {
     setLoading(true);
     try {
-      const response = await fetch('/api/mp/preferences', {
+      const res = await fetch('/api/mp/preferences', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount: total }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Error');
-      setPreferenceId(data.preferenceId);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al generar preferencia');
+      setPrefId(data.preferenceId);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'No se pudo crear preferencia de pago';
-      toast.error(message);
+      toast.error(err instanceof Error ? err.message : 'Error al generar preferencia');
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const submitOrder = async (): Promise<void> => {
+  async function submitOrder(cardToken?: string) {
     setLoading(true);
-    const payload: CreatePedidoDTO = {
-      datos: cart.map((item) => ({
-        id: Number(item.id),
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-      })),
-      total,
-      metodo_pago: payment.metodo,
-      comprador_nombre: shipping.nombre,
-      comprador_email: shipping.email,
-      comprador_telefono: shipping.telefono,
-      direccion_envio: shipping.direccion,
-      ...(payment.metodo === 'transferencia' && { transferencia_ref: transferenciaRef }),
-    };
     try {
+      const payload: CreatePedidoDTO = {
+        datos: cart.map((i) => ({
+          id: Number(i.id),
+          name: i.name,
+          price: i.price,
+          quantity: i.quantity,
+        })),
+        total,
+        metodo_pago: method,
+        comprador_nombre: shipping.nombre,
+        comprador_email: shipping.email,
+        comprador_telefono: shipping.telefono,
+        direccion_envio: shipping.direccion,
+        ...(method === 'transferencia' && { transferencia_ref: transferRef }),
+        ...(cardToken && { cardToken }),
+      };
       const res = await fetch('/api/pedidos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -107,47 +102,18 @@ export default function CheckoutWizard(): React.JSX.Element {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Error al crear pedido');
-      setOrderId(data.orderId);
-      if (payment.metodo !== 'tarjeta') {
-        setStep(3);
-        emptyCart();
-      }
-      toast.success('Pedido creado. Completa el pago.');
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al crear pedido';
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleConfirm = async (): Promise<void> => {
-    if (!orderId) return;
-    setLoading(true);
-    try {
-      const endpoint =
-        payment.metodo === 'tarjeta'
-          ? `/api/pedidos/${orderId}/confirm-card`
-          : `/api/pedidos/${orderId}/confirm-transfer`;
-      const body =
-        payment.metodo === 'tarjeta'
-          ? { cardToken: sessionStorage.getItem('checkout-cardToken')! }
-          : { transferencia_ref: transferenciaRef };
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error('Error al confirmar pago');
       emptyCart();
-      setStep(4);
-      toast.success('Pago confirmado');
+      setStep(3);
+      toast.success('¡Pago procesado con éxito!');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'No se pudo confirmar pago';
-      toast.error(message);
+      toast.error(err instanceof Error ? err.message : 'Error en el pago');
     } finally {
       setLoading(false);
     }
+  }
+
+  const handleCardSubmit = async (cardData: CardData) => {
+    await submitOrder(cardData.token);
   };
 
   const progress = ((step - 1) / (steps.length - 1)) * 100;
@@ -179,21 +145,21 @@ export default function CheckoutWizard(): React.JSX.Element {
             ))}
           </ul>
 
-          {/* Progress bar */}
+          {/* Progress Bar */}
           <div className="h-1 bg-gray-200 rounded-full overflow-hidden mb-6">
             <motion.div className="h-full bg-green-600 rounded-full" style={{ width: `${progress}%` }} />
           </div>
 
           {/* Step 1: Shipping */}
           {step === 1 && (
-            <form onSubmit={(e) => { e.preventDefault(); next(); }} className="space-y-4 animate-fade">
+            <form onSubmit={(e) => { e.preventDefault(); nextStep(); }} className="space-y-4 animate-fade">
               {(['nombre', 'email', 'telefono', 'direccion'] as const).map((field) => (
                 <div key={field}>
                   <label className="block text-sm font-medium mb-1">{field.toUpperCase()}</label>
                   <input
                     name={field}
                     type={field === 'email' ? 'email' : 'text'}
-                    value={shipping[field]}
+                    value={(shipping as any)[field] || ''}
                     onChange={(e) => setShipping({ ...shipping, [field]: e.target.value })}
                     className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
                     required={field !== 'telefono'}
@@ -210,117 +176,61 @@ export default function CheckoutWizard(): React.JSX.Element {
           {step === 2 && (
             <div className="space-y-4 animate-fade">
               <p className="text-sm font-medium">Método de pago</p>
-              <PaymentMethodSelector
-                selected={payment.metodo}
-                onChange={(m) => {
-                  setPayment({ metodo: m as MetodoPago });
-                  setPreferenceId(null);
-                  setTransferenciaRef('');
-                }}
-              />
+              <PaymentMethodSelector selected={method} onChange={(m) => {
+                setMethod(m as MetodoPago);
+                setPrefId(null);
+                setTransferRef('');
+              }} />
 
-              {/* Card Payment */}
-              {payment.metodo === 'tarjeta' && (
-                !preferenceId
-                  ? (
-                    <button onClick={generarPreference} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md">
-                      {loading ? 'Cargando...' : 'Pagar con Tarjeta'}
-                    </button>
-                  )
-                  : (
-                    <CardPaymentForm
-                      preferenceId={preferenceId}
-                      onApprove={async (cardData: CardData) => {
-                        setLoading(true);
-                        try {
-                          const payload: CreatePedidoDTO = {
-                            datos: cart.map((item) => ({
-                              id: Number(item.id),
-                              name: item.name,
-                              price: item.price,
-                              quantity: item.quantity,
-                            })),
-                            total,
-                            metodo_pago: 'tarjeta',
-                            comprador_nombre: shipping.nombre,
-                            comprador_email: shipping.email,
-                            comprador_telefono: shipping.telefono,
-                            direccion_envio: shipping.direccion,
-                            cardToken: cardData.token,
-                          };
-                          const res = await fetch('/api/pedidos', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload),
-                          });
-                          const data = await res.json();
-                          if (!res.ok) throw new Error(data.message || 'Error al procesar pago');
-                          setOrderId(data.orderId);
-                          emptyCart();
-                          setStep(4);
-                          toast.success('Pago con tarjeta exitoso');
-                        } catch (err: unknown) {
-                          const message = err instanceof Error ? err.message : 'Falló el pago con tarjeta';
-                          toast.error(message);
-                        } finally {
-                          setLoading(false);
-                        }
-                      }}
-                    />
-                  )
+              {method === 'tarjeta' && (
+                <>
+                  {!prefId
+                    ? <button onClick={generatePreference} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md">
+                        {loading ? 'Cargando...' : 'Pagar con Tarjeta'}
+                      </button>
+                    : <CardPaymentForm preferenceId={prefId} onApprove={handleCardSubmit} />
+                  }
+                </>
               )}
 
-              {/* Bank Transfer */}
-              {payment.metodo === 'transferencia' && (
+              {method === 'transferencia' && (
                 <div className="space-y-2">
                   <p className="text-sm">
-                    CBU: <code className="font-mono bg-gray-100 px-2 py-1">{CBU_EMPRESA}</code>
+                    CBU: <code className="font-mono bg-gray-100 px-2 py-1">{process.env.NEXT_PUBLIC_CBU_EMPRESA}</code>
                   </p>
                   <input
                     type="text"
                     placeholder="Referencia"
-                    value={transferenciaRef}
-                    onChange={(e) => setTransferenciaRef(e.target.value)}
+                    value={transferRef}
+                    onChange={(e) => setTransferRef(e.target.value)}
                     className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
                   />
                   <p className="text-sm">
                     Envía comprobante por{' '}
-                    <a href={`https://wa.me/${WPP_EMPRESA}`} target="_blank" rel="noreferrer" className="underline text-green-600">
+                    <a href={`https://wa.me/${process.env.NEXT_PUBLIC_WPP_NUMBER}`} target="_blank" rel="noreferrer" className="underline text-green-600">
                       WhatsApp
                     </a>
                   </p>
+                  <div className="flex justify-between">
+                    <button onClick={prevStep} className="px-4 py-2 border rounded-md">Atrás</button>
+                    <button onClick={() => submitOrder()} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md">
+                      {loading ? 'Procesando...' : 'Continuar'}
+                    </button>
+                  </div>
                 </div>
               )}
-
-              <div className="flex justify-between">
-                <button onClick={back} className="px-4 py-2 border rounded-md">Atrás</button>
-                {payment.metodo !== 'tarjeta' && (
-                  <button onClick={submitOrder} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md">
-                    {loading ? 'Procesando...' : 'Continuar'}
-                  </button>
-                )}
-              </div>
             </div>
           )}
 
-          {/* Step 3: Review */}
+          {/* Step 3: Gracias */}
           {step === 3 && (
             <div className="text-center space-y-4 animate-fade">
-              <p className="text-sm"><strong>Envío:</strong> {shipping.direccion}</p>
-              <p className="text-sm"><strong>Método:</strong> {payment.metodo}</p>
-              <p className="text-lg font-bold">Total: ${total.toFixed(2)}</p>
-              <button onClick={handleConfirm} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md">
-                {loading ? 'Confirmando...' : 'He completado el pago'}
+              <CheckCircle2 size={48} className="text-green-600 mx-auto" />
+              <h2 className="text-xl font-semibold">¡Gracias!</h2>
+              <p>Tu pago se ha procesado exitosamente.</p>
+              <button onClick={() => router.push('/')} className="px-4 py-2 bg-green-600 text-white rounded-md">
+                Volver al inicio
               </button>
-            </div>
-          )}
-
-          {/* Step 4: Thank You */}
-          {step === 4 && (
-            <div className="text-center space-y-4 animate-fade">
-              <h2 className="text-xl font-semibold text-green-700">¡Gracias!</h2>
-              <p>Tu pedido está confirmado.</p>
-              <button onClick={() => router.push('/')} className="px-4 py-2 bg-green-600 text-white rounded-md">Inicio</button>
             </div>
           )}
         </div>

@@ -1,4 +1,3 @@
-// src/hooks/useMercadoPago.ts
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -6,8 +5,8 @@ import { useState, useEffect } from 'react';
 export interface MpInstance {
   bricks(): {
     create(
-      name: string,
-      container: string,                // ahora acepta string
+      name: 'wallet' | 'cardPayment',
+      container: string,
       options: {
         initialization: { preferenceId: string };
         callbacks: {
@@ -37,18 +36,16 @@ export function useMercadoPago(
   useEffect(() => {
     if (!preferenceId || typeof window === 'undefined') return;
     if (!window.MercadoPago) {
-      setError('SDK de MercadoPago no cargado');
+      setError('SDK de MercadoPago no disponible');
       return;
     }
     try {
-      const instance = new window.MercadoPago(publicKey, { locale: 'es-AR' });
-      setMp(instance);
+      const inst = new window.MercadoPago(publicKey, { locale: 'es-AR' });
+      setMp(inst);
     } catch (err: unknown) {
-      const message = err instanceof Error
-        ? err.message
-        : 'Error inicializando MercadoPago';
+      const msg = err instanceof Error ? err.message : 'Init error MP';
       console.error(err);
-      setError(message);
+      setError(msg);
     }
   }, [publicKey, preferenceId]);
 
