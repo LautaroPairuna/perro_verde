@@ -5,6 +5,7 @@ import React, { ChangeEvent } from 'react';
 import { useCart, CartItem } from '@/context/CartContext';
 import ImageWithFallback from '@/components/ImageWithFallback';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 export default function Cart() {
   const { cart, updateCart } = useCart();
@@ -40,8 +41,31 @@ export default function Cart() {
         Tu Carrito de Compras
       </h1>
       {cart.length === 0 ? (
-        <p className="text-center text-gray-500 text-lg">Tu carrito está vacío.</p>
-      ) : (
+          <div className="flex flex-col items-center justify-center py-16 space-y-6">
+            <div className="w-36 h-36">
+              <Image
+                src="/images/empty-cart.svg"
+                alt="Carrito vacío"
+                width={144}
+                height={144}
+                priority
+              />
+            </div>
+            <h2 className="text-2xl font-semibold text-gray-700">
+              ¡Tu carrito está vacío!
+            </h2>
+            <p className="text-center text-gray-500 max-w-xs">
+              Agrega productos a tu carrito para comenzar tu compra y descubrir
+              todas nuestras ofertas.
+            </p>
+            <button
+              onClick={() => router.push('/productos')}
+              className="px-6 py-3 bg-green-700 text-white rounded-lg hover:bg-green-800 transition"
+            >
+              Ver Productos
+            </button>
+          </div>
+        ) : (
         <>
           <div className="overflow-x-auto shadow-lg rounded-lg">
             <table className="min-w-full bg-white">

@@ -1,37 +1,49 @@
 // src/strategies/CardStrategy.ts
-import type { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { CreatePedidoDTO } from '@/types/payment';
 import { PaymentStrategy } from './PaymentStrategy';
 
 export class CardStrategy implements PaymentStrategy {
-  async execute(tx: PrismaClient, pedido: { id: number; total: number }, dto: CreatePedidoDTO) {
-    // Llamada a MercadoPago
+  async execute(
+    prisma: PrismaClient,
+    pedido: { id: number; total: number },
+    dto: CreatePedidoDTO
+  ) {
+    const body = {
+      transaction_amount: pedido.total,
+      token: dto.cardToken!,
+      description: `Pago pedido #${pedido.id}`,
+      installments: dto.installments || 1,
+      payment_method_id: dto.payment_method_id!,
+      payer: { email: dto.comprador_email },
+    };
+
     const res = await fetch(
-      'https://api.mercadopago.com/checkout/preferences',
+      'https://api.mercadopago.com/v1/payments',
       {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          items: [{ id: pedido.id, title: 'Pedido', quantity: 1, unit_price: pedido.total }],
-          payer: { email: dto.comprador_email },
-          binary_mode: false,
-          card_token: dto.cardToken,
-        })
+        body: JSON.stringify(body),
       }
     );
-    const pref = await res.json();
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || 'Error procesando pago');
+    }
+
+    const payment = await res.json();
     return {
-      mpId: pref.id,
-      status: pref.status || 'in_process',
-      cardLast4: pref.card?.last_four_digits,
+      mpId: payment.id,
+      status: payment.status,
+      cardLast4: payment.card?.last_four_digits,
       responseToClient: {
         orderId: pedido.id,
-        init_point: pref.init_point,
-        status: pref.status,
-      }
+        status: payment.status,
+      },
     };
   }
 }

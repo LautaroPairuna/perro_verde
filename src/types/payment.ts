@@ -29,8 +29,12 @@ export interface FormaPago {
     comprador_email: string;
     comprador_telefono?: string;
     direccion_envio: string;
-    /** Token de tarjeta (PCI‑DSS) */
+    /** Token de tarjeta (PCI-DSS) */
     cardToken?: string;
+    /** ID del método de pago (ej. "visa", "master") */
+    payment_method_id?: string;
+    /** Cantidad de cuotas (1, 3, 6, etc.) */
+    installments?: number;
     /** Referencia de transferencia (CBU o alias) */
     transferencia_ref?: string;
   }
