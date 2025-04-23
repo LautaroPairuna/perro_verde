@@ -134,7 +134,15 @@ export default function CheckoutWizard(): React.JSX.Element {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || res.statusText);
       setOrderId(data.orderId);
-      if (payment.metodo !== 'tarjeta') {
+      if (payment.metodo === 'tarjeta') {
+        if (data.init_point) {
+          window.open(data.init_point, '_blank');
+          router.push(`/checkout/success?order=${data.orderId}`);
+        } else {
+          setStep(3);
+          emptyCart();
+        }
+      } else {
         setStep(3);
         emptyCart();
       }
@@ -176,106 +184,19 @@ export default function CheckoutWizard(): React.JSX.Element {
         <div className="w-full max-w-xl bg-white shadow-lg rounded-2xl p-6 space-y-6">
           <h1 className="text-2xl font-bold text-center text-green-700">Checkout</h1>
           <ul className="flex justify-between mb-4">
-            {steps.map((s, i) => {
-              const idx = i + 1;
-              const done = step > idx;
-              const active = step === idx;
-              return (
-                <li key={i} className="flex-1 flex flex-col items-center">
-                  <span className={`
-                    p-2 rounded-full border-2
-                    ${done ? 'bg-green-600 border-green-600 text-white' : ''}
-                    ${active ? 'bg-green-500 border-green-500 text-white' : ''}
-                    ${!done && !active ? 'bg-gray-200 border-gray-300 text-gray-500' : ''}
-                  `}>
-                    {s.icon}
-                  </span>
-                  <span className={`mt-1 text-xs ${done || active ? 'text-green-700' : 'text-gray-500'}`}>{s.label}</span>
-                </li>
-              );
-            })}
+            {steps.map((s, i) => { const idx = i + 1; const done = step > idx; const active = step === idx; return (<li key={i} className="flex-1 flex flex-col items-center"><span className={` p-2 rounded-full border-2 ${done ? 'bg-green-600 border-green-600 text-white' : ''} ${active ? 'bg-green-500 border-green-500 text-white' : ''} ${!done && !active ? 'bg-gray-200 border-gray-300 text-gray-500' : ''}`}>{s.icon}</span><span className={`mt-1 text-xs ${done || active ? 'text-green-700' : 'text-gray-500'}`}>{s.label}</span></li>); })}
           </ul>
           <div className="relative mb-4 h-1 bg-gray-200 rounded-full">
-            <motion.div
-              className="absolute top-0 left-0 h-1 bg-green-600 rounded-full"
-              style={{ width: `${progress}%` }}
-              transition={{ type: 'spring', stiffness: 120 }}
-            />
-          </div>
-          {step === 1 && (
-            <form onSubmit={(e: FormEvent) => { e.preventDefault(); next(); }} className="space-y-4 animate-fade">
-              {(['nombre','email','telefono','direccion'] as (keyof ShippingInfo)[]).map(field => (
-                <div key={field}>
-                  <label className="block text-sm font-medium mb-1">{field.charAt(0).toUpperCase() + field.slice(1)}</label>
-                  <input
-                    name={field}
-                    type={field === 'email' ? 'email' : 'text'}
-                    value={shipping[field]}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setShipping(prev => ({ ...prev, [field]: e.target.value }))}
-                    required={field !== 'telefono'}
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
-                  />
-                </div>
-              ))}
-              <div className="flex justify-end">
-                <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-md">Siguiente</button>
-              </div>
-            </form>
-          )}
-          {step === 2 && (
-            <div className="space-y-4 animate-fade">
-              <span className="block text-sm font-medium mb-2">Método de pago</span>
-              <PaymentMethodSelector selected={payment.metodo} onChange={(method: string) => { setPayment({ metodo: method as MetodoPago }); setCardToken(''); setTransferenciaRef(''); }} />
-              {payment.metodo === 'tarjeta' && <div id="card-brick-container" style={{ minHeight: 200 }} />}
-              {payment.metodo === 'transferencia' && (
-                <div className="space-y-4">
-                  <p className="text-sm">Transfiere al CBU:<br/><code className="font-mono bg-gray-100 px-2 py-1 rounded">{CBU_EMPRESA}</code></p>
-                  <input type="text" placeholder="Referencia" value={transferenciaRef} onChange={e => setTransferenciaRef(e.target.value)} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300" />
-                  <p className="text-sm text-gray-700">Envía el comprobante por WhatsApp al <a href={`https://wa.me/${WPP_EMPRESA}`} target="_blank" rel="noopener noreferrer" className="text-green-600 underline">+{WPP_EMPRESA}</a></p>
-                  <div className="flex justify-between">
-                    <button onClick={back} className="px-4 py-2 border rounded-md">Atrás</button>
-                    <button onClick={submitOrder} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md">{loading ? 'Procesando...' : 'Continuar'}</button>
-                  </div>
-                </div>
-              )}
-              {payment.metodo === 'efectivo' && (
-                <div className="space-y-4 text-center">
-                  <p>Paga en tienda cuando retomes tu compra.</p>
-                  <div className="flex justify-between">
-                    <button onClick={back} className="px-4 py-2 border rounded-md">Atrás</button>
-                    <button onClick={submitOrder} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md">{loading ? 'Procesando...' : 'Continuar'}</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          {step === 3 && (
-            <div className="space-y-4 text-center animate-fade">
-              <p><strong>Envío:</strong> {shipping.direccion}</p>
-              <p><strong>Método:</strong> {payment.metodo}</p>
-              <p className="text-lg font-bold"><strong>Total:</strong> ${total.toFixed(2)}</p>
-              <button onClick={handleConfirmTransfer} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md">{loading ? 'Confirmando...' : 'He realizado la transferencia'}</button>
-            </div>
-          )}
-          {step === 4 && (
-            <div className="text-center space-y-4 animate-fade">
-              <h2 className="text-xl font-semibold text-green-700">¡Gracias por tu compra!</h2>
-              <p>Tu pedido está en proceso.</p>
-              <button onClick={() => router.push('/')} className="px-4 py-2 bg-green-600 text-white rounded-md">Volver al inicio</button>
-            </div>
-          )}
+            <motion.div className="absolute top-0 left-0 h-1 bg-green-600 rounded-full" style={{ width: `${progress}%` }} transition={{ type: 'spring', stiffness: 120 }} />
+          </div>          
+          {step === 1 && (<form onSubmit={(e: FormEvent) => { e.preventDefault(); next(); }} className="space-y-4 animate-fade">{(['nombre','email','telefono','direccion'] as (keyof ShippingInfo)[]).map(field => (<div key={field}><label className="block text-sm font-medium mb-1">{field.charAt(0).toUpperCase() + field.slice(1)}</label><input name={field} type={field==='email'?'email':'text'} value={shipping[field]} onChange={(e: ChangeEvent<HTMLInputElement>) => setShipping(prev => ({ ...prev, [field]: e.target.value }))} required={field !== 'telefono'} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300" /></div>))}<div className="flex justify-end"><button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-md">Siguiente</button></div></form>)}
+          {step === 2 && (<div className="space-y-4 animate-fade"><span className="block text-sm font-medium mb-2">Método de pago</span><PaymentMethodSelector selected={payment.metodo} onChange={(method: string) => { setPayment({ metodo: method as MetodoPago }); setCardToken(''); setTransferenciaRef(''); }} />{payment.metodo === 'tarjeta' && <div id="card-brick-container" style={{ minHeight: 200 }} />}{payment.metodo === 'transferencia' && (<div className="space-y-4"><p className="text-sm">Transfiere al CBU:<br/><code className="font-mono bg-gray-100 px-2 py-1 rounded">{CBU_EMPRESA}</code></p><input type="text" placeholder="Referencia" value={transferenciaRef} onChange={e => setTransferenciaRef(e.target.value)} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300" /><p className="text-sm text-gray-700">Envía el comprobante por WhatsApp al <a href={`https://wa.me/${WPP_EMPRESA}`} target="_blank" rel="noopener noreferrer" className="text-green-600 underline">+{WPP_EMPRESA}</a></p><div className="flex justify-between"><button onClick={back} className="px-4 py-2 border rounded-md">Atrás</button><button onClick={submitOrder} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md">{loading ? 'Procesando...' : 'Continuar'}</button></div></div>)}{payment.metodo === 'efectivo' && (<div className="space-y-4 text-center"><p>Paga en tienda cuando retomes tu compra.</p><div className="flex justify-between"><button onClick={back} className="px-4 py-2 border rounded-md">Atrás</button><button onClick={submitOrder} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md">{loading ? 'Procesando...' : 'Continuar'}</button></div></div>)}</div>)}
+          {step === 3 && (<div className="space-y-4 text-center animate-fade"><p><strong>Envío:</strong> {shipping.direccion}</p><p><strong>Método:</strong> {payment.metodo}</p><p className="text-lg font-bold"><strong>Total:</strong> ${total.toFixed(2)}</p><button onClick={handleConfirmTransfer} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md">{loading ? 'Confirmando...' : 'He realizado la transferencia'}</button></div>)}
+          {step === 4 && (<div className="text-center space-y-4 animate-fade"><h2 className="text-xl font-semibold text-green-700">¡Gracias por tu compra!</h2><p>Tu pedido está en proceso.</p><button onClick={() => router.push('/')} className="px-4 py-2 bg-green-600 text-white rounded-md">Volver al inicio</button></div>)}
         </div>
       </div>
 
-      <style jsx>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(20px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade {
-          animation: fadeIn 0.5s ease-out;
-        }
-      `}</style>
+      <style jsx>{`@keyframes fadeIn {from { opacity: 0; transform: translateY(20px);} to { opacity: 1; transform: translateY(0);} } .animate-fade { animation: fadeIn 0.5s ease-out; }`}</style>
     </>
   );
 }
