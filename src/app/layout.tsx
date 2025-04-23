@@ -3,6 +3,7 @@ import './globals.css';
 import { Metadata } from 'next';
 import Header from '@/components/header/Header';
 import Footer from '@/components/footer/Footer';
+import { Toaster } from 'react-hot-toast'
 import { CartProvider } from '@/context/CartContext';
 
 export const metadata: Metadata = {
@@ -52,6 +53,7 @@ export default function RootLayout({
           {/* Footer */}
           <Footer />
         </CartProvider>
+        <Toaster position="top-center" />
       </body>
     </html>
   );
