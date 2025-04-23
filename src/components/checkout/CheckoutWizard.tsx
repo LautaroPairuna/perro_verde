@@ -15,7 +15,7 @@ import { CardPaymentForm, CardData } from './CardPaymentForm';
 interface ShippingInfo {
   nombre: string;
   email: string;
-  telefono?: string;
+  telefono: string;
   direccion: string;
 }
 
@@ -46,19 +46,19 @@ export default function CheckoutWizard(): React.JSX.Element {
   const validateShipping = (): boolean => {
     const { nombre, email, direccion } = shipping;
     if (!nombre || !email || !direccion) {
-      toast.error('Completa los datos de envío');
+      toast.error('Completa todos los datos de envío');
       return false;
     }
     return true;
   };
 
-  const nextStep = (): void => {
+  const next = (): void => {
     if (step === 1 && !validateShipping()) return;
     setStep((s) => Math.min(s + 1, steps.length));
   };
-  const prevStep = (): void => setStep((s) => Math.max(s - 1, 1));
+  const back = (): void => setStep((s) => Math.max(s - 1, 1));
 
-  async function generatePreference() {
+  const generatePreference = async (): Promise<void> => {
     setLoading(true);
     try {
       const res = await fetch('/api/mp/preferences', {
@@ -67,16 +67,16 @@ export default function CheckoutWizard(): React.JSX.Element {
         body: JSON.stringify({ amount: total }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al generar preferencia');
+      if (!res.ok) throw new Error(data.error || 'No se pudo generar preferencia');
       setPrefId(data.preferenceId);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Error al generar preferencia');
+      toast.error(err instanceof Error ? err.message : 'Error generando preferencia');
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  async function submitOrder(cardToken?: string) {
+  const submitOrder = async (cardToken?: string): Promise<void> => {
     setLoading(true);
     try {
       const payload: CreatePedidoDTO = {
@@ -101,19 +101,19 @@ export default function CheckoutWizard(): React.JSX.Element {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Error al crear pedido');
+      if (!res.ok) throw new Error(data.message || 'Error creando pedido');
       emptyCart();
       setStep(3);
-      toast.success('¡Pago procesado con éxito!');
+      toast.success('Pago procesado con éxito');
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Error en el pago');
+      toast.error(err instanceof Error ? err.message : 'Error procesando pago');
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  const handleCardSubmit = async (cardData: CardData) => {
-    await submitOrder(cardData.token);
+  const handleCardSubmit = (cardData: CardData) => {
+    submitOrder(cardData.token);
   };
 
   const progress = ((step - 1) / (steps.length - 1)) * 100;
@@ -145,29 +145,57 @@ export default function CheckoutWizard(): React.JSX.Element {
             ))}
           </ul>
 
-          {/* Progress Bar */}
+          {/* Progress bar */}
           <div className="h-1 bg-gray-200 rounded-full overflow-hidden mb-6">
             <motion.div className="h-full bg-green-600 rounded-full" style={{ width: `${progress}%` }} />
           </div>
 
           {/* Step 1: Shipping */}
           {step === 1 && (
-            <form onSubmit={(e) => { e.preventDefault(); nextStep(); }} className="space-y-4 animate-fade">
-              {(['nombre', 'email', 'telefono', 'direccion'] as const).map((field) => (
-                <div key={field}>
-                  <label className="block text-sm font-medium mb-1">{field.toUpperCase()}</label>
-                  <input
-                    name={field}
-                    type={field === 'email' ? 'email' : 'text'}
-                    value={(shipping as any)[field] || ''}
-                    onChange={(e) => setShipping({ ...shipping, [field]: e.target.value })}
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
-                    required={field !== 'telefono'}
-                  />
-                </div>
-              ))}
+            <form onSubmit={(e) => { e.preventDefault(); next(); }} className="space-y-4 animate-fade">
+              <div>
+                <label className="block text-sm font-medium">Nombre</label>
+                <input
+                  type="text"
+                  value={shipping.nombre}
+                  onChange={(e) => setShipping({ ...shipping, nombre: e.target.value })}
+                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Email</label>
+                <input
+                  type="email"
+                  value={shipping.email}
+                  onChange={(e) => setShipping({ ...shipping, email: e.target.value })}
+                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Teléfono</label>
+                <input
+                  type="text"
+                  value={shipping.telefono}
+                  onChange={(e) => setShipping({ ...shipping, telefono: e.target.value })}
+                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Dirección</label>
+                <input
+                  type="text"
+                  value={shipping.direccion}
+                  onChange={(e) => setShipping({ ...shipping, direccion: e.target.value })}
+                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
+                  required
+                />
+              </div>
               <div className="text-right">
-                <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-md">Siguiente</button>
+                <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-md">
+                  Siguiente
+                </button>
               </div>
             </form>
           )}
@@ -184,12 +212,17 @@ export default function CheckoutWizard(): React.JSX.Element {
 
               {method === 'tarjeta' && (
                 <>
-                  {!prefId
-                    ? <button onClick={generatePreference} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md">
-                        {loading ? 'Cargando...' : 'Pagar con Tarjeta'}
-                      </button>
-                    : <CardPaymentForm preferenceId={prefId} onApprove={handleCardSubmit} />
-                  }
+                  {!prefId ? (
+                    <button
+                      onClick={generatePreference}
+                      disabled={loading}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md"
+                    >
+                      {loading ? 'Cargando...' : 'Pagar con Tarjeta'}
+                    </button>
+                  ) : (
+                    <CardPaymentForm preferenceId={prefId} onApprove={handleCardSubmit} />
+                  )}
                 </>
               )}
 
@@ -207,13 +240,22 @@ export default function CheckoutWizard(): React.JSX.Element {
                   />
                   <p className="text-sm">
                     Envía comprobante por{' '}
-                    <a href={`https://wa.me/${process.env.NEXT_PUBLIC_WPP_NUMBER}`} target="_blank" rel="noreferrer" className="underline text-green-600">
+                    <a
+                      href={`https://wa.me/${process.env.NEXT_PUBLIC_WPP_NUMBER}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline text-green-600"
+                    >
                       WhatsApp
                     </a>
                   </p>
                   <div className="flex justify-between">
-                    <button onClick={prevStep} className="px-4 py-2 border rounded-md">Atrás</button>
-                    <button onClick={() => submitOrder()} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md">
+                    <button onClick={back} className="px-4 py-2 border rounded-md">Atrás</button>
+                    <button
+                      onClick={() => submitOrder()}
+                      disabled={loading}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md"
+                    >
                       {loading ? 'Procesando...' : 'Continuar'}
                     </button>
                   </div>
@@ -222,7 +264,7 @@ export default function CheckoutWizard(): React.JSX.Element {
             </div>
           )}
 
-          {/* Step 3: Gracias */}
+          {/* Step 3: Thank You */}
           {step === 3 && (
             <div className="text-center space-y-4 animate-fade">
               <CheckCircle2 size={48} className="text-green-600 mx-auto" />
