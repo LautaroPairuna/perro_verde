@@ -16,7 +16,11 @@ interface CardPaymentFormProps {
   onApprove: (cardData: CardData) => void;
 }
 
-export function CardPaymentForm({ preferenceId, onApprove }: CardPaymentFormProps) {
+export function CardPaymentForm({
+  preferenceId,
+  onApprove,
+}: CardPaymentFormProps) {
+  // 1) ID único para el contenedor
   const containerId = `mp-wallet-container-${preferenceId}`;
   const { mp, error } = useMercadoPago(
     process.env.NEXT_PUBLIC_MP_PUBLIC_KEY!,
@@ -39,18 +43,14 @@ export function CardPaymentForm({ preferenceId, onApprove }: CardPaymentFormProp
       },
     };
 
-    const container = document.getElementById(containerId);
-    if (!container) {
-      toast.error('Contenedor de pago no encontrado');
-      return;
-    }
-
-    mp.bricks().create('wallet', container, config);
+    // 2) Pasamos el ID (string), no el elemento
+    mp.bricks().create('wallet', containerId, config);
 
     return () => {
       mp.bricks().unmount('wallet');
     };
   }, [mp, preferenceId, error, onApprove, containerId]);
 
+  // 3) Renderizamos el <div> con ese ID
   return <div id={containerId} style={{ minHeight: 300 }} />;
 }

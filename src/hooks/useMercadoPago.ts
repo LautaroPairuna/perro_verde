@@ -3,11 +3,11 @@
 
 import { useState, useEffect } from 'react';
 
-interface MpInstance {
+export interface MpInstance {
   bricks(): {
     create(
       name: string,
-      container: HTMLElement,
+      container: string,                // ahora acepta string
       options: {
         initialization: { preferenceId: string };
         callbacks: {
@@ -35,9 +35,7 @@ export function useMercadoPago(
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!preferenceId || typeof window === 'undefined') {
-      return;
-    }
+    if (!preferenceId || typeof window === 'undefined') return;
     if (!window.MercadoPago) {
       setError('SDK de MercadoPago no cargado');
       return;
@@ -49,7 +47,7 @@ export function useMercadoPago(
       const message = err instanceof Error
         ? err.message
         : 'Error inicializando MercadoPago';
-      console.error('MercadoPago init error:', err);
+      console.error(err);
       setError(message);
     }
   }, [publicKey, preferenceId]);
