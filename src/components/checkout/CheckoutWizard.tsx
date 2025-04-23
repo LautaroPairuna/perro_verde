@@ -1,7 +1,7 @@
 // src/components/checkout/CheckoutWizard.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Script from 'next/script';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -26,7 +26,7 @@ declare global {
             callbacks: {
               onReady: () => void;
               onSubmit: (data: { token: string }) => void;
-              onError: (error: any) => void;
+              onError: (error: Error) => void;
             };
           }
         ): void;
@@ -36,10 +36,17 @@ declare global {
   }
 }
 
+interface ShippingInfo {
+  nombre: string;
+  email: string;
+  telefono: string;
+  direccion: string;
+}
+
 export default function CheckoutWizard(): React.ReactElement {
   const router = useRouter();
   const { cart, updateCart } = useCart();
-  const total = cart.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const emptyCart = () => updateCart([]);
 
   const steps = [
@@ -49,18 +56,18 @@ export default function CheckoutWizard(): React.ReactElement {
     { label: 'Gracias', icon: <CheckCircle2 size={20} /> },
   ];
 
-  const [step, setStep] = useState(1);
-  const [shipping, setShipping] = useState({
+  const [step, setStep] = useState<number>(1);
+  const [shipping, setShipping] = useState<ShippingInfo>({
     nombre: '',
     email: '',
     telefono: '',
     direccion: '',
   });
   const [paymentMethod, setPaymentMethod] = useState<MetodoPago>('efectivo');
-  const [transferRef, setTransferRef] = useState('');
+  const [transferRef, setTransferRef] = useState<string>('');
   const [orderId, setOrderId] = useState<number | null>(null);
-  const [mpLoaded, setMpLoaded] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [mpLoaded, setMpLoaded] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
 
   const CBU = process.env.NEXT_PUBLIC_CBU_EMPRESA ?? '';
   const WPP = process.env.NEXT_PUBLIC_WPP_NUMBER ?? '';
@@ -75,13 +82,60 @@ export default function CheckoutWizard(): React.ReactElement {
 
   const next = (): void => {
     if (step === 1 && !validateShipping()) return;
-    setStep((s) => Math.min(s + 1, steps.length));
-  };
-  const back = (): void => {
-    setStep((s) => Math.max(s - 1, 1));
+    setStep((prev) => Math.min(prev + 1, steps.length));
   };
 
-  // Montar el Brick de tarjeta en el paso 2
+  const back = (): void => {
+    setStep((prev) => Math.max(prev - 1, 1));
+  };
+
+  const submitOrder = useCallback(
+    async (cardToken?: string) => {
+      setLoading(true);
+      try {
+        const payload: CreatePedidoDTO = {
+          datos: cart.map((item) => ({
+            id: Number(item.id),
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+          })),
+          total,
+          metodo_pago: paymentMethod,
+          comprador_nombre: shipping.nombre,
+          comprador_email: shipping.email,
+          comprador_telefono: shipping.telefono,
+          direccion_envio: shipping.direccion,
+          ...(paymentMethod === 'transferencia' && { transferencia_ref: transferRef }),
+          ...(cardToken && { cardToken }),
+        };
+        const res = await fetch('/api/pedidos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Error creando pedido');
+        setOrderId(data.orderId);
+        setStep(3);
+        emptyCart();
+        toast.success(
+          paymentMethod === 'tarjeta'
+            ? 'Pago con tarjeta registrado'
+            : 'Pedido creado. Completa el pago.'
+        );
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Error procesando pedido';
+        console.error('submitOrder error:', err);
+        toast.error(message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [cart, paymentMethod, shipping, transferRef, total, emptyCart]
+  );
+
+  // Montar/desmontar MercadoPago Brick para tarjeta
   useEffect(() => {
     if (step !== 2 || paymentMethod !== 'tarjeta' || !mpLoaded) return;
 
@@ -106,52 +160,9 @@ export default function CheckoutWizard(): React.ReactElement {
         mp.bricks().unmount('cardPayment');
       } catch {}
     };
-  }, [step, paymentMethod, mpLoaded, total]);
+  }, [step, paymentMethod, mpLoaded, total, submitOrder]);
 
-  const submitOrder = async (cardToken?: string) => {
-    setLoading(true);
-    try {
-      const payload: CreatePedidoDTO = {
-        datos: cart.map((i) => ({
-          id: Number(i.id),
-          name: i.name,
-          price: i.price,
-          quantity: i.quantity,
-        })),
-        total,
-        metodo_pago: paymentMethod,
-        comprador_nombre: shipping.nombre,
-        comprador_email: shipping.email,
-        comprador_telefono: shipping.telefono,
-        direccion_envio: shipping.direccion,
-        ...(paymentMethod === 'transferencia' && { transferencia_ref: transferRef }),
-        ...(cardToken && { cardToken }),
-      };
-      const res = await fetch('/api/pedidos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Error creando pedido');
-      setOrderId(data.orderId);
-      // Avanzar al paso 3 independientemente del método
-      setStep(3);
-      emptyCart();
-      toast.success(
-        paymentMethod === 'tarjeta'
-          ? 'Pago con tarjeta registrado'
-          : 'Pedido creado. Completa el pago.'
-      );
-    } catch (err: any) {
-      console.error('submitOrder error:', err);
-      toast.error(err.message || 'Error procesando pedido');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleConfirm = async () => {
+  const handleConfirm = async (): Promise<void> => {
     if (!orderId) return;
     setLoading(true);
     try {
@@ -171,7 +182,7 @@ export default function CheckoutWizard(): React.ReactElement {
       if (!res.ok) throw new Error('No se pudo confirmar pago');
       toast.success('Pago confirmado');
       setStep(4);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('confirm error:', err);
       toast.error('Error confirmando pago');
     } finally {
@@ -189,7 +200,7 @@ export default function CheckoutWizard(): React.ReactElement {
         onLoad={() => setMpLoaded(true)}
       />
 
-      <div className="bg-green-50 flex items-center justify-center p-4">
+      <div className="bg-green-50 flex justify-center p-4">
         <div className="w-full max-w-xl bg-white p-6 space-y-6 rounded-2xl shadow-lg">
           <h1 className="text-2xl font-bold text-center text-green-700">
             Checkout
@@ -304,19 +315,14 @@ export default function CheckoutWizard(): React.ReactElement {
               />
 
               {paymentMethod === 'tarjeta' && (
-                <div
-                  id="card-brick-container"
-                  style={{ minHeight: 200 }}
-                />
+                <div id="card-brick-container" style={{ minHeight: 200 }} />
               )}
 
               {paymentMethod === 'transferencia' && (
                 <div className="space-y-2">
                   <p className="text-sm">
                     CBU:{' '}
-                    <code className="font-mono bg-gray-100 px-2 py-1">
-                      {CBU}
-                    </code>
+                    <code className="font-mono bg-gray-100 px-2 py-1">{CBU}</code>
                   </p>
                   <input
                     type="text"
