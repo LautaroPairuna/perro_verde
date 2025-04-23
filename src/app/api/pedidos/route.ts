@@ -1,7 +1,7 @@
 // src/app/api/pedidos/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { PedidoService } from '@/services/PedidoService';
+import { PedidoService } from '../../../services/PedidoService';
 
 // 1. Defino validación del body
 

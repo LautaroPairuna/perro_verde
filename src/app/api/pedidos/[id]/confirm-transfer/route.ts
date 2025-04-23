@@ -1,7 +1,7 @@
 // src/app/api/pedidos/[id]/confirm-transfer/route.ts
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { PedidoService } from '@/services/PedidoService';
+import { PedidoService } from '../../../../../services/PedidoService';
 
 export const runtime = 'nodejs';
 

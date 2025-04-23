@@ -1,6 +1,6 @@
 // src/app/carrito/page.tsx
 import Head from 'next/head';
-import Cart from '@/components/carrito/Cart';
+import Cart from '../../components/carrito/Cart';
 
 export default function CartPage() {
   const title = "Tu Carrito | Perro Verde";
