@@ -16,7 +16,7 @@ export class PedidoService {
    * 2) Ejecuta la pasarela.
    * 3) En éxito, marca 'pagado' y guarda la respuesta al cliente en mp_response.
    *    En fallo, marca 'cancelado' y guarda código/mensaje en mp_error_* y mp_response.
-   * 4) Devuelve PaymentResponse o relanza el error.
+   * 4) Devuelve PaymentResponse o lanza un error con mensaje.
    */
   async procesarPedido(dto: CreatePedidoDTO): Promise<PaymentResponse> {
     // 1) Crear el pedido inicial
@@ -51,17 +51,31 @@ export class PedidoService {
           tarjeta_last4:          pago.cardLast4,
           tarjeta_payment_method: pago.cardLast4 ? dto.cardToken : undefined,
           estado:                 pago.status,
-          // Cast via unknown to satisfy InputJsonValue
           mp_response:            pago.responseToClient as unknown as Prisma.InputJsonValue,
         },
       })
 
       return pago.responseToClient
 
-    } catch (error: any) {
-      // 3b) Fallo: capturar código y mensaje de MP
-      const mpCode    = error.cause?.error   || error.error   || error.name   || 'unknown_error'
-      const mpMessage = error.cause?.message || error.message || 'Error desconocido'
+    } catch (error: unknown) {
+      // 3b) Fallo: capturar código y mensaje de MP con tipado seguro
+      interface MPError {
+        cause?: { error?: string; message?: string }
+        error?: string
+        name?: string
+        message?: string
+      }
+      const e = error as MPError
+
+      const mpCode = e.cause?.error
+        ?? e.error
+        ?? e.name
+        ?? 'unknown_error'
+
+      const mpMessage = e.cause?.message
+        ?? e.message
+        ?? 'Error desconocido'
+
       const errorData = { code: mpCode, message: mpMessage }
 
       await this.prisma.pedidos.update({
@@ -74,7 +88,8 @@ export class PedidoService {
         },
       })
 
-      throw error
+      // Lanzamos un Error con el mensaje limpio
+      throw new Error(mpMessage)
     }
   }
 
