@@ -5,6 +5,7 @@ import Header from '@/components/header/Header';
 import Footer from '@/components/footer/Footer';
 import { Toaster } from 'react-hot-toast'
 import { CartProvider } from '@/context/CartContext';
+import WhatsappLink from '@/components/WhatsappLink';
 
 export const metadata: Metadata = {
   title: 'Perro Verde',
@@ -51,6 +52,7 @@ export default function RootLayout({
           {/* Contenido principal */}
           {children}
           {/* Footer */}
+          <WhatsappLink />
           <Footer />
         </CartProvider>
         <Toaster position="top-center" />
