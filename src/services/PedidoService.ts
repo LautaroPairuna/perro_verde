@@ -1,46 +1,49 @@
 // src/services/PedidoService.ts
-import { PrismaClient, Prisma } from '@prisma/client';
-import { CreatePedidoDTO, PaymentResponse } from '@/types/payment';
-import { CashStrategy } from '@/strategies/CashStrategy';
-import { TransferStrategy } from '@/strategies/TransferStrategy';
-import { CardStrategy } from '@/strategies/CardStrategy';
-import { PaymentStrategy } from '@/strategies/PaymentStrategy';
+
+import { PrismaClient, Prisma } from '@prisma/client'
+import { CreatePedidoDTO, PaymentResponse } from '@/types/payment'
+import { CashStrategy } from '@/strategies/CashStrategy'
+import { TransferStrategy } from '@/strategies/TransferStrategy'
+import { CardStrategy } from '@/strategies/CardStrategy'
+import { PaymentStrategy } from '@/strategies/PaymentStrategy'
 
 export class PedidoService {
-  private prisma = new PrismaClient();
+  private prisma = new PrismaClient()
 
   /**
    * Procesa un nuevo pedido:
-   * 1) Crea el registro en la tabla pedidos.
-   * 2) Ejecuta la estrategia de pago (efectivo, transferencia o tarjeta).
-   * 3) Actualiza los datos de pago (mp_payment_id, transferencia_ref, tarjeta_last4, estado).
-   * 4) Devuelve al cliente la respuesta generada por la pasarela.
+   * 1) Crea el pedido en 'pendiente'.
+   * 2) Ejecuta la pasarela.
+   * 3) En éxito, marca 'pagado' y guarda la respuesta al cliente en mp_response.
+   *    En fallo, marca 'cancelado' y guarda código/mensaje en mp_error_* y mp_response.
+   * 4) Devuelve PaymentResponse o relanza el error.
    */
   async procesarPedido(dto: CreatePedidoDTO): Promise<PaymentResponse> {
-    return await this.prisma.$transaction(async (tx) => {
-      // 1) Crear el pedido
-      const pedido = await tx.pedidos.create({
-        data: {
-          datos: dto.datos as unknown as Prisma.InputJsonValue,
-          total: dto.total,
-          metodo_pago: dto.metodo_pago,
-          comprador_nombre: dto.comprador_nombre,
-          comprador_email: dto.comprador_email,
-          comprador_telefono: dto.comprador_telefono,
-          direccion_envio: dto.direccion_envio,
-        },
-      });
+    // 1) Crear el pedido inicial
+    const pedido = await this.prisma.pedidos.create({
+      data: {
+        datos:              dto.datos as unknown as Prisma.InputJsonValue,
+        total:              dto.total,
+        metodo_pago:        dto.metodo_pago,
+        comprador_nombre:   dto.comprador_nombre,
+        comprador_email:    dto.comprador_email,
+        comprador_telefono: dto.comprador_telefono,
+        direccion_envio:    dto.direccion_envio,
+        estado:             'pendiente',
+      },
+    })
 
-      // 2) Seleccionar y ejecutar la estrategia de pago
-      const strategy: PaymentStrategy = this.getStrategy(dto.metodo_pago);
+    // 2) Seleccionar e invocar la estrategia de pago
+    const strategy: PaymentStrategy = this.getStrategy(dto.metodo_pago)
+    try {
       const pago = await strategy.execute(
-        tx,
+        this.prisma,
         { id: pedido.id, total: Number(pedido.total) },
         dto
-      );
+      )
 
-      // 3) Actualizar campos de pago en la base de datos
-      await tx.pedidos.update({
+      // 3a) Éxito: actualizar con datos de pago y respuesta al cliente
+      await this.prisma.pedidos.update({
         where: { id: pedido.id },
         data: {
           mp_payment_id:          pago.mpId,
@@ -48,52 +51,57 @@ export class PedidoService {
           tarjeta_last4:          pago.cardLast4,
           tarjeta_payment_method: pago.cardLast4 ? dto.cardToken : undefined,
           estado:                 pago.status,
+          // Cast via unknown to satisfy InputJsonValue
+          mp_response:            pago.responseToClient as unknown as Prisma.InputJsonValue,
         },
-      });
+      })
 
-      // 4) Devolver la respuesta al cliente
-      return pago.responseToClient;
-    });
-  }
+      return pago.responseToClient
 
-  /**
-   * Devuelve la estrategia de pago correspondiente.
-   */
-  private getStrategy(m: CreatePedidoDTO['metodo_pago']): PaymentStrategy {
-    switch (m) {
-      case 'tarjeta':
-        return new CardStrategy();
-      case 'transferencia':
-        return new TransferStrategy();
-      default:
-        return new CashStrategy();
+    } catch (error: any) {
+      // 3b) Fallo: capturar código y mensaje de MP
+      const mpCode    = error.cause?.error   || error.error   || error.name   || 'unknown_error'
+      const mpMessage = error.cause?.message || error.message || 'Error desconocido'
+      const errorData = { code: mpCode, message: mpMessage }
+
+      await this.prisma.pedidos.update({
+        where: { id: pedido.id },
+        data: {
+          estado:           'cancelado',
+          mp_error_code:    mpCode,
+          mp_error_message: mpMessage,
+          mp_response:      errorData as unknown as Prisma.InputJsonValue,
+        },
+      })
+
+      throw error
     }
   }
 
-  /**
-   * Confirma manualmente una transferencia bancaria:
-   * - Verifica existencia del pedido.
-   * - Comprueba que el método de pago sea 'transferencia'.
-   * - Actualiza transferencia_ref y marca como 'pagado'.
-   */
-  async confirmTransfer(orderId: number, transferenciaRef: string): Promise<void> {
-    const pedido = await this.prisma.pedidos.findUnique({
-      where: { id: orderId }
-    });
+  /** Retorna la estrategia según método de pago. */
+  private getStrategy(metodo: CreatePedidoDTO['metodo_pago']): PaymentStrategy {
+    switch (metodo) {
+      case 'tarjeta':      return new CardStrategy()
+      case 'transferencia':return new TransferStrategy()
+      default:             return new CashStrategy()
+    }
+  }
 
+  /** Confirma transferencia manualmente. */
+  async confirmTransfer(orderId: number, transferenciaRef: string): Promise<void> {
+    const pedido = await this.prisma.pedidos.findUnique({ where: { id: orderId } })
     if (!pedido) {
-      throw new Error(`Pedido con id ${orderId} no encontrado`);
+      throw new Error(`Pedido con id ${orderId} no encontrado`)
     }
     if (pedido.metodo_pago !== 'transferencia') {
-      throw new Error(`El pedido ${orderId} no usa transferencia bancaria`);
+      throw new Error(`El pedido ${orderId} no usa transferencia bancaria`)
     }
-
     await this.prisma.pedidos.update({
       where: { id: orderId },
       data: {
         transferencia_ref: transferenciaRef,
-        estado: 'pagado',
+        estado:            'pagado',
       },
-    });
+    })
   }
 }

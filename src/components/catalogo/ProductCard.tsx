@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import slugify from "@/utils/slugify";
 import { useCart } from "@/context/CartContext";
+import toast from 'react-hot-toast';    // <-- import
 
 export interface Rubro {
   id: number;
@@ -29,10 +30,8 @@ export interface ProductCardProps {
 const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const { cart, updateCart } = useCart();
 
-  // ProductCard.tsx (fragmento)
   const productSlug = slugify(product.producto);
   const productUrl = `/catalogo/detalle/${productSlug}-${product.id}`;
-  
   const displayPrice = product.precio ? `$${product.precio}` : "Precio no disponible";
 
   const handleAddToCart = (): void => {
@@ -51,6 +50,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       newCart[index].quantity += 1;
     }
     updateCart(newCart);
+    toast.success(`Añadido "${product.producto}" al carrito`);  // <-- toast
   };
 
   return (

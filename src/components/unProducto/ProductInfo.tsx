@@ -6,6 +6,7 @@ import ErrorBoundary from './ErrorBoundary';
 import { useCart } from '@/context/CartContext';
 import type { ProductDetail } from '@/utils/fetchData';
 import Link from 'next/link';
+import toast from 'react-hot-toast';   // <-- import
 
 interface ProductInfoProps {
   product: ProductDetail;
@@ -50,6 +51,7 @@ const ProductInfo: React.FC<ProductInfoProps> = ({ product }) => {
     }
     updateCart(newCart);
     setQuantity(1);
+    toast.success(`Añadiste ${quantity} × "${sanitizedProduct.producto}" al carrito`);  // <-- toast
   };
 
   return (
@@ -65,19 +67,19 @@ const ProductInfo: React.FC<ProductInfoProps> = ({ product }) => {
           </p>
         </div>
 
-        {/* Tarjetas de Información (Marca y Categoria) */}
+        {/* Tarjetas de Información */}
         <div className="flex flex-wrap gap-4">
           <div className="bg-white border border-green-400 rounded-md px-4 py-2 shadow-sm flex-1 min-w-[120px] transition-transform duration-300 hover:scale-105 hover:shadow-lg">
             <p className="text-gray-700 text-sm font-semibold uppercase">Marca</p>
             <p className="text-gray-600 text-sm mt-1">{sanitizedProduct.marca?.marca || 'Sin marca'}</p>
           </div>
           <div className="bg-white border border-green-400 rounded-md px-4 py-2 shadow-sm flex-1 min-w-[120px] transition-transform duration-300 hover:scale-105 hover:shadow-lg">
-            <p className="text-gray-700 text-sm font-semibold uppercase">Categoria</p>
-            <p className="text-gray-600 text-sm mt-1">{sanitizedProduct.rubro?.rubro || 'Sin Categoria'}</p>
+            <p className="text-gray-700 text-sm font-semibold uppercase">Categoría</p>
+            <p className="text-gray-600 text-sm mt-1">{sanitizedProduct.rubro?.rubro || 'Sin categoría'}</p>
           </div>
         </div>
 
-        {/* Sección de cantidad y botón para añadir al carrito */}
+        {/* Cantidad y Añadir */}
         <div className="flex flex-col sm:flex-row items-center gap-4">
           <div className="flex items-center space-x-2">
             <label htmlFor="cantidad" className="text-gray-700 font-medium">
@@ -102,19 +104,15 @@ const ProductInfo: React.FC<ProductInfoProps> = ({ product }) => {
           </button>
         </div>
 
-        {/* Botón para volver al catálogo */}
+        {/* Volver al Catálogo */}
         <div>
           <Link
             href="/catalogo"
             className="w-full sm:w-auto px-6 py-3 border border-green-700 text-green-700 rounded-md shadow-md transition-all duration-300 hover:bg-green-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-green-500 flex items-center justify-center gap-2"
             aria-label="Volver al Catálogo"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none"
+                 viewBox="0 0 24 24" stroke="currentColor"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
             </svg>

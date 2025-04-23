@@ -142,6 +142,9 @@ model Pedidos {
   transferencia_ref      String?
   tarjeta_last4          String?
   tarjeta_payment_method String?
+  mp_error_code          String?   @db.VarChar(64)
+  mp_error_message       String?   @db.Text
+  mp_response            Json?     
 
   @@map("pedidos")
 }
