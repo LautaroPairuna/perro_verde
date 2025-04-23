@@ -1,4 +1,5 @@
 // src/components/checkout/CheckoutWizard.tsx
+
 'use client';
 
 import React, {
@@ -20,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { PaymentMethodSelector } from './PaymentMethodSelector';
-import { CreatePedidoDTO, MetodoPago } from '@/types/payment';
+import type { CreatePedidoDTO, MetodoPago } from '@/types/payment';
 
 interface CardBrickController {
   getFormData(): Promise<{ token: string }>;
@@ -38,10 +39,9 @@ export default function CheckoutWizard(): React.ReactElement {
   const router = useRouter();
   const { cart, updateCart } = useCart();
 
-  /* ---------- DERIVED DATA ---------- */
   const total = useMemo(
-    () => cart.reduce((acc, item) => acc + item.price * item.quantity, 0),
-    [cart],
+    () => cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    [cart]
   );
 
   const steps = [
@@ -51,7 +51,6 @@ export default function CheckoutWizard(): React.ReactElement {
     { label: 'Gracias', icon: <CheckCircle2 size={20} /> },
   ];
 
-  /* ---------- STATE ---------- */
   const [step, setStep] = useState(1);
   const [shipping, setShipping] = useState<ShippingInfo>({
     nombre: '',
@@ -67,36 +66,30 @@ export default function CheckoutWizard(): React.ReactElement {
   const [cardCtrl, setCardCtrl] = useState<CardBrickController | null>(null);
   const [loading, setLoading] = useState(false);
 
-  /* ---------- HELPERS ---------- */
   const emptyCart = useCallback(() => updateCart([]), [updateCart]);
-
-  const validateShipping = (): boolean =>
+  const validateShipping = () =>
     !!shipping.nombre && !!shipping.email && !!shipping.direccion;
-
-  const next = (): void => {
+  const next = () => {
     if (step === 1 && !validateShipping()) {
       toast.error('Completa los datos de envío');
       return;
     }
     setStep((s) => Math.min(s + 1, steps.length));
   };
-  const back = (): void => setStep((s) => Math.max(s - 1, 1));
+  const back = () => setStep((s) => Math.max(s - 1, 1));
 
-  /* ---------- MERCADO PAGO BRICK ---------- */
   useEffect(() => {
     if (step !== 3 || paymentMethod !== 'tarjeta' || !mpReady) return;
-  
+
     const mp = new window.MercadoPago(
       process.env.NEXT_PUBLIC_MP_PUBLIC_KEY as string,
-      { locale: 'es-AR' },
+      { locale: 'es-AR' }
     );
-  
     let activeCtrl: CardBrickController | null = null;
-  
+
     (async () => {
       try {
-        // 1. Obtenemos el resultado bruto
-        const rawCtrl = await mp.bricks().create(
+        const raw = await mp.bricks().create(
           'cardPayment',
           'card-brick-container',
           {
@@ -104,33 +97,32 @@ export default function CheckoutWizard(): React.ReactElement {
             customization: { visual: { hidePaymentButton: true } },
             callbacks: {
               onReady: () => toast.success('Formulario listo'),
-              onError: (error: unknown) => {
-                console.error(error);
+              onError: (e: unknown) => {
+                console.error(e);
                 toast.error('Error en el formulario');
               },
             },
-          },
+          }
         );
-        // 2. Cast doble: primero a unknown, luego a CardBrickController
-        activeCtrl = rawCtrl as unknown as CardBrickController;
+        activeCtrl = raw as unknown as CardBrickController;
         setCardCtrl(activeCtrl);
-      } catch (error: unknown) {
-        console.error(error);
+      } catch (e: unknown) {
+        console.error(e);
         toast.error('No se pudo cargar el Brick');
       }
     })();
-  
+
     return () => {
       activeCtrl?.unmount();
       setCardCtrl(null);
     };
   }, [step, paymentMethod, mpReady, total]);
 
-  /* ---------- ORDER CREATION ---------- */
   const submitOrder = useCallback(
-    async (cardToken?: string): Promise<void> => {
+    async (cardToken?: string) => {
       setLoading(true);
       try {
+        // 1. Construye el payload
         const payload: CreatePedidoDTO = {
           datos: cart.map(({ id, name, price, quantity }) => ({
             id: Number(id),
@@ -150,11 +142,17 @@ export default function CheckoutWizard(): React.ReactElement {
           ...(cardToken && { cardToken }),
         };
 
+        // 2. Genera idempotencyKey y la manda en cabecera
+        const idempotencyKey = crypto.randomUUID();
         const res = await fetch('/api/pedidos', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Idempotency-Key': idempotencyKey,
+          },
+          body: JSON.stringify({ ...payload, idempotencyKey }),
         });
+
         const { data, message } = await res.json();
         if (!res.ok) throw new Error(message ?? 'Error creando pedido');
 
@@ -162,20 +160,18 @@ export default function CheckoutWizard(): React.ReactElement {
         emptyCart();
         toast.success('Pedido confirmado');
         setStep(4);
-      } catch (error: unknown) {
-        toast.error(
-          error instanceof Error ? error.message : 'Error procesando pedido',
-        );
+      } catch (e: unknown) {
+        console.error(e);
+        toast.error(e instanceof Error ? e.message : 'Error procesando pedido');
       } finally {
         setLoading(false);
       }
     },
-    [cart, emptyCart, paymentMethod, shipping, total, transferRef],
+    [cart, emptyCart, paymentMethod, shipping, transferRef, total]
   );
 
   const progress = ((step - 1) / (steps.length - 1)) * 100;
 
-  /* ---------- RENDER ---------- */
   return (
     <>
       <Toaster position="top-center" />
@@ -190,7 +186,6 @@ export default function CheckoutWizard(): React.ReactElement {
             Checkout
           </h1>
 
-          {/* PASOS */}
           <ul className="flex justify-between mb-4">
             {steps.map((s, i) => (
               <li key={s.label} className="flex-1 text-center">
@@ -214,7 +209,6 @@ export default function CheckoutWizard(): React.ReactElement {
             ))}
           </ul>
 
-          {/* PROGRESO */}
           <div className="h-1 bg-gray-200 rounded-full overflow-hidden mb-6">
             <motion.div
               className="h-full bg-green-600 rounded-full"
@@ -222,7 +216,7 @@ export default function CheckoutWizard(): React.ReactElement {
             />
           </div>
 
-          {/* ---------- STEP 1 : ENVÍO ---------- */}
+          {/* STEP 1: ENVÍO */}
           {step === 1 && (
             <form
               onSubmit={(e) => {
@@ -241,15 +235,18 @@ export default function CheckoutWizard(): React.ReactElement {
                       type={field === 'email' ? 'email' : 'text'}
                       value={shipping[field]}
                       onChange={(
-                        e: ChangeEvent<HTMLInputElement>,
-                      ): void =>
-                        setShipping((s) => ({ ...s, [field]: e.target.value }))
+                        e: ChangeEvent<HTMLInputElement>
+                      ) =>
+                        setShipping((s) => ({
+                          ...s,
+                          [field]: e.target.value,
+                        }))
                       }
                       required={field !== 'telefono'}
                       className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
                     />
                   </div>
-                ),
+                )
               )}
               <div className="text-right">
                 <button className="px-4 py-2 bg-green-600 text-white rounded-md">
@@ -259,14 +256,16 @@ export default function CheckoutWizard(): React.ReactElement {
             </form>
           )}
 
-          {/* ---------- STEP 2 : REVISIÓN ---------- */}
+          {/* STEP 2: REVISIÓN */}
           {step === 2 && (
             <div className="space-y-4 animate-fadeIn">
               <h2 className="text-lg font-semibold">Revisa tu pedido</h2>
-
               <ul className="divide-y">
                 {cart.map((p) => (
-                  <li key={p.id} className="flex justify-between py-2 text-sm">
+                  <li
+                    key={p.id}
+                    className="flex justify-between py-2 text-sm"
+                  >
                     <span>
                       {p.name} x{p.quantity}
                     </span>
@@ -274,11 +273,9 @@ export default function CheckoutWizard(): React.ReactElement {
                   </li>
                 ))}
               </ul>
-
               <div className="text-right font-semibold">
                 Total: ${total.toFixed(2)}
               </div>
-
               <button
                 onClick={next}
                 className="w-full px-4 py-3 bg-green-600 text-white rounded-md"
@@ -294,7 +291,7 @@ export default function CheckoutWizard(): React.ReactElement {
             </div>
           )}
 
-          {/* ---------- STEP 3 : PAGO ---------- */}
+          {/* STEP 3: PAGO */}
           {step === 3 && (
             <div className="space-y-6 animate-fadeIn">
               <PaymentMethodSelector
@@ -302,20 +299,22 @@ export default function CheckoutWizard(): React.ReactElement {
                 onChange={(m) => setPaymentMethod(m as MetodoPago)}
               />
 
-              {/* TARJETA */}
               {paymentMethod === 'tarjeta' && (
                 <div className="space-y-4">
-                  <div id="card-brick-container" style={{ minHeight: 200 }} />
+                  <div
+                    id="card-brick-container"
+                    style={{ minHeight: 200 }}
+                  />
                   <button
                     disabled={!cardCtrl || loading}
-                    onClick={async (): Promise<void> => {
+                    onClick={async () => {
                       if (!cardCtrl) return;
                       try {
                         setLoading(true);
                         const { token } = await cardCtrl.getFormData();
                         await submitOrder(token);
-                      } catch (error: unknown) {
-                        console.error(error);
+                      } catch (e) {
+                        console.error(e);
                         toast.error('No se pudo generar el token');
                       } finally {
                         setLoading(false);
@@ -328,16 +327,15 @@ export default function CheckoutWizard(): React.ReactElement {
                 </div>
               )}
 
-              {/* TRANSFERENCIA */}
               {paymentMethod === 'transferencia' && (
                 <div className="space-y-4">
                   <input
                     type="text"
                     placeholder="Referencia de transferencia"
                     value={transferRef}
-                    onChange={(e: ChangeEvent<HTMLInputElement>): void =>
-                      setTransferRef(e.target.value)
-                    }
+                    onChange={(
+                      e: ChangeEvent<HTMLInputElement>
+                    ) => setTransferRef(e.target.value)}
                     className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
                   />
                   <button
@@ -350,7 +348,6 @@ export default function CheckoutWizard(): React.ReactElement {
                 </div>
               )}
 
-              {/* EFECTIVO */}
               {paymentMethod === 'efectivo' && (
                 <button
                   disabled={loading}
@@ -367,10 +364,12 @@ export default function CheckoutWizard(): React.ReactElement {
             </div>
           )}
 
-          {/* ---------- STEP 4 : GRACIAS ---------- */}
+          {/* STEP 4: GRACIAS */}
           {step === 4 && (
             <div className="text-center space-y-4 animate-fadeIn">
-              <h2 className="text-xl font-semibold text-green-700">¡Gracias!</h2>
+              <h2 className="text-xl font-semibold text-green-700">
+                ¡Gracias!
+              </h2>
               <p>Tu pedido (ID: {orderId}) ha sido confirmado.</p>
               <button
                 onClick={() => router.push('/')}
@@ -383,7 +382,6 @@ export default function CheckoutWizard(): React.ReactElement {
         </div>
       </div>
 
-      {/* ANIMACIÓN */}
       <style jsx>{`
         @keyframes fadeIn {
           from {
