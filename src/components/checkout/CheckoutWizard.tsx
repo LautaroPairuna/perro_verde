@@ -23,7 +23,14 @@ import { PaymentMethodSelector } from './PaymentMethodSelector';
 import type { CreatePedidoDTO, MetodoPago } from '@/types/payment';
 
 interface CardBrickController {
-  getFormData(): Promise<{ token: string }>;
+  getFormData(): Promise<{
+    token: string;
+    payment_method_id: string;
+    installments: number;
+    issuer_id?: string;
+    transaction_amount?: number;
+    payer?: unknown;
+  }>;
   unmount(): void;
 }
 
@@ -33,6 +40,12 @@ interface ShippingInfo {
   telefono: string;
   direccion: string;
 }
+
+type CardData = {
+  cardToken: string;
+  payment_method_id: string;
+  installments: number;
+};
 
 export default function CheckoutWizard(): React.ReactElement {
   const router = useRouter();
@@ -118,7 +131,7 @@ export default function CheckoutWizard(): React.ReactElement {
   }, [step, paymentMethod, mpReady, total]);
 
   const submitOrder = useCallback(
-    async (cardToken?: string) => {
+    async (cardData?: CardData) => {
       setLoading(true);
       try {
         const payload: CreatePedidoDTO = {
@@ -137,7 +150,11 @@ export default function CheckoutWizard(): React.ReactElement {
           ...(paymentMethod === 'transferencia' && {
             transferencia_ref: transferRef,
           }),
-          ...(cardToken && { cardToken }),
+          ...(paymentMethod === 'tarjeta' && cardData && {
+            cardToken:          cardData.cardToken,
+            payment_method_id:  cardData.payment_method_id,
+            installments:       cardData.installments,
+          }),
         };
 
         const idempotencyKey = crypto.randomUUID();
@@ -315,8 +332,11 @@ export default function CheckoutWizard(): React.ReactElement {
                         setLoading(true);
                         const formData = await cardCtrl.getFormData();
                         console.log('🔥 Bricks.getFormData →', formData);
-                        const { token } = formData;
-                        await submitOrder(token);
+                        await submitOrder({
+                          cardToken:        formData.token,
+                          payment_method_id: formData.payment_method_id,
+                          installments:     formData.installments,
+                        });
                       } catch (e) {
                         console.error(e);
                         toast.error('No se pudo generar el token');

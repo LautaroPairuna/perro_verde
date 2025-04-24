@@ -1,8 +1,7 @@
 // src/strategies/CardStrategy.ts
-
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
-import { CreatePedidoDTO } from '@/types/payment';
+import type { CreatePedidoDTO } from '@/types/payment';
 import { PaymentStrategy } from './PaymentStrategy';
 
 export class CardStrategy implements PaymentStrategy {
@@ -11,17 +10,22 @@ export class CardStrategy implements PaymentStrategy {
     pedido: { id: number; total: number },
     dto: CreatePedidoDTO
   ) {
-    // 1. Usa la clave enviada o genera una nueva
     const idempotencyKey = dto.idempotencyKey ?? randomUUID();
-
     const body = {
       transaction_amount: pedido.total,
-      token: dto.cardToken!,
-      description: `Pago pedido #${pedido.id}`,
-      installments: dto.installments ?? 1,
-      payment_method_id: dto.payment_method_id ?? 'visa',
+      token:               dto.cardToken!,
+      description:        `Pago pedido #${pedido.id}`,
+      installments:       dto.installments!,
+      payment_method_id:  dto.payment_method_id!,
       payer: { email: dto.comprador_email },
     };
+
+    console.log(
+      '💳 [CardStrategy] MP body →',
+      JSON.stringify(body, null, 2),
+      'idempotencyKey →',
+      idempotencyKey
+    );
 
     const res = await fetch(
       'https://api.mercadopago.com/v1/payments',
@@ -43,12 +47,12 @@ export class CardStrategy implements PaymentStrategy {
 
     const payment = await res.json();
     return {
-      mpId: payment.id,
-      status: payment.status,
-      cardLast4: payment.card?.last_four_digits,
+      mpId:         payment.id,
+      status:       payment.status,
+      cardLast4:    payment.card?.last_four_digits,
       responseToClient: {
         orderId: pedido.id,
-        status: payment.status,
+        status:  payment.status,
       },
     };
   }
