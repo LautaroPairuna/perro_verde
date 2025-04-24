@@ -144,7 +144,9 @@ model Pedidos {
   tarjeta_payment_method String?
   mp_error_code          String?   @db.VarChar(64)
   mp_error_message       String?   @db.Text
-  mp_response            Json?     
+  mp_response            Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt   
 
   @@map("pedidos")
 }
