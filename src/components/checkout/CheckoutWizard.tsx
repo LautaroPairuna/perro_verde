@@ -1,5 +1,4 @@
 // src/components/checkout/CheckoutWizard.tsx
-
 'use client';
 
 import React, {
@@ -122,7 +121,6 @@ export default function CheckoutWizard(): React.ReactElement {
     async (cardToken?: string) => {
       setLoading(true);
       try {
-        // 1. Construye el payload
         const payload: CreatePedidoDTO = {
           datos: cart.map(({ id, name, price, quantity }) => ({
             id: Number(id),
@@ -142,8 +140,9 @@ export default function CheckoutWizard(): React.ReactElement {
           ...(cardToken && { cardToken }),
         };
 
-        // 2. Genera idempotencyKey y la manda en cabecera
         const idempotencyKey = crypto.randomUUID();
+        console.log('➡️ Payload /api/pedidos:', { payload, idempotencyKey });
+
         const res = await fetch('/api/pedidos', {
           method: 'POST',
           headers: {
@@ -153,7 +152,10 @@ export default function CheckoutWizard(): React.ReactElement {
           body: JSON.stringify({ ...payload, idempotencyKey }),
         });
 
-        const { data, message } = await res.json();
+        const json = await res.json();
+        console.log('⬅️ /api/pedidos response:', json);
+
+        const { data, message } = json;
         if (!res.ok) throw new Error(message ?? 'Error creando pedido');
 
         setOrderId(data.orderId);
@@ -311,7 +313,9 @@ export default function CheckoutWizard(): React.ReactElement {
                       if (!cardCtrl) return;
                       try {
                         setLoading(true);
-                        const { token } = await cardCtrl.getFormData();
+                        const formData = await cardCtrl.getFormData();
+                        console.log('🔥 Bricks.getFormData →', formData);
+                        const { token } = formData;
                         await submitOrder(token);
                       } catch (e) {
                         console.error(e);
