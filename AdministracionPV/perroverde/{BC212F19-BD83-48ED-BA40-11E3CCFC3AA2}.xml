@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<configuration date="2025/04/24" author="e.World Technology Ltd.">
+  <project id="{BC212F19-BD83-48ED-BA40-11E3CCFC3AA2}" file="" name="perroverde" product="PHPMaker" version="14.0" datetime="2025/04/24 12:21:31" languagefolder="phplang" userlevel="-2,&quot;Anonymous&quot;,0;">
+    <table id="cfgformaspagos" name="cfgformaspagos" caption="Formas de Pagos" userlevel="-2,&quot;Anonymous&quot;,0;" priv="1" />
+    <table id="cfgmarcas" name="cfgmarcas" caption="Marcas" userlevel="-2,&quot;Anonymous&quot;,0;" priv="1" />
+    <table id="cfgmonedas" name="cfgmonedas" caption="Monedas" userlevel="-2,&quot;Anonymous&quot;,0;" priv="1" />
+    <table id="cfgrubros" name="cfgrubros" caption="Rubros" userlevel="-2,&quot;Anonymous&quot;,0;" priv="1" />
+    <table id="cfgslider" name="cfgslider" caption="Slider" userlevel="-2,&quot;Anonymous&quot;,0;" priv="1" />
+    <table id="pedidos" name="pedidos" caption="Pedidos" userlevel="-2,&quot;Anonymous&quot;,0;" priv="1" />
+    <table id="productoespecificaciones" name="productoespecificaciones" caption="Especificaciones" userlevel="-2,&quot;Anonymous&quot;,0;" priv="1" />
+    <table id="productofotos" name="productofotos" caption="Fotos" userlevel="-2,&quot;Anonymous&quot;,0;" priv="1" />
+    <table id="productos" name="productos" caption="Productos" userlevel="-2,&quot;Anonymous&quot;,0;" priv="1" />
+    <table id="productoversiones" name="productoversiones" caption="Versiones" userlevel="-2,&quot;Anonymous&quot;,0;" priv="1" />
+  </project>
+</configuration>
