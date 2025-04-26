@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 
-const PLACEHOLDER_THUMB = '/images/productos/thumbs/placeholder.jpg';
+const PLACEHOLDER_THUMB = '/images/productos/fotos/placeholder.jpg';
 
 interface GalleryImage {
   src: string;

@@ -1,0 +1,47 @@
+/* ─── Global: contenedor de tabla con scroll interno ─── */
+.AJS_TableContainer {
+  overflow-x: auto      !important;
+  max-width: 100%       !important;
+  box-sizing: border-box!important;
+}
+
+/* ─── Global: tabla ocupa 100% y reparte ancho ─── */
+.AJS_Table {
+  table-layout: fixed   !important;
+  width: 100%           !important;
+  min-width: 100%       !important;
+}
+
+/* ─── Global: celdas no rompen layout ─── */
+.AJS_Table th,
+.AJS_Table td {
+  white-space: nowrap   !important;
+  overflow: hidden      !important;
+  text-overflow: ellipsis!important;
+  min-width: 150px      !important; /* ajusta si quieres más o menos */
+}
+
+/* ─── Mobile (<768px): stacked cards ─── */
+@media screen and (max-width: 768px) {
+  .AJS_Table thead {
+    display: none       !important;
+  }
+  .AJS_Table,
+  .AJS_Table tbody,
+  .AJS_Table tr,
+  .AJS_Table td {
+    display: block      !important;
+    width: 100%         !important;
+  }
+  .AJS_Table td {
+    position: relative  !important;
+    padding-left: 50%   !important;
+  }
+  .AJS_Table td::before {
+    content: attr(data-property-path) !important;
+    position: absolute;
+    left: .5rem; top: .5rem;
+    font-weight: bold;
+    text-transform: capitalize;
+  }
+}

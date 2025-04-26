@@ -101,15 +101,15 @@ export default async function ProductDetailPage({
 
   // 5) Preparar las URLs de la galería
   const mainImage = {
-    src: `/images/productos/thumbs/${product.foto}`,
-    thumb: `/images/productos/thumbs/${product.foto}`,
+    src: `/images/productos/${product.foto}`,
+    thumb: `/images/productos/${product.foto}`,
     alt: product.producto,
   }
   const images = [
     mainImage,
     ...product.fotos.map((f) => ({
-      src: `/images/productos/thumbs/${f.foto}`,
-      thumb: `/images/productos/thumbs/${f.foto}`,
+      src: `/images/productos/fotos/${f.foto}`,
+      thumb: `/images/productos/fotos/${f.foto}`,
       alt: product.producto,
     })),
   ]

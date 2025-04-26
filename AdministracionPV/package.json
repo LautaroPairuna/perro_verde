@@ -1,0 +1,40 @@
+{
+    "name": "perro-verde-admin",
+    "version": "1.0.0",
+    "description": "Panel de administración de Perro Verde con AdminJS + Prisma v5",
+    "type": "module",
+    "main": "server.js",
+    "scripts": {
+        "dev": "nodemon server.js",
+        "start": "node server.js",
+        "generate": "prisma generate"
+    },
+    "dependencies": {
+        "@adminjs/express": "^6.1.1",
+        "@adminjs/prisma": "^5.0.3",
+        "@adminjs/relations": "^1.1.2",
+        "@adminjs/themes": "^1.0.1",
+        "@adminjs/upload": "^4.0.2",
+        "@quixo3/prisma-session-store": "^3.1.13",
+        "adminjs": "^7.4.2",
+        "bcryptjs": "^2.4.3",
+        "compression": "^1.8.0",
+        "dotenv": "^16.4.1",
+        "express": "^4.18.2",
+        "express-fileupload": "^1.5.1",
+        "express-session": "^1.17.3",
+        "fs-extra": "^11.3.0",
+        "helmet": "^8.1.0",
+        "morgan": "^1.10.0",
+        "sharp": "^0.34.1",
+        "slugify": "^1.6.6"
+    },
+    "devDependencies": {
+        "@prisma/client": "^5.22.0",
+        "nodemon": "^3.0.3",
+        "prisma": "^5.22.0"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}

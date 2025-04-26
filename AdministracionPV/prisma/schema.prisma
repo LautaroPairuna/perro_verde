@@ -58,7 +58,7 @@ model CfgSlider {
   id     Int     @id @default(autoincrement())
   titulo String
   thumbs String? // tinytext
-  foto   String
+  foto   String?
   orden  Int     @default(5)
   activo Boolean @default(true)
 

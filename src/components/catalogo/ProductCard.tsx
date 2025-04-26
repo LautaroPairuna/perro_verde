@@ -58,7 +58,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       <figure className="relative aspect-[3/4] overflow-hidden">
         <Link href={productUrl} aria-label={`Ver más detalles de ${product.producto}`} className="block">
           <Image
-            src={`/images/productos/thumbs/${product.foto || "placeholder.jpg"}`}
+            src={`/images/productos/${product.foto || "placeholder.jpg"}`}
             alt={product.producto || "Imagen no disponible"}
             fill
             style={{ objectFit: "cover" }}

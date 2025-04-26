@@ -1,45 +1,23 @@
-// src/components/home/MostViewedProducts.tsx
+'use client';
+
 import React from 'react';
 import ProductCard from '../catalogo/ProductCard';
 import Link from 'next/link';
-import { prisma } from '@/lib/prisma';
-import type { Prisma } from '@prisma/client';
+import type { ViewedProduct } from './HomeClientComponents';
 
-type ViewedProduct = Prisma.ProductosGetPayload<{
-  select: {
-    id: true;
-    producto: true;
-    descripcion: true;
-    precio: true;
-    foto: true;
-    visitas: true;
-    rubro: { select: { id: true; rubro: true } };
-    marca: { select: { id: true; marca: true } };
-  };
-}>;
+interface Props {
+  products: ViewedProduct[];
+}
 
-export default async function MostViewedProducts() {
-  const products: ViewedProduct[] = await prisma.productos.findMany({
-    select: {
-      id: true,
-      producto: true,
-      descripcion: true,
-      precio: true,
-      foto: true,
-      visitas: true,
-      rubro: { select: { id: true, rubro: true } },
-      marca: { select: { id: true, marca: true } },
-    },
-    orderBy: { visitas: 'desc' },
-    take: 4,
-  });
-
+export default function MostViewedProducts({ products }: Props) {
   return (
     <section className="p-12 text-center bg-green-50">
       <div className="max-w-[1400px] mx-auto">
-        <h2 className="text-3xl font-bold text-green-800 mb-10">Productos más Vistos</h2>
+        <h2 className="text-3xl font-bold text-green-800 mb-10">
+          Productos más Vistos
+        </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
-          {products.map((product: ViewedProduct) => (
+          {products.map(product => (
             <ProductCard
               key={product.id}
               product={{

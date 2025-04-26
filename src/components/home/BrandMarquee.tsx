@@ -1,25 +1,17 @@
-// src/components/BrandMarquee.tsx
+// src/components/home/BrandMarquee.tsx
+'use client';
+
 import React from 'react';
 import slugify from '@/utils/slugify';
-import { prisma } from '../../lib/prisma';
 import Image from 'next/image';
 import Link from 'next/link';
+import type { Brand } from './HomeClientComponents';
 
-export default async function BrandMarquee() {
-  const brands = await prisma.cfgMarcas.findMany({
-    select: {
-      id: true,
-      marca: true,
-      foto: true,
-    },
-    where: {
-      activo: true,
-    },
-    orderBy: {
-      marca: 'asc',
-    },
-  });
+interface Props {
+  brands: Brand[];
+}
 
+export default function BrandMarquee({ brands }: Props) {
   return (
     <section className="bg-white py-8 overflow-hidden">
       <div className="max-w-7xl mx-auto">
@@ -38,7 +30,7 @@ export default async function BrandMarquee() {
                       loading="lazy"
                       fill
                       sizes="9rem"
-                      className="absolute inset-0 w-full h-full object-contain"
+                      className="object-contain"
                     />
                   </div>
                 </Link>
