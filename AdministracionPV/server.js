@@ -246,7 +246,7 @@ app.use(express.static(path.join(projectRoot,'public')))
 const adminJs = new AdminJS({
   componentLoader: loader,
   resources,
-  rootPath: '/admin',
+  rootPath: '/',
   dashboard: { component: REDIRECT_DASHBOARD },
   assets: { styles: ['/admin-custom.css'] },
   defaultTheme: 'dark',

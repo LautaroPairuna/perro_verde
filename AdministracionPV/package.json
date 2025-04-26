@@ -25,6 +25,7 @@
         "express-session": "^1.17.3",
         "fs-extra": "^11.3.0",
         "helmet": "^8.1.0",
+        "lucide-react": "^0.503.0",
         "morgan": "^1.10.0",
         "sharp": "^0.34.1",
         "slugify": "^1.6.6"

@@ -36,7 +36,7 @@ const ChildLink = ({ record, property }) => {
   const text  = `${count} ${count === 1 ? cfg.singular : cfg.plural}`
 
   const goToChildren = () => {
-    const path = `/admin/resources/${cfg.resource}/actions/list`
+    const path = `/resources/${cfg.resource}/actions/list`
     const search = `?filters.${cfg.foreignKey}=${record.params.id}`
     navigate(path + search)
   }
