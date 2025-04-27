@@ -254,7 +254,7 @@ app.use(
 const adminJs = new AdminJS({
   componentLoader: loader,
   resources,
-  rootPath: '/AdministracionPV',
+  rootPath: '/admin',
   dashboard: { component: REDIRECT_DASHBOARD },
   assets: { styles: ['/admin-custom.css'] },
   defaultTheme: 'dark',
@@ -288,7 +288,7 @@ app.use(session({
   cookie: { httpOnly: true, sameSite: 'lax', secure: NODE_ENV === 'production' }
 }))
 
-// Router autenticado montado en /AdministracionPV
+// Router autenticado montado en /admin
 const router = AdminJSExpress.buildAuthenticatedRouter(
   adminJs,
   {
