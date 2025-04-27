@@ -1,26 +1,26 @@
 import 'dotenv/config'
-import express            from 'express'
-import session            from 'express-session'
-import path               from 'path'
-import fs                 from 'fs'
-import fsExtra            from 'fs-extra'
-import { fileURLToPath }  from 'url'
-import bcrypt             from 'bcryptjs'
-import sharp              from 'sharp'
-import slugify            from 'slugify'
+import express from 'express'
+import session from 'express-session'
+import path from 'path'
+import fs from 'fs'
+import fsExtra from 'fs-extra'
+import { fileURLToPath } from 'url'
+import bcrypt from 'bcryptjs'
+import sharp from 'sharp'
+import slugify from 'slugify'
 
-import AdminJS, { ComponentLoader }           from 'adminjs'
-import AdminJSExpress                         from '@adminjs/express'
+import AdminJS, { ComponentLoader } from 'adminjs'
+import AdminJSExpress from '@adminjs/express'
 import { Database, Resource, getModelByName } from '@adminjs/prisma'
-import uploadFeature, { LocalProvider }       from '@adminjs/upload'
+import uploadFeature, { LocalProvider } from '@adminjs/upload'
 
-import * as PrismaModule      from '@prisma/client'
-const { PrismaClient }        = PrismaModule
+import * as PrismaModule from '@prisma/client'
+const { PrismaClient } = PrismaModule
 import { PrismaSessionStore } from '@quixo3/prisma-session-store'
 
 /* ────────── Utils ────────── */
 const __filename = fileURLToPath(import.meta.url)
-const __dirname  = path.dirname(__filename)
+const __dirname = path.dirname(__filename)
 ;['ADMIN_EMAIL','ADMIN_PASSWORD','COOKIE_SECRET'].forEach(key => {
   if (!process.env[key]) {
     console.error(`❌ Missing env var ${key}`)
@@ -31,8 +31,7 @@ const {
   ADMIN_EMAIL,
   ADMIN_PASSWORD,
   COOKIE_SECRET,
-  NODE_ENV = 'development',
-  PORT_ADMIN = 8080
+  NODE_ENV = 'development'
 } = process.env
 
 /* ────────── Prisma & AdminJS Setup ────────── */
@@ -46,7 +45,7 @@ const REDIRECT_DASHBOARD = loader.add(
   'RedirectDashboard',
   path.resolve(__dirname, 'components', 'RedirectDashboard.jsx')
 )
-const CHILD_LINK  = loader.add(
+const CHILD_LINK = loader.add(
   'ChildLink',
   path.resolve(__dirname, 'components', 'ChildLink.jsx')
 )
@@ -61,8 +60,8 @@ const ACTIONS_COLUMN = loader.add(
 
 /* ────────── Helpers ────────── */
 const projectRoot = path.resolve(process.cwd(), '..')
-const bucketBase  = path.join(projectRoot, 'public', 'images')
-const ensureDir   = dir => { if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive:true }) }
+const bucketBase = path.join(projectRoot, 'public', 'images')
+const ensureDir = dir => { if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive:true }) }
 const timestampAR = () => {
   const [date, time] = new Date()
     .toLocaleString('sv-SE', { timeZone:'America/Argentina/Salta', hour12:false })
@@ -79,7 +78,7 @@ class CrossDriveProvider extends LocalProvider {
   }
   async delete(key, bucket) {
     await super.delete(key, bucket)
-    const thumb = path.join(bucket,'thumbs',`thumb_${path.basename(key)}`)
+    const thumb = path.join(bucket, 'thumbs', `thumb_${path.basename(key)}`)
     if (fs.existsSync(thumb)) await fs.promises.unlink(thumb)
   }
 }
@@ -94,19 +93,19 @@ const actionsProperty = {
 
 /* ────────── Resource Factory with Upload ────────── */
 function resourceWithUpload({ modelName, folder, titleField }) {
-  const dir       = path.join(bucketBase, folder)
+  const dir = path.join(bucketBase, folder)
   const thumbsDir = path.join(dir, 'thumbs')
   ensureDir(dir); ensureDir(thumbsDir)
 
-  const dmmfModel    = PrismaModule.Prisma.dmmf.datamodel.models.find(m => m.name === modelName)
+  const dmmfModel = PrismaModule.Prisma.dmmf.datamodel.models.find(m => m.name === modelName)
   const scalarFields = dmmfModel.fields.filter(f => f.kind === 'scalar').map(f => f.name)
 
-  const listProps  = [...scalarFields]
+  const listProps = [...scalarFields]
   const properties = {
     [titleField]: { isTitle:true },
-    foto:          { isVisible:{ list:true, show:true, edit:false, new:false } },
-    uploadedFile:  { isVisible:{ list:false, show:false, edit:true, new:true } },
-    thumbs:        { isVisible:{ list:true, show:true, edit:false, new:false } }
+    foto: { isVisible:{ list:true, show:true, edit:false, new:false } },
+    uploadedFile: { isVisible:{ list:false, show:false, edit:true, new:true } },
+    thumbs: { isVisible:{ list:true, show:true, edit:false, new:false } }
   }
 
   let actions = {}
@@ -114,26 +113,26 @@ function resourceWithUpload({ modelName, folder, titleField }) {
     listProps.push('photosCount','versionsCount','specsCount')
     properties.photosCount = {
       components: { list: CHILD_LINK },
-      isVisible:   { list:true, show:true, edit:false, new:false },
-      label:       'Fotos'
+      isVisible: { list:true, show:true, edit:false, new:false },
+      label: 'Fotos'
     }
     properties.versionsCount = {
       components: { list: CHILD_LINK },
-      isVisible:   { list:true, show:true, edit:false, new:false },
-      label:       'Versiones'
+      isVisible: { list:true, show:true, edit:false, new:false },
+      label: 'Versiones'
     }
     properties.specsCount = {
       components: { list: CHILD_LINK },
-      isVisible:   { list:true, show:true, edit:false, new:false },
-      label:       'Especificaciones'
+      isVisible: { list:true, show:true, edit:false, new:false },
+      label: 'Especificaciones'
     }
     actions.list = {
       after: async response => {
         await Promise.all(response.records.map(async record => {
           const id = record.params.id
-          record.params.photosCount   = await prisma.productoFotos.count({ where:{ producto_id:id } })
+          record.params.photosCount = await prisma.productoFotos.count({ where:{ producto_id:id } })
           record.params.versionsCount = await prisma.productoVersiones.count({ where:{ producto_id:id } })
-          record.params.specsCount    = await prisma.productoEspecificaciones.count({ where:{ producto_id:id } })
+          record.params.specsCount = await prisma.productoEspecificaciones.count({ where:{ producto_id:id } })
         }))
         return response
       }
@@ -174,9 +173,9 @@ function resourceWithUpload({ modelName, folder, titleField }) {
           after: async (res, _req, ctx) => {
             const { record, resource } = ctx
             if (!record?.isValid() || !record.params.foto) return res
-            const inPath    = path.join(dir, record.params.foto)
+            const inPath = path.join(dir, record.params.foto)
             const thumbName = `thumb_${path.basename(record.params.foto)}`
-            const outPath   = path.join(thumbsDir, thumbName)
+            const outPath = path.join(thumbsDir, thumbName)
             try {
               await sharp(inPath).resize({ width:400 }).toFile(outPath)
               await resource.update({ id:record.params.id, data:{ thumbs: thumbName } })
@@ -228,7 +227,7 @@ const resources = [
         list:{ after: async response => {
           await Promise.all(response.records.map(async record => {
             const row = await prisma.pedidos.findUnique({ where:{ id: record.params.id }, select:{ datos:true, mp_response:true } })
-            record.params.datos       = row?.datos       ?? null
+            record.params.datos = row?.datos ?? null
             record.params.mp_response = row?.mp_response ?? null
           }))
           return response
@@ -241,12 +240,21 @@ const resources = [
 
 /* ────────── AdminJS & Server ────────── */
 const app = express()
-app.use(express.static(path.join(projectRoot,'public')))
+
+// Servir carpetas de imágenes y CSS personalizado
+app.use(
+  '/images',
+  express.static(path.join(projectRoot, 'public', 'images'))
+)
+app.use(
+  '/admin-custom.css',
+  express.static(path.join(__dirname, 'public', 'admin-custom.css'))
+)
 
 const adminJs = new AdminJS({
   componentLoader: loader,
   resources,
-  rootPath: '/',
+  rootPath: '/AdministracionPV',
   dashboard: { component: REDIRECT_DASHBOARD },
   assets: { styles: ['/admin-custom.css'] },
   defaultTheme: 'dark',
@@ -256,9 +264,9 @@ const adminJs = new AdminJS({
       resources: {
         Productos: {
           properties: {
-            photosCount:   'Fotos',
+            photosCount: 'Fotos',
             versionsCount: 'Versiones',
-            specsCount:    'Especificaciones',
+            specsCount: 'Especificaciones',
             actionsColumn: 'Acciones',
           }
         }
@@ -267,51 +275,50 @@ const adminJs = new AdminJS({
   }
 })
 
-if (NODE_ENV === 'production') {
-  await adminJs.initialize()
-} else {
-  adminJs.watch()
-}
+// Inicialización siempre
+await adminJs.initialize()
 
-app.use(adminJs.options.rootPath, express.static(path.join(projectRoot,'public')))
-
-const store = new PrismaSessionStore(prisma, { checkPeriod:120_000 })
+// Sesiones con Prisma
+const store = new PrismaSessionStore(prisma, { checkPeriod: 120_000 })
 app.use(session({
   secret: COOKIE_SECRET,
   store,
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly:true, sameSite:'lax', secure: NODE_ENV==='production' }
+  cookie: { httpOnly: true, sameSite: 'lax', secure: NODE_ENV === 'production' }
 }))
 
-app.use(
-  adminJs.options.rootPath,
-  AdminJSExpress.buildAuthenticatedRouter(
-    adminJs,
-    {
-      authenticate: async(email, pw) =>
-        email === ADMIN_EMAIL && await bcrypt.compare(pw, ADMIN_PASSWORD)
-          ? { email }
-          : null,
-      cookieName: 'adminjs',
-      cookiePassword: COOKIE_SECRET
-    },
-    null,
-    { store, resave:false, saveUninitialized:false }
-  )
+// Router autenticado montado en /AdministracionPV
+const router = AdminJSExpress.buildAuthenticatedRouter(
+  adminJs,
+  {
+    authenticate: async(email, pw) =>
+      email === ADMIN_EMAIL && await bcrypt.compare(pw, ADMIN_PASSWORD)
+        ? { email }
+        : null,
+    cookieName: 'adminjs',
+    cookiePassword: COOKIE_SECRET
+  },
+  null,
+  { store, resave: false, saveUninitialized: false }
 )
+app.use(adminJs.options.rootPath, router)
 
+// Manejo de errores
 app.use((err, _req, res, _next) => {
   console.error(err)
   res.status(500).send('internal-error')
 })
 
+// Desconectar Prisma y cerrar servidor limpio
 process.on('unhandledRejection', r => console.error('Rejection:', r))
-process.on('uncaughtException',   e => console.error('Exception:', e))
+process.on('uncaughtException', e => console.error('Exception:', e))
 
-const server = app.listen(PORT_ADMIN, () =>
-  console.log(`AdminJS → http://localhost:${PORT_ADMIN}${adminJs.options.rootPath}`)
+// Arranque con el puerto inyectado
+const port = parseInt(process.env.PORT, 10) || 8080
+app.listen(port, () =>
+  console.log(`AdminJS → http://localhost:${port}${adminJs.options.rootPath}`)
 )
 
-process.on('SIGINT',  async() => { await prisma.$disconnect(); server.close(() => process.exit(0)) })
-process.on('SIGTERM', async() => { await prisma.$disconnect(); server.close(() => process.exit(0)) })
+process.on('SIGINT', async() => { await prisma.$disconnect(); process.exit(0) })
+process.on('SIGTERM', async() => { await prisma.$disconnect(); process.exit(0) })
