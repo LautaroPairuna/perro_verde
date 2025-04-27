@@ -31,7 +31,7 @@ RUN npm install --production
 # 8) Copia los artefactos compilados
 COPY --from=builder /app/.next .next
 COPY --from=builder /app/public public
-COPY --from=builder /app/server.js server.mjs
+COPY --from=builder /app/server.mjs server.mjs
 
 EXPOSE 3000
 CMD ["npm", "start"]
