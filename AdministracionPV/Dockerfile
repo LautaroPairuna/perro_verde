@@ -1,16 +1,40 @@
-FROM node:18-alpine
+# AdministracionPV/Dockerfile
+
+# 1) Builder stage
+FROM node:18-alpine AS builder
 WORKDIR /app
 
-# 1) Copia deps y las instala
+# Copiamos sólo package.json para instalar deps
+COPY package*.json ./
+
+# Copiamos el directorio prisma (donde está schema.prisma)
+COPY prisma ./prisma
+
+# Instalamos TODO (incluye devDeps)
+RUN npm install
+
+# Generamos el cliente de Prisma
+RUN npx prisma generate
+
+# Copiamos el resto del código
+COPY . .
+
+# No necesitamos build step si tu AdminJS no requiere bundling
+# (si lo necesitara, aquí harías npm run build-admin u otro script)
+
+# 2) Runtime stage
+FROM node:18-alpine AS runtime
+WORKDIR /app
+
+# Instalamos sólo deps de producción
 COPY package*.json ./
 RUN npm install --production
 
-# 2) Copia el resto del código
-COPY . .
+# Traemos todo desde el builder
+COPY --from=builder /app ./
 
-# 3) Expone el puerto donde tu server.js arranca AdminJS
-#    (coincide con process.env.PORT o el valor por defecto 8080)
+# Exponemos el puerto en que arranca server.js (p. ej. 8080)
 EXPOSE 8080
 
-# 4) Lanza el servidor de AdminJS
+# Arrancamos tu servidor de AdminJS
 CMD ["node", "server.js"]
