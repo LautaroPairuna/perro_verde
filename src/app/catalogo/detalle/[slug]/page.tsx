@@ -13,9 +13,10 @@ import type { Metadata }         from 'next'
 export const dynamic    = 'force-dynamic'
 export const revalidate = 60
 
-// Extraemos el tipo de un elemento de versiones y de especificaciones
-type Version       = ProductDetail['versiones'][number]
+// Extraemos tipos de los arrays
+type Version        = ProductDetail['versiones'][number]
 type Especificacion = ProductDetail['especificaciones'][number]
+type Foto           = ProductDetail['fotos'][number]
 
 export async function generateMetadata({
   params,
@@ -96,7 +97,7 @@ export default async function ProductDetailPage({
   }
   const images = [
     mainImage,
-    ...product.fotos.map((f) => ({
+    ...product.fotos.map((f: Foto) => ({
       src:   `/images/productos/fotos/${f.foto}`,
       thumb: `/images/productos/fotos/${f.foto}`,
       alt:   product.producto,
