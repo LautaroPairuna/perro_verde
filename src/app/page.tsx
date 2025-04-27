@@ -2,25 +2,21 @@
 import Head                 from 'next/head'
 import HomeClientComponents from '@/components/home/HomeClientComponents'
 import prisma               from '@/lib/prisma'
-import type { CfgSlider }   from '@prisma/client'
 
 export const dynamic    = 'force-dynamic'
 export const revalidate = 60
 
 export default async function HomePage() {
-  // 1) Recuperar solo la foto de cada slider
-  const sliders: Array<Pick<CfgSlider, 'foto'>> = await prisma.cfgSlider.findMany({
+  // 1. Sliders
+  const sliders = await prisma.cfgSlider.findMany({
     where:   { activo: true },
     orderBy: { orden: 'asc' },
     select:  { foto: true },
   })
+  // Sin anotación manual: TS infiere `s: { foto: string }`
+  const promotionImages = sliders.map(s => `/images/slider/${s.foto}`)
 
-  // 2) Ahora TS sabe que `s` tiene forma { foto: string }
-  const promotionImages: string[] = sliders.map(
-    (s): string => `/images/slider/${s.foto}`
-  )
-
-  // 3) Productos destacados (igual que antes)
+  // 2. Productos destacados
   const rawFeatured = await prisma.productos.findMany({
     where:    { destacado: true, activo: true },
     take:      4,
@@ -36,14 +32,14 @@ export default async function HomePage() {
     precio: parseFloat(p.precio.toString()),
   }))
 
-  // 4) Marcas
+  // 3. Marcas
   const brands = await prisma.cfgMarcas.findMany({
     where:   { activo: true },
     orderBy: { marca: 'asc' },
     select:  { id: true, marca: true, foto: true },
   })
 
-  // 5) Más vistos
+  // 4. Productos más vistos
   const rawMostViewed = await prisma.productos.findMany({
     where:    { activo: true },
     orderBy:  { visitas: 'desc' },
