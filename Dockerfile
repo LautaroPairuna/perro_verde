@@ -1,25 +1,40 @@
+# Stage 1: builder
 FROM node:18-alpine AS builder
 WORKDIR /app
 
+# 1) Copia solo package.json y lockfile
 COPY package*.json ./
 
-# 1) Instala todo (incluye devDeps para que next build funcione)
+# 2) Copia tu esquema de Prisma para prisma generate
+COPY prisma ./prisma
+
+# 3) Instala todas las dependencias (incluyendo devDeps)
 RUN npm install
 
-# 2) Genera el cliente de Prisma para que @prisma/client refleje tu esquema
+# 4) Genera el cliente de Prisma
 RUN npx prisma generate
 
-# 3) Copia el resto del código y compila
+# 5) Copia el resto del código
 COPY . .
+
+# 6) Compila tu Next.js
 RUN npm run build
 
-# 4) Runtime minimal
-FROM node:18-alpine
+# Stage 2: runtime
+FROM node:18-alpine AS runtime
 WORKDIR /app
+
+# 7) Instala solo deps de producción
 COPY package*.json ./
 RUN npm install --production
+
+# 8) Copia los artefactos compilados
 COPY --from=builder /app/.next .next
 COPY --from=builder /app/public public
 COPY --from=builder /app/server.js server.js
+# Si usas next.config.js o tsconfig.json en runtime, cópialos también:
+COPY --from=builder /app/next.config.js next.config.js
+COPY --from=builder /app/tsconfig.json tsconfig.json
+
 EXPOSE 3000
-CMD ["npm","start"]
+CMD ["npm", "start"]
