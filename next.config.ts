@@ -12,12 +12,12 @@ const nextConfig: NextConfig = {
     return [
       // Para la ruta base /AdministracionPV
       {
-        source: '/AdministracionPV',
+        source: '/admin',
         destination: `${ADMIN_APP_URL}`,  
       },
       // Para todas las subrutas
       {
-        source: '/AdministracionPV/:path*',
+        source: '/admin/:path*',
         destination: `${ADMIN_APP_URL}/:path*`,
       },
     ]
