@@ -38,6 +38,7 @@ const {
 const prisma = new PrismaClient({
   log: NODE_ENV === 'development' ? ['error','warn'] : ['error']
 })
+await prisma.$connect()
 AdminJS.registerAdapter({ Database, Resource })
 
 const loader = new ComponentLoader()
