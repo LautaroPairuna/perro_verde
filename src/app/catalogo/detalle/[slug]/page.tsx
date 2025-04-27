@@ -1,37 +1,38 @@
 // src/app/catalogo/detalle/[slug]/page.tsx
-
 import { redirect } from 'next/navigation'
-import Head from 'next/head'
-import slugify from '@/utils/slugify'
+import Head         from 'next/head'
+import slugify      from '@/utils/slugify'
 import { getSingleProduct } from '@/utils/fetchData'
-import ProductInfo from '@/components/unProducto/ProductInfo'
-import ProductTabs from '@/components/unProducto/ProductTabs'
+import ProductInfo  from '@/components/unProducto/ProductInfo'
+import ProductTabs  from '@/components/unProducto/ProductTabs'
 import { PhotoSwipeInitializer } from '@/components/unProducto/PhotoSwipeInitializer'
-import ImageWithFallback from '@/components/ImageWithFallback'
-import type { ProductDetail } from '@/utils/fetchData'
-import type { Metadata } from 'next'
-export const dynamic = 'force-dynamic'
+import ImageWithFallback         from '@/components/ImageWithFallback'
+import type { ProductDetail }    from '@/utils/fetchData'
+import type { Metadata }         from 'next'
+
+export const dynamic    = 'force-dynamic'
 export const revalidate = 60
+
+// Extraemos el tipo de un elemento de versiones y de especificaciones
+type Version       = ProductDetail['versiones'][number]
+type Especificacion = ProductDetail['especificaciones'][number]
 
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug?: string }>
 }): Promise<Metadata> {
-  const { slug } = await params
-  const defaultTitle = 'Detalle de Producto'
-
+  const { slug }       = await params
+  const defaultTitle   = 'Detalle de Producto'
   if (!slug) {
     return { title: defaultTitle, description: 'Producto no encontrado' }
   }
-
-  const parts = slug.split('-')
-  const idPart = parts.at(-1) ?? ''
+  const parts    = slug.split('-')
+  const idPart   = parts.at(-1) ?? ''
   const productId = Number(idPart)
   if (isNaN(productId)) {
     return { title: defaultTitle, description: 'ID de producto inválido' }
   }
-
   try {
     const raw = await getSingleProduct(productId)
     return {
@@ -39,10 +40,7 @@ export async function generateMetadata({
       description: raw.descripcion?.substring(0, 160) || 'Descripción no disponible.',
     }
   } catch {
-    return {
-      title: defaultTitle,
-      description: 'Error al cargar detalles del producto',
-    }
+    return { title: defaultTitle, description: 'Error al cargar detalles del producto' }
   }
 }
 
@@ -51,66 +49,57 @@ export default async function ProductDetailPage({
 }: {
   params: Promise<{ slug?: string }>
 }) {
-  // 1) Leer y validar `slug`
+  // 1) Validar slug e ID
   const { slug } = await params
-  if (!slug) {
-    throw new Error('Falta el parámetro del producto en la URL.')
-  }
-
-  const parts = slug.split('-')
-  const idStr = parts.at(-1) ?? ''
+  if (!slug) throw new Error('Falta el parámetro del producto en la URL.')
+  const parts     = slug.split('-')
+  const idStr     = parts.at(-1) ?? ''
   const productId = Number(idStr)
-  if (isNaN(productId)) {
-    throw new Error(`ID inválido en URL ("${idStr}").`)
-  }
+  if (isNaN(productId)) throw new Error(`ID inválido en URL ("${idStr}").`)
 
-  // 2) Cargar datos del producto
+  // 2) Cargar datos
   let raw: ProductDetail
   try {
     raw = await getSingleProduct(productId)
   } catch (err) {
     console.error('Error cargando producto:', err)
-    // Si falla, redirigimos a una página de "no encontrado"
     redirect('/catalogo/not-found')
   }
 
-  // 3) Mapear al tipo que usan tus componentes
-  const product: ProductDetail & {
-    foto: string
-    descripcion: string
-  } = {
+  // 3) Mapear y normalizar
+  const product: ProductDetail & { foto: string; descripcion: string } = {
     ...raw,
-    // Aquí raw.precio ya es Decimal & number, no convertimos a `number`
-    precio: raw.precio,
     descripcion: raw.descripcion ?? '',
-    foto: raw.foto ?? 'placeholder.jpg',
-    versiones: raw.versiones.map((v) => ({
+    foto:        raw.foto ?? 'placeholder.jpg',
+
+    versiones: raw.versiones.map((v: Version) => ({
       ...v,
       detalle: v.detalle ?? '',
     })),
-    especificaciones: raw.especificaciones.map((e) => ({
+
+    especificaciones: raw.especificaciones.map((e: Especificacion) => ({
       ...e,
     })),
   }
 
-  // 4) Si el slug no coincide con el canónico, redirigimos
+  // 4) Redirigir al slug canónico si difiere
   const canonical = `${slugify(product.producto)}-${product.id}`
   if (slug !== canonical) {
     redirect(`/catalogo/detalle/${canonical}`)
   }
 
-  // 5) Preparar las URLs de la galería
+  // 5) Construir galería
   const mainImage = {
-    src: `/images/productos/${product.foto}`,
+    src:   `/images/productos/${product.foto}`,
     thumb: `/images/productos/${product.foto}`,
-    alt: product.producto,
+    alt:   product.producto,
   }
   const images = [
     mainImage,
     ...product.fotos.map((f) => ({
-      src: `/images/productos/fotos/${f.foto}`,
+      src:   `/images/productos/fotos/${f.foto}`,
       thumb: `/images/productos/fotos/${f.foto}`,
-      alt: product.producto,
+      alt:   product.producto,
     })),
   ]
 
@@ -148,7 +137,7 @@ export default async function ProductDetailPage({
               className={`grid gap-4 ${
                 images.length <= 2 ? 'grid-cols-2'
                 : images.length <= 3 ? 'grid-cols-3'
-                : 'grid-cols-4'
+                :                    'grid-cols-4'
               }`}
             >
               {images.slice(1).map((img, i) => (
@@ -178,14 +167,14 @@ export default async function ProductDetailPage({
         </div>
       </main>
 
-      {/* Sección de pestañas adicionales */}
+      {/* Pestañas adicionales */}
       <section className="p-8 md:p-16 bg-white">
         <div className="max-w-screen-xl mx-auto">
           <ProductTabs product={product} />
         </div>
       </section>
 
-      {/* Inicializador de PhotoSwipe (no necesita prop `images`) */}
+      {/* PhotoSwipe */}
       <PhotoSwipeInitializer />
     </>
   )
