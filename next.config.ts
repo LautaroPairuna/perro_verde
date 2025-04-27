@@ -1,15 +1,21 @@
 import { NextConfig } from 'next'
 
-/**
- * Define aquí, o en el .env, la URL que EasyPanel te asigna
- * para tu app de AdminJS.
- */
 const ADMIN_APP_URL = process.env.ADMIN_APP_URL 
+  || 'https://perro-verde-administracion.aslxla.easypanel.host'
+
+if (!ADMIN_APP_URL.startsWith('http')) {
+  throw new Error('La variable ADMIN_APP_URL debe empezar por http:// o https://')
+}
 
 const nextConfig: NextConfig = {
-  // …otras opciones que ya tengas…
   async rewrites() {
     return [
+      // Para la ruta base /AdministracionPV
+      {
+        source: '/AdministracionPV',
+        destination: `${ADMIN_APP_URL}`,  
+      },
+      // Para todas las subrutas
       {
         source: '/AdministracionPV/:path*',
         destination: `${ADMIN_APP_URL}/:path*`,
