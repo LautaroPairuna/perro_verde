@@ -1,66 +1,60 @@
 // src/app/page.tsx
-import Head from "next/head";
-import HomeClientComponents from "@/components/home/HomeClientComponents";
-import prisma from "@/lib/prisma";
+import Head                 from 'next/head'
+import HomeClientComponents from '@/components/home/HomeClientComponents'
+import prisma               from '@/lib/prisma'
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 60;
+export const dynamic    = 'force-dynamic'
+export const revalidate = 60
 
 export default async function HomePage() {
   // 1. Sliders
   const sliders = await prisma.cfgSlider.findMany({
-    where: { activo: true },
+    where:   { activo: true },
     orderBy: { orden: 'asc' },
-    select: { foto: true },
-  });
-  const promotionImages = sliders.map(s => `/images/slider/${s.foto}`);
+    select:  { foto: true },
+  })
+  // Sin anotación manual: TS infiere `s: { foto: string }`
+  const promotionImages = sliders.map(s => `/images/slider/${s.foto}`)
 
   // 2. Productos destacados
   const rawFeatured = await prisma.productos.findMany({
-    where: { destacado: true, activo: true },
-    take: 4,
+    where:    { destacado: true, activo: true },
+    take:      4,
     select: {
-      id: true,
-      producto: true,
-      descripcion: true,
-      precio: true,
-      foto: true,
+      id: true, producto: true, descripcion: true,
+      precio: true, foto: true,
       rubro: { select: { id: true, rubro: true } },
       marca: { select: { id: true, marca: true } },
     },
-  });
+  })
   const featuredProducts = rawFeatured.map(p => ({
     ...p,
     precio: parseFloat(p.precio.toString()),
-  }));
+  }))
 
   // 3. Marcas
   const brands = await prisma.cfgMarcas.findMany({
-    where: { activo: true },
+    where:   { activo: true },
     orderBy: { marca: 'asc' },
-    select: { id: true, marca: true, foto: true },
-  });
+    select:  { id: true, marca: true, foto: true },
+  })
 
   // 4. Productos más vistos
   const rawMostViewed = await prisma.productos.findMany({
-    where: { activo: true },
-    orderBy: { visitas: 'desc' },
-    take: 4,
+    where:    { activo: true },
+    orderBy:  { visitas: 'desc' },
+    take:      4,
     select: {
-      id: true,
-      producto: true,
-      descripcion: true,
-      precio: true,
-      foto: true,
-      visitas: true,
+      id: true, producto: true, descripcion: true,
+      precio: true, foto: true, visitas: true,
       rubro: { select: { id: true, rubro: true } },
       marca: { select: { id: true, marca: true } },
     },
-  });
+  })
   const mostViewed = rawMostViewed.map(p => ({
     ...p,
     precio: parseFloat(p.precio.toString()),
-  }));
+  }))
 
   return (
     <>
@@ -75,5 +69,5 @@ export default async function HomePage() {
         mostViewed={mostViewed}
       />
     </>
-  );
+  )
 }
