@@ -3,7 +3,6 @@
 
 import React from 'react';
 import dynamic from 'next/dynamic';
-import type { Productos, CfgMarcas } from '@prisma/client';
 
 // Tipo para productos destacados
 export type FeaturedProduct = {
