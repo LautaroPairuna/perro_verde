@@ -181,3 +181,13 @@ html, body {
 .adminjs_Table thead th {
   color: #fff !important;
 }
+
+/* TODOS los <td> dentro de un thead de AdminJS */
+thead td.adminjs_TableCell {
+  color: #fff !important;
+}
+
+/* Si quieres asegurarte de que sólo afecte al header, y no al body: */
+.adminjs_TableHead thead td.adminjs_TableCell {
+  color: #fff !important;
+}

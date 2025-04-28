@@ -1,14 +1,14 @@
 // components/ChildLink.jsx
 import React from 'react'
-import { Button } from '@adminjs/design-system'
-import { useNavigate } from 'react-router-dom'
+import PropTypes from 'prop-types'
+import { Button, Link } from '@adminjs/design-system'
 
 const map = {
   photosCount: {
     singular:   'foto',
     plural:     'fotos',
     resource:   'ProductoFotos',
-    foreignKey: 'producto',
+    foreignKey: 'producto',  // ← tu FK real en Prisma
     buttonProps:{ size:'sm', variant:'primary' },
   },
   versionsCount: {
@@ -29,23 +29,29 @@ const map = {
 
 const ChildLink = ({ record, property }) => {
   const cfg = map[property.path]
-  const navigate = useNavigate()
   if (!cfg) return null
 
   const count = record.params[property.path] ?? 0
-  const text  = `${count} ${count === 1 ? cfg.singular : cfg.plural}`
+  const label = `${count} ${count === 1 ? cfg.singular : cfg.plural}`
 
-  const goToChildren = () => {
-    const path = `/resources/${cfg.resource}/actions/list`
-    const search = `?filters.${cfg.foreignKey}=${record.params.id}`
-    navigate(path + search)
-  }
+  // Construye manualmente el href correcto:
+  const href = `/admin/resources/${cfg.resource}/actions/list?filters.${cfg.foreignKey}=${record.params.id}`
 
   return (
-    <Button onClick={goToChildren} {...cfg.buttonProps} style={{ margin: '0.2em 0' }}>
-      {text}
-    </Button>
+    <Link
+      href={href}
+      style={{ textDecoration:'none', margin:'0.2em 0' }}
+    >
+      <Button {...cfg.buttonProps}>
+        {label}
+      </Button>
+    </Link>
   )
+}
+
+ChildLink.propTypes = {
+  record:   PropTypes.object.isRequired,
+  property: PropTypes.object.isRequired,
 }
 
 export default ChildLink
