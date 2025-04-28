@@ -300,6 +300,7 @@ const app = express()
 
 // Servir imágenes
 const imagesPath = path.join(__dirname, 'public', 'images')
+console.log('⮕ Servir imágenes desde:', imagesPath)
 app.use(
   '/images',
   express.static(imagesPath, { maxAge:'1d', etag:false })
