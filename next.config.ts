@@ -1,25 +1,28 @@
 // next.config.ts
 import { NextConfig } from 'next'
 
-const ADMIN_HOST = 'https://perro-verde-administracion.aslxla.easypanel.host'
-const ADMIN_URL  = `${ADMIN_HOST}/admin`
+const ADMIN_HOST = 'perro-verde-administracion.aslxla.easypanel.host'
+const WEB_HOST   = 'perro-verde-web.aslxla.easypanel.host'
+const ADMIN_URL  = `https://${ADMIN_HOST}/admin`
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
 
   images: {
-    // Le dices a Next que puede optimizar cualquier imagen que venga de tu AdminJS
-    domains: ['perro-verde-administracion.aslxla.easypanel.host'],
-    // NO toques el `path`, que por defecto es "/_next/image"
+    // Permitimos optimizar imágenes de AdminJS y también de nuestra propia web
+    domains: [
+      ADMIN_HOST,
+      WEB_HOST,
+    ],
+    // path queda /_next/image por defecto
   },
 
   async rewrites() {
     return [
-      // Proxy para todo lo de /admin
-      { source: '/admin/:path*', destination: `${ADMIN_URL}/:path*` },
-
-      // Proxy para servir las imágenes estáticas de AdminJS
-      { source: '/images/:path*', destination: `${ADMIN_HOST}/images/:path*` },
+      // Proxy todo /admin al AdminJS real
+      { source: '/admin/:path*',  destination: `${ADMIN_URL}/:path*` },
+      // Proxy /images/* a AdminJS
+      { source: '/images/:path*', destination: `https://${ADMIN_HOST}/images/:path*` },
     ]
   },
 }
