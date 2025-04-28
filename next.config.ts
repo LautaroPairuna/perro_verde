@@ -9,19 +9,29 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
 
   images: {
-    // Permitimos optimizar imágenes de AdminJS y también de nuestra propia web
-    domains: [
-      ADMIN_HOST,
-      WEB_HOST,
+    // En lugar de domains, definimos patrones remotos
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: ADMIN_HOST,
+        port:     '',
+        // Cualquier /images/*
+        pathname: '/images/**',
+      },
+      {
+        protocol: 'https',
+        hostname: WEB_HOST,
+        port:     '',
+        pathname: '/_next/image',  // si también quieres permitir optimización de tu propio host
+      },
     ],
-    // path queda /_next/image por defecto
   },
 
   async rewrites() {
     return [
-      // Proxy todo /admin al AdminJS real
+      // Proxy de /admin
       { source: '/admin/:path*',  destination: `${ADMIN_URL}/:path*` },
-      // Proxy /images/* a AdminJS
+      // Proxy de /images hacia AdminJS
       { source: '/images/:path*', destination: `https://${ADMIN_HOST}/images/:path*` },
     ]
   },
