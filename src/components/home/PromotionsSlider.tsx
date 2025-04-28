@@ -5,8 +5,10 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 
 interface PromotionsSliderProps {
-  images: string[];
+  images: string[]; // rutas relativas como "/images/slider/slider-1.webp"
 }
+
+const ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST!.replace(/\/$/, '');
 
 export default function PromotionsSlider({ images }: PromotionsSliderProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -38,7 +40,7 @@ export default function PromotionsSlider({ images }: PromotionsSliderProps) {
   const goToSlide = (index: number) => setCurrentIndex(index);
 
   const touchStartX = useRef(0);
-  const touchEndX = useRef(0);
+  const touchEndX   = useRef(0);
   const minSwipeDistance = 50;
 
   const onTouchStart = (e: React.TouchEvent) => {
@@ -48,13 +50,13 @@ export default function PromotionsSlider({ images }: PromotionsSliderProps) {
     touchEndX.current = e.changedTouches[0].screenX;
   };
   const onTouchEnd = () => {
-    if (touchStartX.current - touchEndX.current > minSwipeDistance) {
-      handleNext();
-    }
-    if (touchEndX.current - touchStartX.current > minSwipeDistance) {
-      handlePrev();
-    }
+    if (touchStartX.current - touchEndX.current > minSwipeDistance) handleNext();
+    if (touchEndX.current - touchStartX.current > minSwipeDistance) handlePrev();
   };
+
+  // Helper para convertir rutas relativas en URLs absolutas
+  const toAbsolute = (src: string) =>
+    src.startsWith('http') ? src : `${ADMIN_HOST}${src}`;
 
   return (
     <section
@@ -78,7 +80,7 @@ export default function PromotionsSlider({ images }: PromotionsSliderProps) {
             className="w-full flex-shrink-0 relative aspect-[4/3] lg:aspect-[16/9] 2xl:aspect-[21/9] group"
           >
             <Image
-              src={src}
+              src={toAbsolute(src)}       // URL absoluta
               alt={`Promoción ${idx + 1}`}
               fill
               className="object-cover transition-transform duration-300 group-hover:scale-105"
