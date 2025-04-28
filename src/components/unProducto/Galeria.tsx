@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 
 const PLACEHOLDER_THUMB = '/images/productos/fotos/placeholder.jpg';
+const ADMIN_HOST        = process.env.NEXT_PUBLIC_ADMIN_HOST!;
 
 interface GalleryImage {
   src: string;
@@ -16,31 +17,39 @@ interface GalleryImage {
 
 async function validateImage(url: string): Promise<boolean> {
   try {
-    const response = await fetch(url, { method: 'HEAD' });
-    return response.ok;
+    // Cabezal HEAD para verificar existencia
+    const res = await fetch(url, { method: 'HEAD' });
+    return res.ok;
   } catch {
     return false;
   }
 }
 
 async function validateImages(images: GalleryImage[]): Promise<GalleryImage[]> {
-  const validations = images.map(async img => {
-    const ok = await validateImage(img.src);
-    return ok ? img : { ...img, src: PLACEHOLDER_THUMB, thumb: PLACEHOLDER_THUMB };
-  });
-  return Promise.all(validations);
+  return Promise.all(
+    images.map(async img => {
+      const fullSrc  = img.src.startsWith('http') ? img.src : `${ADMIN_HOST}${img.src}`;
+      const ok       = await validateImage(fullSrc);
+      const finalSrc = ok ? fullSrc : `${ADMIN_HOST}${PLACEHOLDER_THUMB}`;
+      const finalThumb = ok
+        ? img.thumb.startsWith('http') ? img.thumb : `${ADMIN_HOST}${img.thumb}`
+        : `${ADMIN_HOST}${PLACEHOLDER_THUMB}`;
+      return { ...img, src: finalSrc, thumb: finalThumb };
+    })
+  );
 }
 
 const Galeria: React.FC = () => {
   const [images, setImages] = useState<GalleryImage[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [loaded,  setLoaded] = useState(false);
 
   useEffect(() => {
-    const imagesRaw: GalleryImage[] = [
+    const raw: GalleryImage[] = [
       { src: '/images/large1.jpg', thumb: '/images/thumb1.jpg', alt: 'Image 1', pswpWidth: 800, pswpHeight: 800 },
       { src: '/images/large2.jpg', thumb: '/images/thumb2.jpg', alt: 'Image 2', pswpWidth: 800, pswpHeight: 800 },
+      // …añade tus imágenes aquí
     ];
-    validateImages(imagesRaw).then(validated => {
+    validateImages(raw).then(validated => {
       setImages(validated);
       setLoaded(true);
     });
@@ -82,7 +91,10 @@ const Galeria: React.FC = () => {
               width={300}
               height={300}
               className={`object-cover rounded cursor-pointer fade-in ${loaded ? 'loaded' : ''}`}
-              onError={e => { (e.currentTarget as HTMLImageElement).src = PLACEHOLDER_THUMB; }}
+              onError={e => {
+                // Fallback en caso de error
+                (e.currentTarget as HTMLImageElement).src = `${ADMIN_HOST}${PLACEHOLDER_THUMB}`;
+              }}
             />
           </a>
         ))}

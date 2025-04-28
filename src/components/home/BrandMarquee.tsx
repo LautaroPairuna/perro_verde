@@ -11,6 +11,8 @@ interface Props {
   brands: Brand[];
 }
 
+const ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST!;
+
 export default function BrandMarquee({ brands }: Props) {
   return (
     <section className="bg-white py-8 overflow-hidden">
@@ -25,12 +27,12 @@ export default function BrandMarquee({ brands }: Props) {
                 <Link href={`/catalogo/marca-${slugify(brand.marca)}/pagina-1`}>
                   <div className="relative aspect-square w-full">
                     <Image
-                      src={`/images/marcas/thumbs/${brand.foto || 'placeholder.jpg'}`}
+                      src={`${ADMIN_HOST}/images/marcas/thumbs/${brand.foto || 'placeholder.jpg'}`}
                       alt={`Logo de ${brand.marca}`}
-                      loading="lazy"
                       fill
                       sizes="9rem"
                       className="object-contain"
+                      priority={false}
                     />
                   </div>
                 </Link>

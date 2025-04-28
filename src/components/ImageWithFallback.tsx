@@ -1,12 +1,15 @@
+// src/components/ImageWithFallback.tsx
 'use client';
 
 import Image, { ImageProps } from 'next/image';
 import { useState } from 'react';
 
 interface ImageWithFallbackProps extends Omit<ImageProps, 'src'> {
-  src: string;
-  fallbackSrc?: string;
+  src: string;              // puede venir "/images/..." o URL absoluta
+  fallbackSrc?: string;     // idem
 }
+
+const ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST!;
 
 const ImageWithFallback: React.FC<ImageWithFallbackProps> = ({
   src,
@@ -14,17 +17,22 @@ const ImageWithFallback: React.FC<ImageWithFallbackProps> = ({
   alt,
   ...rest
 }) => {
-  const [imgSrc, setImgSrc] = useState(src);
+  // Función para anteponer host si es ruta relativa
+  const makeUrl = (u: string) =>
+    u.startsWith('http') ? u : `${ADMIN_HOST}${u}`;
+
+  const [imgSrc, setImgSrc] = useState(() => makeUrl(src));
+  const fbSrc = makeUrl(fallbackSrc);
 
   return (
     <Image
       {...rest}
       src={imgSrc}
       alt={alt}
-      onError={() => setImgSrc(fallbackSrc)}
-      // Si no quieres especificar width/height, usa layout="fill" y envuelve en un contenedor position:relative
-      width={300}
-      height={300}
+      onError={() => setImgSrc(fbSrc)}
+      // Width/height por defecto (puedes pasarlos via rest)
+      width={rest.width ?? 300}
+      height={rest.height ?? 300}
     />
   );
 };

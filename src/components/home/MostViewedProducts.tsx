@@ -1,3 +1,4 @@
+// src/components/home/MostViewedProducts.tsx
 'use client';
 
 import React from 'react';
