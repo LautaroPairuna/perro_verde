@@ -1,7 +1,7 @@
 // next.config.ts
 import { NextConfig } from 'next'
 
-const ADMIN_URL = 'https://perro-verde-administracion.aslxla.easypanel.host'
+const ADMIN_URL = 'https://perro-verde-administracion.aslxla.easypanel.host/admin'
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
