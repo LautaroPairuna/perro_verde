@@ -20,8 +20,8 @@ export async function generateMetadata({
 }: {
   params: Promise<{ slug?: string }>
 }): Promise<Metadata> {
-  const { slug }       = await params
-  const defaultMeta    = { title:'Detalle de Producto', description:'Producto no encontrado' }
+  const { slug }    = await params
+  const defaultMeta = { title:'Detalle de Producto', description:'Producto no encontrado' }
   if (!slug) return defaultMeta
 
   const parts     = slug.split('-')
@@ -62,8 +62,8 @@ export default async function ProductDetailPage({
 
   const product = {
     ...raw,
-    descripcion: raw.descripcion || '',
-    foto:        raw.foto        || 'placeholder.jpg',
+    descripcion: raw.descripcion           || '',
+    foto:        raw.foto                  || 'placeholder.jpg',
     versiones:   raw.versiones.map(v => ({ ...v, detalle: v.detalle || '' })),
     especificaciones: raw.especificaciones,
   }
@@ -75,18 +75,18 @@ export default async function ProductDetailPage({
 
   const images = [
     {
-      src:   `${ADMIN_HOST}/images/productos/${product.foto}`,
-      thumb: `${ADMIN_HOST}/images/productos/${product.foto}`,
-      alt:   product.producto,
-      pswpWidth: 1200,
+      src:        `${ADMIN_HOST}/images/productos/${product.foto}`,
+      thumb:      `${ADMIN_HOST}/images/productos/${product.foto}`,
+      alt:        product.producto,
+      pswpWidth:  1200,
       pswpHeight: 1200,
     },
-    ...product.fotos.map((f, i) => ({
-      src:   `${ADMIN_HOST}/images/productos/fotos/${f.foto}`,
-      thumb: `${ADMIN_HOST}/images/productos/fotos/${f.foto}`,
-      alt:   product.producto,
-      pswpWidth: 1200,
-      pswpHeight: 800,
+    ...product.fotos.map(f => ({
+      src:        `${ADMIN_HOST}/images/productos/fotos/${f.foto}`,
+      thumb:      `${ADMIN_HOST}/images/productos/fotos/${f.foto}`,
+      alt:        product.producto,
+      pswpWidth:  1200,
+      pswpHeight:  800,
     })),
   ]
 
@@ -100,6 +100,7 @@ export default async function ProductDetailPage({
         <div className="max-w-screen-xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Galería */}
           <section id="gallery" className="space-y-4">
+            {/* Imagen principal */}
             <a
               href={images[0].src}
               data-pswp-width={images[0].pswpWidth}
@@ -115,17 +116,19 @@ export default async function ProductDetailPage({
                 priority
               />
             </a>
+
+            {/* Resto de miniaturas */}
             <div className={`grid gap-4 ${
                 images.length <= 2 ? 'grid-cols-2'
               : images.length <= 3 ? 'grid-cols-3'
               :                       'grid-cols-4'}`}>
-              {images.slice(1).map((img, i) => (
+              {images.slice(1).map((img, index) => (
                 <a
-                  key={i}
+                  key={img.src}                             // usamos src como key
                   href={img.src}
                   data-pswp-width={img.pswpWidth}
                   data-pswp-height={img.pswpHeight}
-                  data-index={i + 1}
+                  data-index={index + 1}                    // ahora sí usamos "index"
                   className="relative w-full aspect-square overflow-hidden hover:scale-105 transition"
                 >
                   <Image
