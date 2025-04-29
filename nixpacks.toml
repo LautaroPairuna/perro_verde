@@ -1,21 +1,21 @@
 [phases.setup]
 # Asegura node, npm y pm2 en el entorno de build y runtime
-packages = ["nodejs", "npm"]
+packages = ["nodejs", "npm", "pm2"]
 
 [phases.build]
-# Instala y build de Next.js
+# Verifica si las dependencias están instaladas, si no, las instala
 commands = [
-  "npm ci --prefix .",
-  "npm run build --prefix .",
-  "npm ci --prefix AdministracionPV",
-  "npm run generate --prefix AdministracionPV"
+  "npm list next || npm ci --prefix .",  # Verifica si 'next' está instalado, si no lo está, lo instala
+  "npm list dotenv || npm ci --prefix .",  # Verifica si 'dotenv' está instalado, si no lo está, lo instala
+  "npm run build --prefix .",  # Luego, ejecuta el build del frontend
+  "npm ci --prefix AdministracionPV",  # Instala dependencias de AdminJS
+  "npm run generate --prefix AdministracionPV"  # Genera Prisma Client
 ]
 
 [phases.start]
-# Ejecuta pm2-runtime con npx
+# Verifica si pm2 está instalado y ejecuta pm2-runtime para arrancar las aplicaciones
 commands = [
-  "export PATH=$PATH:$(npm bin -g)",  # Asegúrate de añadir el binario global de npm
-  "npx pm2-runtime ecosystem.config.js"  # Usa npx para ejecutar pm2
+  "npx pm2-runtime ecosystem.config.js"  # Utiliza npx para ejecutar pm2-runtime
 ]
 
 [env]
