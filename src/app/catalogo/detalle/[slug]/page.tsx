@@ -13,11 +13,11 @@ import type { Metadata }         from 'next'
 export const dynamic    = 'force-dynamic'
 export const revalidate = 60
 
-type Version        = ProductDetail['versiones'][number]
-type Especificacion = ProductDetail['especificaciones'][number]
-type Foto           = ProductDetail['fotos'][number]
+// -- Elimina estas tres líneas --
+// type Version        = ProductDetail['versiones'][number]
+// type Especificacion = ProductDetail['especificaciones'][number]
+// type Foto           = ProductDetail['fotos'][number]
 
-// El host de AdminJS, viene de next.config.js como NEXT_PUBLIC_ADMIN_HOST
 const ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST!
 
 export async function generateMetadata({ params }: { params: Promise<{ slug?: string }> }): Promise<Metadata> {
@@ -70,17 +70,16 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     redirect(`/catalogo/detalle/${canonical}`)
   }
 
-  // Construimos lista de imágenes
   const images = [
     {
-      src:   `${ADMIN_HOST}/images/productos/${product.foto}`,
-      thumb: `${ADMIN_HOST}/images/productos/${product.foto}`,
+      src:   `/images/productos/${product.foto}`,
+      thumb: `/images/productos/${product.foto}`,
       alt:   product.producto,
     },
-    ...product.fotos.map(f => ({
-      src:   `${ADMIN_HOST}/images/productos/fotos/${f.foto}`,
-      thumb: `${ADMIN_HOST}/images/productos/fotos/${f.foto}`,
-      alt:   product.producto,
+    ...product.fotos.map((f, index) => ({
+      src:        `/images/productos/fotos/${f.foto}`,
+      thumb:      `/images/productos/fotos/${f.foto}`,
+      alt:        product.producto,
     })),
   ]
 
@@ -113,13 +112,13 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 images.length <= 2 ? 'grid-cols-2'
               : images.length <= 3 ? 'grid-cols-3'
               :                       'grid-cols-4'}`}>
-              {images.slice(1).map((img, i) => (
+              {images.slice(1).map((img, idx) => (
                 <a
-                  key={i}
+                  key={img.src}
                   href={img.src}
                   data-pswp-width="1200"
                   data-pswp-height="800"
-                  data-index={i + 1}
+                  data-index={idx + 1}
                   className="relative w-full aspect-square overflow-hidden hover:scale-105 transition"
                 >
                   <Image
