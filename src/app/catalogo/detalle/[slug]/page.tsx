@@ -7,25 +7,26 @@ import { getSingleProduct } from '@/utils/fetchData'
 import ProductInfo  from '@/components/unProducto/ProductInfo'
 import ProductTabs  from '@/components/unProducto/ProductTabs'
 import { PhotoSwipeInitializer } from '@/components/unProducto/PhotoSwipeInitializer'
-import type { Metadata } from 'next'
-import type { ProductDetail } from '@/utils/fetchData'
+import type { ProductDetail }    from '@/utils/fetchData'
+import type { Metadata }         from 'next'
 
 export const dynamic    = 'force-dynamic'
 export const revalidate = 60
 
+type Version        = ProductDetail['versiones'][number]
+type Especificacion = ProductDetail['especificaciones'][number]
+type Foto           = ProductDetail['fotos'][number]
+
+// El host de AdminJS, viene de next.config.js como NEXT_PUBLIC_ADMIN_HOST
 const ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST!
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ slug?: string }>
-}): Promise<Metadata> {
-  const { slug }    = await params
-  const defaultMeta = { title:'Detalle de Producto', description:'Producto no encontrado' }
+export async function generateMetadata({ params }: { params: Promise<{ slug?: string }> }): Promise<Metadata> {
+  const { slug }     = await params
+  const defaultMeta  = { title:'Detalle de Producto', description:'Producto no encontrado' }
   if (!slug) return defaultMeta
 
-  const parts     = slug.split('-')
-  const idPart    = parts.at(-1)!
+  const parts    = slug.split('-')
+  const idPart   = parts.at(-1)!
   const productId = Number(idPart)
   if (isNaN(productId)) return defaultMeta
 
@@ -33,18 +34,14 @@ export async function generateMetadata({
     const raw = await getSingleProduct(productId)
     return {
       title: `${raw.producto} | Detalle de Producto`,
-      description: raw.descripcion?.substring(0,160) || 'Descripción no disponible.',
+      description: raw.descripcion?.slice(0,160) || 'Descripción no disponible.',
     }
   } catch {
     return defaultMeta
   }
 }
 
-export default async function ProductDetailPage({
-  params,
-}: {
-  params: Promise<{ slug?: string }>
-}) {
+export default async function ProductDetailPage({ params }: { params: Promise<{ slug?: string }> }) {
   const { slug } = await params
   if (!slug) throw new Error('Falta el parámetro del producto en la URL.')
 
@@ -62,8 +59,8 @@ export default async function ProductDetailPage({
 
   const product = {
     ...raw,
-    descripcion: raw.descripcion           || '',
-    foto:        raw.foto                  || 'placeholder.jpg',
+    descripcion: raw.descripcion || '',
+    foto:        raw.foto || 'placeholder.jpg',
     versiones:   raw.versiones.map(v => ({ ...v, detalle: v.detalle || '' })),
     especificaciones: raw.especificaciones,
   }
@@ -73,20 +70,17 @@ export default async function ProductDetailPage({
     redirect(`/catalogo/detalle/${canonical}`)
   }
 
+  // Construimos lista de imágenes
   const images = [
     {
-      src:        `${ADMIN_HOST}/images/productos/${product.foto}`,
-      thumb:      `${ADMIN_HOST}/images/productos/${product.foto}`,
-      alt:        product.producto,
-      pswpWidth:  1200,
-      pswpHeight: 1200,
+      src:   `${ADMIN_HOST}/images/productos/${product.foto}`,
+      thumb: `${ADMIN_HOST}/images/productos/${product.foto}`,
+      alt:   product.producto,
     },
     ...product.fotos.map(f => ({
-      src:        `${ADMIN_HOST}/images/productos/fotos/${f.foto}`,
-      thumb:      `${ADMIN_HOST}/images/productos/fotos/${f.foto}`,
-      alt:        product.producto,
-      pswpWidth:  1200,
-      pswpHeight:  800,
+      src:   `${ADMIN_HOST}/images/productos/fotos/${f.foto}`,
+      thumb: `${ADMIN_HOST}/images/productos/fotos/${f.foto}`,
+      alt:   product.producto,
     })),
   ]
 
@@ -94,17 +88,16 @@ export default async function ProductDetailPage({
     <>
       <Head>
         <title>{`${product.producto} | Detalle de Producto`}</title>
-        <meta name="description" content={product.descripcion.substring(0,160)} />
+        <meta name="description" content={product.descripcion.slice(0,160)} />
       </Head>
       <main className="p-8 md:p-12 bg-gray-50">
         <div className="max-w-screen-xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Galería */}
           <section id="gallery" className="space-y-4">
-            {/* Imagen principal */}
             <a
               href={images[0].src}
-              data-pswp-width={images[0].pswpWidth}
-              data-pswp-height={images[0].pswpHeight}
+              data-pswp-width="1200"
+              data-pswp-height="1200"
               data-index={0}
               className="relative w-full aspect-square overflow-hidden hover:scale-105 transition"
             >
@@ -116,19 +109,17 @@ export default async function ProductDetailPage({
                 priority
               />
             </a>
-
-            {/* Resto de miniaturas */}
             <div className={`grid gap-4 ${
                 images.length <= 2 ? 'grid-cols-2'
               : images.length <= 3 ? 'grid-cols-3'
               :                       'grid-cols-4'}`}>
-              {images.slice(1).map((img, index) => (
+              {images.slice(1).map((img, i) => (
                 <a
-                  key={img.src}                             // usamos src como key
+                  key={i}
                   href={img.src}
-                  data-pswp-width={img.pswpWidth}
-                  data-pswp-height={img.pswpHeight}
-                  data-index={index + 1}                    // ahora sí usamos "index"
+                  data-pswp-width="1200"
+                  data-pswp-height="800"
+                  data-index={i + 1}
                   className="relative w-full aspect-square overflow-hidden hover:scale-105 transition"
                 >
                   <Image
@@ -143,21 +134,20 @@ export default async function ProductDetailPage({
             </div>
           </section>
 
-          {/* Información del producto */}
+          {/* Info del producto */}
           <section>
             <ProductInfo product={product} />
           </section>
         </div>
       </main>
 
-      {/* Pestañas adicionales */}
+      {/* Pestañas */}
       <section className="p-8 md:p-16 bg-white">
         <div className="max-w-screen-xl mx-auto">
           <ProductTabs product={product} />
         </div>
       </section>
 
-      {/* PhotoSwipe */}
       <PhotoSwipeInitializer />
     </>
   )
