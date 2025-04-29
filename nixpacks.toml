@@ -5,16 +5,20 @@ packages = ["nodejs", "npm", "pm2"]
 [phases.build]
 # Verifica si las dependencias están instaladas, si no, las instala
 commands = [
-  "npm list next || npm ci --prefix .",  # Verifica si 'next' está instalado, si no lo está, lo instala
-  "npm list dotenv || npm ci --prefix .",  # Verifica si 'dotenv' está instalado, si no lo está, lo instala
+  "echo 'Verificando dependencias del frontend...'",
+  "cd /app && npm install --legacy-peer-deps",  # Instalar dependencias del frontend, asegurando compatibilidad
+  "echo 'Verificando dependencias de AdminJS...'",
+  "cd /app/AdministracionPV && npm install --legacy-peer-deps",  # Instalar dependencias de AdminJS, asegurando compatibilidad
+  "echo 'Ejecutando build del frontend...'",
   "npm run build --prefix .",  # Luego, ejecuta el build del frontend
-  "npm ci --prefix AdministracionPV",  # Instala dependencias de AdminJS
+  "echo 'Generando Prisma client...'",
   "npm run generate --prefix AdministracionPV"  # Genera Prisma Client
 ]
 
 [phases.start]
 # Verifica si pm2 está instalado y ejecuta pm2-runtime para arrancar las aplicaciones
 commands = [
+  "echo 'Iniciando aplicaciones con pm2-runtime...'",
   "npx pm2-runtime ecosystem.config.js"  # Utiliza npx para ejecutar pm2-runtime
 ]
 
