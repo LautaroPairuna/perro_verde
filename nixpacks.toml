@@ -1,28 +1,34 @@
 # nixpacks.toml
 
 [phases.setup]
-# Asegura que node, npm y pm2 están en el entorno de build y runtime
-packages = ["nodejs", "npm", "pm2"]
+# Verifica si PM2 está instalado, y si no lo está, lo instala
+commands = [
+  "npm install -g pm2",  # Instalar PM2 si no está instalado
+  "pm2 -v",              # Verifica la versión de PM2 para asegurarse de que se ha instalado correctamente
+  "node -v",              # Verifica la versión de Node.js
+  "npm -v",               # Verifica la versión de npm
+  "which pm2"             # Verifica la ubicación de PM2 en el sistema
+]
 
 [phases.build]
-# Instala y build de Next.js
+# Instala las dependencias y hace el build de Next.js y AdminJS
 commands = [
-  # Instala dependencias del frontend y genera el build
+  # Instala las dependencias del frontend y genera el build
   "npm ci --prefix .",
   "npm run build --prefix .",
-  # Instala dependencias de AdminJS y genera el cliente Prisma
+  # Instala las dependencias y genera el cliente Prisma para AdminJS
   "npm ci --prefix AdministracionPV",
   "npm run generate --prefix AdministracionPV"
 ]
 
 [phases.start]
-# Arranca PM2 con tu configuración que levanta Next y AdminJS
+# Arranca PM2 con la configuración de ecosistema
 commands = [
   "pm2-runtime ecosystem.config.js"
 ]
 
 [env]
-# Define la URL interna donde corre AdminJS
+# Define la URL interna para AdminJS
 NEXT_PUBLIC_ADMIN_URL = "http://localhost:8080"
 NODE_ENV = "production"
 PORT = "3000"
