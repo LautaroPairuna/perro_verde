@@ -6,10 +6,7 @@ const ADMIN_URL  = `https://${ADMIN_HOST}/admin`
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-
   images: {
-    // Solo lo necesitas si en algún <Image> usas src absoluto apuntando al AdminJS
-    // Para rutas relativas (/images/...), Next las toma como local y las sirve directo.
     remotePatterns: [
       {
         protocol: 'https',
@@ -19,14 +16,12 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-
   async rewrites() {
     return [
-      // Proxy únicamente /admin → AdminJS
-      {
-        source:      '/admin/:path*',
-        destination: `${ADMIN_URL}/:path*`,
-      },
+      // Sigue proxy-fiando todo /admin al AdminJS
+      { source: '/admin/:path*',  destination: `${ADMIN_URL}/:path*` },
+      // Y proxy-fia todo /images/* a AdminJS también
+      { source: '/images/:path*', destination: `https://${ADMIN_HOST}/images/:path*` },
     ]
   },
 }
