@@ -1,16 +1,16 @@
 # nixpacks.toml
 
 [phases.setup]
-# Asegura node, npm y pm2 en el entorno de build y runtime
+# Asegura que node, npm y pm2 están en el entorno de build y runtime
 packages = ["nodejs", "npm", "pm2"]
 
 [phases.build]
 # Instala y build de Next.js
 commands = [
-  # instala dependencias del frontend y genera el build
+  # Instala dependencias del frontend y genera el build
   "npm ci --prefix .",
   "npm run build --prefix .",
-  # instala dependencias de AdminJS y genera el cliente Prisma
+  # Instala dependencias de AdminJS y genera el cliente Prisma
   "npm ci --prefix AdministracionPV",
   "npm run generate --prefix AdministracionPV"
 ]
