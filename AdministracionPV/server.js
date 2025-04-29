@@ -67,7 +67,7 @@ const JSON_VIEWER    = loader.add('JsonViewer',    path.resolve(__dirname, 'comp
 const ACTIONS_COLUMN = loader.add('ActionsColumn', path.resolve(__dirname, 'components', 'ActionsColumn.jsx'))
 
 /* ────────── Helpers & Caches ────────── */
-const bucketBase  = path.join(__dirname, 'public', 'images')
+const bucketBase  = path.join(__dirname, '..', 'public', 'images')
 const createdDirs = new Set()
 const ensureDir = dir => {
   if (!createdDirs.has(dir)) {
@@ -299,11 +299,12 @@ const resources = [
 const app = express()
 
 // Servir imágenes
-const imagesPath = path.join(__dirname, 'public', 'images')
+const imagesPath = path.join(__dirname, '..', 'public', 'images')
 console.log('⮕ Servir imágenes desde:', imagesPath)
+
 app.use(
   '/images',
-  express.static(imagesPath, { maxAge:'1d', etag:false })
+  express.static(imagesPath, { maxAge: '1d', etag: false }),
 )
 
 // Servir CSS personalizado

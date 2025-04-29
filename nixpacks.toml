@@ -1,0 +1,28 @@
+# nixpacks.toml
+
+[phases.setup]
+# Asegura node, npm y pm2 en el entorno de build y runtime
+packages = ["nodejs", "npm", "pm2"]
+
+[phases.build]
+# Instala y build de Next.js
+commands = [
+  # instala dependencias del frontend y genera el build
+  "npm ci --prefix .",
+  "npm run build --prefix .",
+  # instala dependencias de AdminJS y genera el cliente Prisma
+  "npm ci --prefix AdministracionPV",
+  "npm run generate --prefix AdministracionPV"
+]
+
+[phases.start]
+# Arranca PM2 con tu configuración que levanta Next y AdminJS
+commands = [
+  "pm2-runtime ecosystem.config.js"
+]
+
+[env]
+# Define la URL interna donde corre AdminJS
+NEXT_PUBLIC_ADMIN_URL = "http://localhost:8080"
+NODE_ENV = "production"
+PORT = "3000"
