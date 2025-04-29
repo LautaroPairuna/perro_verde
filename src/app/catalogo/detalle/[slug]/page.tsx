@@ -18,8 +18,6 @@ export const revalidate = 60
 // type Especificacion = ProductDetail['especificaciones'][number]
 // type Foto           = ProductDetail['fotos'][number]
 
-const ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST!
-
 export async function generateMetadata({ params }: { params: Promise<{ slug?: string }> }): Promise<Metadata> {
   const { slug }     = await params
   const defaultMeta  = { title:'Detalle de Producto', description:'Producto no encontrado' }
@@ -76,7 +74,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       thumb: `/images/productos/${product.foto}`,
       alt:   product.producto,
     },
-    ...product.fotos.map((f, index) => ({
+    ...product.fotos.map(f => ({
       src:        `/images/productos/fotos/${f.foto}`,
       thumb:      `/images/productos/fotos/${f.foto}`,
       alt:        product.producto,
