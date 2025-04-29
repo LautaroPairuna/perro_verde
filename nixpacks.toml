@@ -1,13 +1,14 @@
 # nixpacks.toml
 
 [phases.setup]
-# Verifica si PM2 está instalado, y si no lo está, lo instala
+# Instala PM2 y asegura que el directorio de paquetes global esté en el PATH
 commands = [
-  "npm install -g pm2",  # Instalar PM2 si no está instalado
-  "pm2 -v",              # Verifica la versión de PM2 para asegurarse de que se ha instalado correctamente
+  "npm install -g pm2",  # Instalar PM2
+  "export PATH=$PATH:$(npm bin -g)",  # Asegura que el directorio global de npm esté en el PATH
+  "pm2 -v",              # Verifica la versión de PM2
   "node -v",              # Verifica la versión de Node.js
   "npm -v",               # Verifica la versión de npm
-  "which pm2"             # Verifica la ubicación de PM2 en el sistema
+  "which pm2"             # Verifica la ubicación de PM2
 ]
 
 [phases.build]
