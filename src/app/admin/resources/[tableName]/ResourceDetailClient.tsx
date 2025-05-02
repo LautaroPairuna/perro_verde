@@ -32,12 +32,58 @@
     ProductoEspecificaciones: 'Especificaciones',
   }
   
-  // 🔸 columnas ocultas por tabla
+  /* ---------------------------------------------------------------------------
+   COLUMNAS QUE NO QUEREMOS MOSTRAR EN TABLAS (mismo que tenías)
+  --------------------------------------------------------------------------- */
   const HIDDEN_COLUMNS: Record<string, string[]> = {
-    Productos: ['marca_id', 'rubro_id', 'moneda_id'],
-    ProductoFotos: ['producto_id'],
-    ProductoVersiones: ['producto_id'],
+    Productos:                ['marca_id', 'rubro_id', 'moneda_id'],
+    ProductoFotos:            ['producto_id'],
+    ProductoVersiones:        ['producto_id'],
     ProductoEspecificaciones: ['producto_id'],
+  }
+
+  /* ---------------------------------------------------------------------------
+    MAPA COMPLETO DE COLUMNAS POR TABLA  (basado en schema.prisma)
+  --------------------------------------------------------------------------- */
+  const DEFAULT_COLUMNS: Record<string, string[]> = {
+    CfgMarcas: [
+      'id', 'marca', 'keywords', 'foto', 'activo',
+    ],
+    CfgRubros: [
+      'id', 'rubro', 'condiciones', 'keywords', 'foto', 'activo',
+    ],
+    CfgFormasPagos: [
+      'id', 'forma_pago', 'descripcion', 'permite_cuotas', 'activo',
+    ],
+    CfgMonedas: [
+      'id', 'moneda', 'moneda_des', 'activo',
+    ],
+    CfgSlider: [
+      'id', 'titulo', 'thumbs', 'foto', 'orden', 'activo',
+    ],
+    Productos: [
+      'id', 'marca_id', 'rubro_id', 'moneda_id',
+      'producto', 'descripcion', 'foto', 'precio',
+      'stock', 'destacado', 'activo', 'visitas',
+    ],
+    ProductoFotos: [
+      'id', 'producto_id', 'epigrafe', 'foto', 'orden', 'activo',
+    ],
+    ProductoVersiones: [
+      'id', 'producto_id', 'version', 'detalle', 'orden', 'activo',
+    ],
+    ProductoEspecificaciones: [
+      'id', 'producto_id', 'categoria', 'especificaciones', 'orden', 'activo',
+    ],
+    Pedidos: [
+      'id', 'datos', 'total', 'estado', 'metodo_pago',
+      'comprador_nombre', 'comprador_email', 'comprador_telefono',
+      'direccion_envio',
+      'mp_payment_id', 'transferencia_ref',
+      'tarjeta_last4', 'tarjeta_payment_method',
+      'mp_error_code', 'mp_error_message', 'mp_response',
+      'createdAt', 'updatedAt',
+    ],
   }
   
   const fkConfig: Record<
@@ -176,23 +222,34 @@
     // -------------------------------- tabla activa
     const tableData = childRelation ? childData : rows
   
-    /** columnas visibles */
-    /* ------------- columnas detectadas ------------- */
-    const rawColumns = useMemo<string[]>(() => Object.keys(tableData[0] || {}), [tableData])
+    /* ---------- columnas base detectadas ---------- */
+    const rawColumns = useMemo<string[]>(
+      () => Object.keys(tableData[0] || {}),
+      [tableData],
+    )
 
-    /* ------------- columnas visibles (oculta FK, fallback si no hay filas) ------------- */
+    /* ---------- columnas visibles ---------- */
     const visibleCols = useMemo<string[]>(() => {
-      if (rawColumns.length === 0) {
-        // tabla vacía: id + posibles FK
-        return childRelation
-          ? ['id', childRelation.foreignKey]
-          : ['id', ...Object.keys(fkConfig).filter(k => k.endsWith('_id'))]
-      }
       const hidden = HIDDEN_COLUMNS[tableName] ?? []
-      return rawColumns.filter(c => !hidden.includes(c))
+
+      if (rawColumns.length > 0) {
+        // con filas: inferimos de los datos
+        return rawColumns.filter(c => !hidden.includes(c))
+      }
+
+      // tabla vacía: usamos DEFAULT_COLUMNS
+      const base = DEFAULT_COLUMNS[tableName] ?? ['id']
+      const cols = base.filter(c => !hidden.includes(c))
+
+      // Si es una vista hija vacía asegúrate de incluir la FK
+      if (childRelation && !cols.includes(childRelation.foreignKey)) {
+        return ['id', childRelation.foreignKey, ...cols.filter(c => c !== 'id')]
+      }
+
+      return cols
     }, [rawColumns, tableName, childRelation])
 
-    /* ------------- columnas finales (orden especial para Productos) ------------- */
+    /* ---------- orden especial para Productos ---------- */
     const columns = useMemo<string[]>(() => {
       if (tableName === 'Productos' && !childRelation) {
         const first = ['id', 'producto', 'precio']
