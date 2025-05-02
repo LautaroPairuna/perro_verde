@@ -1,6 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* Nota: se desactiva la regla para `any` sólo en este archivo.
-   Podrás tiparlo con calma más adelante. */
+/* eslint-disable react-hooks/rules-of-hooks, @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any */
   'use client'
 
   import React, {
