@@ -61,6 +61,14 @@ function normalizeBooleans(obj: Record<string, unknown>) {
   }
 }
 
+function isFileLike(val: unknown): val is Blob {
+  return (
+    typeof val === 'object' &&
+    val !== null &&
+    typeof (val as Blob).arrayBuffer === 'function'
+  )
+}
+
 /* ------------------------------------------------------------------ */
 /* PUT                                                                 */
 /* ------------------------------------------------------------------ */
@@ -87,7 +95,7 @@ export async function PUT(
   if (ct.includes('multipart/form-data')) {
     const form = await request.formData()
     for (const [k, v] of form.entries()) {
-      if (k === FILE_FIELD && v instanceof File) file = v
+      if (k === FILE_FIELD && isFileLike(v)) file = v
       else if (typeof v === 'string') data[k] = /^\d+$/.test(v) ? Number(v) : v
     }
     normalizeBooleans(data)
