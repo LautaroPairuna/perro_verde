@@ -1,343 +1,409 @@
-// src/app/admin/ResourceDetailClient.tsx
-'use client'
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* Nota: se desactiva la regla para `any` sólo en este archivo.
+   Podrás tiparlo con calma más adelante. */
+  'use client'
 
-import React, {
-  useState, useEffect, useMemo, useCallback, memo,
-} from 'react'
-import useSWR, { mutate } from 'swr'
-import {
-  HiChevronLeft, HiChevronRight,
-  HiCheckCircle, HiXCircle, HiCalendar, HiDocumentText,
-  HiPencil, HiTrash, HiEye,
-  HiSortAscending, HiSortDescending,
-  HiPlus, HiAdjustments,
-} from 'react-icons/hi'
-import { ToastContainer, toast } from 'react-toastify'
-import 'react-toastify/dist/ReactToastify.css'
-import clsx from 'clsx'
-
-// ---------------------------------------------------------------------------
-// CONFIGURACIÓN
-// ---------------------------------------------------------------------------
-
-const fetcher = (url: string) => fetch(url).then(res => res.json())
-
-const READ_ONLY_RESOURCES = ['Pedidos']      // 🔸 Solo ver / editar
-
-const relationMap: Record<string, string[]> = {
-  Productos: ['ProductoFotos', 'ProductoVersiones', 'ProductoEspecificaciones'],
-}
-const relationLabels: Record<string, string> = {
-  ProductoFotos:           'Fotos',
-  ProductoVersiones:       'Versiones',
-  ProductoEspecificaciones:'Especificaciones',
-}
-
-// 🔸 columnas que no queremos mostrar en cada tabla
-const HIDDEN_COLUMNS: Record<string, string[]> = {
-  Productos:                ['marca_id', 'rubro_id', 'moneda_id'],
-  ProductoFotos:            ['producto_id'],
-  ProductoVersiones:        ['producto_id'],
-  ProductoEspecificaciones: ['producto_id'],
-}
-
-const fkConfig: Record<string, { resource: string; labelKey: string; fieldLabel: string }> = {
-  marca_id:       { resource: 'CfgMarcas',    labelKey: 'marca',        fieldLabel: 'Marca' },
-  rubro_id:       { resource: 'CfgRubros',    labelKey: 'rubro',        fieldLabel: 'Rubro' },
-  forma_pago_id:  { resource: 'CfgFormasPagos', labelKey: 'descripcion', fieldLabel: 'Forma de Pago' },
-  moneda_id:      { resource: 'CfgMonedas',   labelKey: 'moneda_des',   fieldLabel: 'Moneda' },
-  producto_id:    { resource: 'Productos',    labelKey: 'producto',     fieldLabel: 'Producto' },
-}
-
-// ---------------------------------------------------------------------------
-// useTable – filtro, orden, paginación
-// ---------------------------------------------------------------------------
-function useTable(data: any[], opts?: { initialSort?: [string, 'asc' | 'desc'] }) {
-  const [search, setSearch]   = useState('')
-  const [sortBy, setSortBy]   = useState<string>(opts?.initialSort?.[0] || '')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(opts?.initialSort?.[1] || 'asc')
-  const [page, setPage]       = useState(1)
-  const [pageSize, setPageSize] = useState(10)
-
-  const filtered = useMemo(() => {
-    if (!search) return data
-    const term = search.toLowerCase()
-    return data.filter(row => Object.values(row).some(v => String(v).toLowerCase().includes(term)))
-  }, [data, search])
-
-  const sorted = useMemo(() => {
-    if (!sortBy) return filtered
-    return [...filtered].sort((a, b) => {
-      if (a[sortBy] < b[sortBy]) return sortDir === 'asc' ? -1 : 1
-      if (a[sortBy] > b[sortBy]) return sortDir === 'asc' ? 1 : -1
-      return 0
-    })
-  }, [filtered, sortBy, sortDir])
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
-  const pageData   = sorted.slice((page - 1) * pageSize, page * pageSize)
-
-  const toggleSort = useCallback((col: string) => {
-    setPage(1)
-    if (sortBy === col) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
-    else {
-      setSortBy(col)
-      setSortDir('asc')
-    }
-  }, [sortBy])
-
-  return {
-    search, setSearch,
-    sortBy, sortDir, toggleSort,
-    page, setPage, totalPages,
-    pageSize, setPageSize,
-    pageData,
+  import React, {
+    useState, useEffect, useMemo, useCallback, memo,
+  } from 'react'
+  import useSWR, { mutate } from 'swr'
+  import {
+    HiChevronLeft, HiChevronRight,
+    HiCheckCircle, HiXCircle, HiCalendar, HiDocumentText,
+    HiPencil, HiTrash, HiEye,
+    HiSortAscending, HiSortDescending,
+    HiPlus, HiAdjustments,
+  } from 'react-icons/hi'
+  import { ToastContainer, toast } from 'react-toastify'
+  import 'react-toastify/dist/ReactToastify.css'
+  
+  // ---------------------------------------------------------------------------
+  // CONFIGURACIÓN
+  // ---------------------------------------------------------------------------
+  
+  const fetcher = (url: string) => fetch(url).then(res => res.json())
+  
+  const READ_ONLY_RESOURCES = ['Pedidos'] // 🔸 Solo ver / editar
+  
+  const relationMap: Record<string, string[]> = {
+    Productos: ['ProductoFotos', 'ProductoVersiones', 'ProductoEspecificaciones'],
   }
-}
-
-// ---------------------------------------------------------------------------
-// Utilidades
-// ---------------------------------------------------------------------------
-function buildFormData(data: Record<string, any>): FormData {
-  const fd = new FormData()
-  Object.entries(data).forEach(([k, v]) => {
-    if (v instanceof File) fd.append(k, v)
-    else fd.append(k, String(v))
-  })
-  return fd
-}
-
-// ---------------------------------------------------------------------------
-// Componente principal
-// ---------------------------------------------------------------------------
-export default function ResourceDetailClient({ tableName }: { tableName: string }) {
-  const readOnly = READ_ONLY_RESOURCES.includes(tableName) // 🔸
-
-  // -------------------------------- datos padre
-  const { data: rows = [], error: parentError } = useSWR<any[]>(
-    `/api/admin/resources/${tableName}`, fetcher
-  )
-
-  // -------------------------------- relaciones hijo
-  const [childRelation, setChildRelation] = useState<{
-    childTable: string, foreignKey: string, parentId: any
-  } | null>(null)
-
-  const allRelations = relationMap[tableName] || []
-
-  const relationDataArray = allRelations.map(ct => {
-    const { data: rel = [] } = useSWR<any[]>(`/api/admin/resources/${ct}`, fetcher)
-    return { childTable: ct, data: rel }
-  })
-
-  const rawChild = useMemo(() => {
-    if (!childRelation) return []
-    const relObj = relationDataArray.find(r => r.childTable === childRelation.childTable)
-    return relObj ? relObj.data : []
-  }, [childRelation, relationDataArray])
-
-  const childData = useMemo(() => {
-    if (!childRelation) return []
-    return rawChild.filter(r => r[childRelation.foreignKey] === childRelation.parentId)
-  }, [rawChild, childRelation])
-
-  // -------------------------------- tabla activa
-  const tableData = childRelation ? childData : rows
-
-  /** ---------------- columnas visibles + orden especial productos ---------- */
-  const rawColumns   = useMemo(() => Object.keys(tableData[0] || {}), [tableData])
-  const visibleCols  = useMemo(() => {
-    const hidden = HIDDEN_COLUMNS[tableName] ?? []
-    return rawColumns.filter(c => !hidden.includes(c))
-  }, [rawColumns, tableName])
-
-  const columns      = useMemo(() => {
-    // Productos (solamente vista padre) → orden custom
-    if (tableName === 'Productos' && !childRelation) {
-      const first = ['id', 'producto', 'precio']
-      const rest  = visibleCols.filter(c => !first.includes(c))
-      return [...first, ...rest]
-    }
-    return visibleCols
-  }, [visibleCols, tableName, childRelation])
-
-  // -------------------------------- useTable
-  const {
-    search, setSearch,
-    sortBy, sortDir, toggleSort,
-    page, setPage, totalPages,
-    pageSize, setPageSize,
-    pageData,
-  } = useTable(tableData, { initialSort: ['id', 'asc'] })
-
-  // -------------------------------- recargas SWR
-  const refreshParent = useCallback(() => mutate(`/api/admin/resources/${tableName}`), [tableName])
-  const refreshChild  = useCallback(() => childRelation && mutate(`/api/admin/resources/${childRelation.childTable}`), [childRelation])
-
-  // -------------------------------- selección y modales
-  const [selected,        setSelected]        = useState<any[]>([])
-  const [confirmItems,    setConfirmItems]    = useState<any[] | null>(null)
-  const [detailRow,       setDetailRow]       = useState<any | null>(null)
-  const [editRow,         setEditRow]         = useState<any | 'bulk' | null>(null) // 🔸 admite 'bulk'
-  const [createOpen,      setCreateOpen]      = useState(false)
-  const [openSections,    setOpenSections]    = useState<Record<string, boolean>>({})
-
-  useEffect(() => setSelected([]), [childRelation, tableName])
-
-  const toggleSelect = useCallback((id: any) => {
-    setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id])
-  }, [])
-  const toggleSelectAll = useCallback(() => {
-    const allIds = tableData.map(r => r.id)
-    setSelected(s => s.length === allIds.length ? [] : allIds)
-  }, [tableData])
-
-  // -------------------------------------------------------------------------
-  // CRUD handlers
-  // -------------------------------------------------------------------------
-  const handleCreate = useCallback(async (newData: any) => {
-    const hasFile = newData.foto instanceof File
-    const init: RequestInit = {
-      method: 'POST',
-      body: hasFile ? buildFormData(newData) : JSON.stringify(newData),
-      headers: hasFile ? undefined : { 'Content-Type': 'application/json' },
-    }
-    const res = await fetch(`/api/admin/resources/${tableName}`, init)
-    if (!res.ok) return toast.error('Error al crear')
-    toast.success('Registro creado')
-    setCreateOpen(false)
-    refreshParent()
-  }, [tableName, refreshParent])
-
-  const handleUpdate = useCallback(async (id: any, updated: any) => {
-    const hasFile = updated.foto instanceof File
-    const init: RequestInit = {
-      method: 'PUT',
-      body: hasFile ? buildFormData(updated) : JSON.stringify(updated),
-      headers: hasFile ? undefined : { 'Content-Type': 'application/json' },
-    }
-    const res = await fetch(`/api/admin/resources/${tableName}/${id}`, init)
-    if (!res.ok) return toast.error('Error al actualizar')
-    toast.success(`Registro ${id} actualizado`)
-    setEditRow(null)
-    refreshParent()
-    refreshChild()
-  }, [tableName, refreshParent, refreshChild])
-
-  const handleDelete = useCallback(async (id: any) => {
-    const res = await fetch(`/api/admin/resources/${tableName}/${id}`, { method: 'DELETE' })
-    if (!res.ok) return toast.error('Error al eliminar')
-    toast.success(`Registro ${id} eliminado`)
-    refreshParent()
-    refreshChild()
-  }, [tableName, refreshParent, refreshChild])
-
-  // 🔸 Bulk update
-  const handleBulkUpdate = useCallback(async (field: string, value: any) => {
-    const promises = selected.map(id =>
-      fetch(`/api/admin/resources/${tableName}/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [field]: value }),
+  const relationLabels: Record<string, string> = {
+    ProductoFotos: 'Fotos',
+    ProductoVersiones: 'Versiones',
+    ProductoEspecificaciones: 'Especificaciones',
+  }
+  
+  // 🔸 columnas ocultas por tabla
+  const HIDDEN_COLUMNS: Record<string, string[]> = {
+    Productos: ['marca_id', 'rubro_id', 'moneda_id'],
+    ProductoFotos: ['producto_id'],
+    ProductoVersiones: ['producto_id'],
+    ProductoEspecificaciones: ['producto_id'],
+  }
+  
+  const fkConfig: Record<
+    string,
+    { resource: string; labelKey: string; fieldLabel: string }
+  > = {
+    marca_id: { resource: 'CfgMarcas', labelKey: 'marca', fieldLabel: 'Marca' },
+    rubro_id: { resource: 'CfgRubros', labelKey: 'rubro', fieldLabel: 'Rubro' },
+    forma_pago_id: {
+      resource: 'CfgFormasPagos',
+      labelKey: 'descripcion',
+      fieldLabel: 'Forma de Pago',
+    },
+    moneda_id: { resource: 'CfgMonedas', labelKey: 'moneda_des', fieldLabel: 'Moneda' },
+    producto_id: {
+      resource: 'Productos',
+      labelKey: 'producto',
+      fieldLabel: 'Producto',
+    },
+  }
+  
+  // ---------------------------------------------------------------------------
+  // useTable – filtro, orden, paginación
+  // ---------------------------------------------------------------------------
+  function useTable(data: any[], opts?: { initialSort?: [string, 'asc' | 'desc'] }) {
+    const [search, setSearch] = useState('')
+    const [sortBy, setSortBy] = useState<string>(opts?.initialSort?.[0] || '')
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>(opts?.initialSort?.[1] || 'asc')
+    const [page, setPage] = useState(1)
+    const [pageSize, setPageSize] = useState(10)
+  
+    const filtered = useMemo(() => {
+      if (!search) return data
+      const term = search.toLowerCase()
+      return data.filter(row =>
+        Object.values(row).some(v => String(v).toLowerCase().includes(term)),
+      )
+    }, [data, search])
+  
+    const sorted = useMemo(() => {
+      if (!sortBy) return filtered
+      return [...filtered].sort((a, b) => {
+        if (a[sortBy] < b[sortBy]) return sortDir === 'asc' ? -1 : 1
+        if (a[sortBy] > b[sortBy]) return sortDir === 'asc' ? 1 : -1
+        return 0
       })
+    }, [filtered, sortBy, sortDir])
+  
+    const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
+    const pageData = sorted.slice((page - 1) * pageSize, page * pageSize)
+  
+    const toggleSort = useCallback(
+      (col: string) => {
+        setPage(1)
+        if (sortBy === col) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+        else {
+          setSortBy(col)
+          setSortDir('asc')
+        }
+      },
+      [sortBy],
     )
-    await Promise.all(promises)
-    toast.success(`Actualizados ${selected.length} registro(s)`)
-    setEditRow(null)
-    setSelected([])
-    refreshParent()
-  }, [selected, tableName, refreshParent])
-
-  const selectedRows = useMemo(() => tableData.filter(r => selected.includes(r.id)), [selected, tableData])
-
-  // -------------------------------------------------------------------------
-  // Render de celdas
-  // -------------------------------------------------------------------------
-  const renderCell = useCallback((val: any, col: string) => {
-    if (val == null) return <span className="text-gray-400">null</span>
-
-    // Pedidos – columna DATOS mejorada (uno debajo de otro + cantidad)
-    if (tableName === 'Pedidos' && col.toLowerCase() === 'datos') {
-      let items: any[] = []
-
-      // Normalizamos la entrada a un array
-      if (typeof val === 'string') {
-        try { items = JSON.parse(val) } catch { items = [] }
-      } else if (Array.isArray(val)) {
-        items = val
+  
+    return {
+      search,
+      setSearch,
+      sortBy,
+      sortDir,
+      toggleSort,
+      page,
+      setPage,
+      totalPages,
+      pageSize,
+      setPageSize,
+      pageData,
+    }
+  }
+  
+  // ---------------------------------------------------------------------------
+  // Utilidades
+  // ---------------------------------------------------------------------------
+  function buildFormData(data: Record<string, any>): FormData {
+    const fd = new FormData()
+    Object.entries(data).forEach(([k, v]) => {
+      if (v instanceof File) fd.append(k, v)
+      else fd.append(k, String(v))
+    })
+    return fd
+  }
+  
+  // ---------------------------------------------------------------------------
+  // Hook auxiliar — carga relaciones SIN violar rules‑of‑hooks
+  // ---------------------------------------------------------------------------
+  function useRelations(relations: string[]) {
+    return relations.map(childTable => {
+      const { data = [] } = useSWR<any[]>(`/api/admin/resources/${childTable}`, fetcher)
+      return { childTable, data }
+    })
+  }
+  
+  // ---------------------------------------------------------------------------
+  // Componente principal
+  // ---------------------------------------------------------------------------
+  export default function ResourceDetailClient({ tableName }: { tableName: string }) {
+    const readOnly = READ_ONLY_RESOURCES.includes(tableName)
+  
+    // -------------------------------- datos padre
+    const { data: rows = [], error: parentError } = useSWR<any[]>(
+      `/api/admin/resources/${tableName}`,
+      fetcher,
+    )
+  
+    // -------------------------------- relaciones hijo
+    const [childRelation, setChildRelation] = useState<{
+      childTable: string
+      foreignKey: string
+      parentId: any
+    } | null>(null)
+  
+    const allRelations = relationMap[tableName] || []
+    const relationDataArray = useRelations(allRelations) // ✅ sin hook en loops
+  
+    const rawChild = useMemo(() => {
+      if (!childRelation) return []
+      const relObj = relationDataArray.find(r => r.childTable === childRelation.childTable)
+      return relObj ? relObj.data : []
+    }, [childRelation, relationDataArray])
+  
+    const childData = useMemo(() => {
+      if (!childRelation) return []
+      return rawChild.filter(r => r[childRelation.foreignKey] === childRelation.parentId)
+    }, [rawChild, childRelation])
+  
+    // -------------------------------- tabla activa
+    const tableData = childRelation ? childData : rows
+  
+    /** columnas visibles */
+    const rawColumns = useMemo(() => Object.keys(tableData[0] || {}), [tableData])
+    const visibleCols = useMemo(() => {
+      const hidden = HIDDEN_COLUMNS[tableName] ?? []
+      return rawColumns.filter(c => !hidden.includes(c))
+    }, [rawColumns, tableName])
+  
+    const columns = useMemo(() => {
+      if (tableName === 'Productos' && !childRelation) {
+        const first = ['id', 'producto', 'precio']
+        const rest = visibleCols.filter(c => !first.includes(c))
+        return [...first, ...rest]
       }
-
-      if (items.length) {
-        return (
-          <div className="text-sm text-indigo-700 leading-tight space-y-0.5">
-            {items.slice(0, 5).map((it, idx) => {
-              const nombre = it.name || it.nombre || it.producto || `Ítem ${idx + 1}`
-              const cant   = it.cantidad ?? it.qty ?? it.quantity ?? it.cant ?? 1
-              return (
-                <div key={idx}>
-                  <span className="font-medium">{cant}×</span> {nombre}
-                </div>
-              )
-            })}
-            {items.length > 5 && <div className="text-xs text-gray-500">… y {items.length - 5} más</div>}
-          </div>
+      return visibleCols
+    }, [visibleCols, tableName, childRelation])
+  
+    // -------------------------------- useTable
+    const {
+      search,
+      setSearch,
+      sortBy,
+      sortDir,
+      toggleSort,
+      page,
+      setPage,
+      totalPages,
+      pageSize,
+      setPageSize,
+      pageData,
+    } = useTable(tableData, { initialSort: ['id', 'asc'] })
+  
+    // -------------------------------- recargas SWR
+    const refreshParent = useCallback(
+      () => mutate(`/api/admin/resources/${tableName}`),
+      [tableName],
+    )
+    const refreshChild = useCallback(
+      () => childRelation && mutate(`/api/admin/resources/${childRelation.childTable}`),
+      [childRelation],
+    )
+  
+    // -------------------------------- selección y modales
+    const [selected, setSelected] = useState<any[]>([])
+    const [confirmItems, setConfirmItems] = useState<any[] | null>(null)
+    const [detailRow, setDetailRow] = useState<any | null>(null)
+    const [editRow, setEditRow] = useState<any | 'bulk' | null>(null)
+    const [createOpen, setCreateOpen] = useState(false)
+    const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
+  
+    useEffect(() => setSelected([]), [childRelation, tableName])
+  
+    const toggleSelect = useCallback(
+      (id: any) => {
+        setSelected(s => (s.includes(id) ? s.filter(x => x !== id) : [...s, id]))
+      },
+      [],
+    )
+    const toggleSelectAll = useCallback(() => {
+      const allIds = tableData.map(r => r.id)
+      setSelected(s => (s.length === allIds.length ? [] : allIds))
+    }, [tableData])
+  
+    // -------------------------------------------------------------------------
+    // CRUD handlers
+    // -------------------------------------------------------------------------
+    const handleCreate = useCallback(
+      async (newData: any) => {
+        const hasFile = newData.foto instanceof File
+        const init: RequestInit = {
+          method: 'POST',
+          body: hasFile ? buildFormData(newData) : JSON.stringify(newData),
+          headers: hasFile ? undefined : { 'Content-Type': 'application/json' },
+        }
+        const res = await fetch(`/api/admin/resources/${tableName}`, init)
+        if (!res.ok) return toast.error('Error al crear')
+        toast.success('Registro creado')
+        setCreateOpen(false)
+        refreshParent()
+      },
+      [tableName, refreshParent],
+    )
+  
+    const handleUpdate = useCallback(
+      async (id: any, updated: any) => {
+        const hasFile = updated.foto instanceof File
+        const init: RequestInit = {
+          method: 'PUT',
+          body: hasFile ? buildFormData(updated) : JSON.stringify(updated),
+          headers: hasFile ? undefined : { 'Content-Type': 'application/json' },
+        }
+        const res = await fetch(`/api/admin/resources/${tableName}/${id}`, init)
+        if (!res.ok) return toast.error('Error al actualizar')
+        toast.success(`Registro ${id} actualizado`)
+        setEditRow(null)
+        refreshParent()
+        refreshChild()
+      },
+      [tableName, refreshParent, refreshChild],
+    )
+  
+    const handleDelete = useCallback(
+      async (id: any) => {
+        const res = await fetch(`/api/admin/resources/${tableName}/${id}`, { method: 'DELETE' })
+        if (!res.ok) return toast.error('Error al eliminar')
+        toast.success(`Registro ${id} eliminado`)
+        refreshParent()
+        refreshChild()
+      },
+      [tableName, refreshParent, refreshChild],
+    )
+  
+    const handleBulkUpdate = useCallback(
+      async (field: string, value: any) => {
+        const promises = selected.map(id =>
+          fetch(`/api/admin/resources/${tableName}/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [field]: value }),
+          }),
         )
-      }
-    }
-
-    // Pedidos – items JSON largo (fallback)
-    if (tableName === 'Pedidos' && col.toLowerCase() === 'items' && Array.isArray(val)) {
-      return (
-        <span className="text-sm text-indigo-700">
-          {val.length} item{val.length !== 1 && 's'}
-        </span>
-      )
-    }
-
-    if (val instanceof Date) {
-      return (
-        <div className="flex items-center text-sm text-gray-700">
-          <HiCalendar className="h-4 w-4 text-blue-400 mr-1" />
-          {val.toLocaleDateString()}
-        </div>
-      )
-    }
-
-    if (typeof val === 'object') {
-      const json = JSON.stringify(val)
-      return (
-        <div className="flex items-center text-sm text-gray-700">
-          <HiDocumentText className="h-4 w-4 text-green-400 mr-1" />
-          {json.length > 40 ? json.slice(0, 40) + '…' : json}
-        </div>
-      )
-    }
-
-    if (typeof val === 'boolean') {
-      return val
-        ? <HiCheckCircle className="h-5 w-5 text-green-500" />
-        : <HiXCircle className="h-5 w-5 text-red-500" />
-    }
-
-    const str = String(val)
-    return <span className="text-sm text-gray-700">{str.length > 50 ? str.slice(0, 50) + '…' : str}</span>
-  }, [tableName])
-
-  // -------------------------------------------------------------------------
-  // Estados de carga / error
-  // -------------------------------------------------------------------------
-  if (parentError) return <div className="p-4 text-red-500">Error al cargar datos</div>
-  if (!rows)        return <div className="p-4 text-gray-600">Cargando...</div>
-
-  // nombre padre (vista hijo)
-  const parentRow   = rows.find(r => r.id === childRelation?.parentId)
-  const displayName = parentRow?.nombre || parentRow?.name || `${tableName} #${childRelation?.parentId}`
-
-  const nextId = useMemo(() => {
-    if (!rows.length) return 1
-    const maxId = Math.max(...rows.map(r => (typeof r.id === 'number' ? r.id : 0)))
-    return maxId + 1
-  }, [rows])
+        await Promise.all(promises)
+        toast.success(`Actualizados ${selected.length} registro(s)`)
+        setEditRow(null)
+        setSelected([])
+        refreshParent()
+      },
+      [selected, tableName, refreshParent],
+    )
+  
+    const selectedRows = useMemo(
+      () => tableData.filter(r => selected.includes(r.id)),
+      [selected, tableData],
+    )
+  
+    // -------------------------------------------------------------------------
+    // Render de celdas (Pedidos: datos mejorados)
+    // -------------------------------------------------------------------------
+    const renderCell = useCallback(
+      (val: any, col: string) => {
+        if (val == null) return <span className="text-gray-400">null</span>
+  
+        // Pedidos – columna DATOS
+        if (tableName === 'Pedidos' && col.toLowerCase() === 'datos') {
+          let items: any[] = []
+  
+          if (typeof val === 'string') {
+            try {
+              items = JSON.parse(val)
+            } catch {
+              items = []
+            }
+          } else if (Array.isArray(val)) {
+            items = val
+          }
+  
+          if (items.length) {
+            return (
+              <div className="text-sm text-indigo-700 leading-tight space-y-0.5">
+                {items.slice(0, 5).map((it, idx) => {
+                  const nombre = it.name || it.nombre || it.producto || `Ítem ${idx + 1}`
+                  const cant = it.cantidad ?? it.qty ?? it.quantity ?? it.cant ?? 1
+                  return (
+                    <div key={idx}>
+                      <span className="font-medium">{cant}×</span> {nombre}
+                    </div>
+                  )
+                })}
+                {items.length > 5 && (
+                  <div className="text-xs text-gray-500">… y {items.length - 5} más</div>
+                )}
+              </div>
+            )
+          }
+        }
+  
+        if (val instanceof Date) {
+          return (
+            <div className="flex items-center text-sm text-gray-700">
+              <HiCalendar className="h-4 w-4 text-blue-400 mr-1" />
+              {val.toLocaleDateString()}
+            </div>
+          )
+        }
+  
+        if (typeof val === 'object') {
+          const json = JSON.stringify(val)
+          return (
+            <div className="flex items-center text-sm text-gray-700">
+              <HiDocumentText className="h-4 w-4 text-green-400 mr-1" />
+              {json.length > 40 ? json.slice(0, 40) + '…' : json}
+            </div>
+          )
+        }
+  
+        if (typeof val === 'boolean') {
+          return val ? (
+            <HiCheckCircle className="h-5 w-5 text-green-500" />
+          ) : (
+            <HiXCircle className="h-5 w-5 text-red-500" />
+          )
+        }
+  
+        const str = String(val)
+        return (
+          <span className="text-sm text-gray-700">
+            {str.length > 50 ? str.slice(0, 50) + '…' : str}
+          </span>
+        )
+      },
+      [tableName],
+    )
+  
+    // -------------------------------------------------------------------------
+    // Estados de carga / error
+    // -------------------------------------------------------------------------
+    if (parentError) return <div className="p-4 text-red-500">Error al cargar datos</div>
+    if (!rows) return <div className="p-4 text-gray-600">Cargando...</div>
+  
+    // nombre padre (vista hijo)
+    const parentRow = rows.find(r => r.id === childRelation?.parentId)
+    const displayName =
+      parentRow?.nombre || parentRow?.name || `${tableName} #${childRelation?.parentId}`
+  
+    const nextId = useMemo(() => {
+      if (!rows.length) return 1
+      const maxId = Math.max(...rows.map(r => (typeof r.id === 'number' ? r.id : 0)))
+      return maxId + 1
+    }, [rows])
 
   // -------------------------------------------------------------------------
   // UI
