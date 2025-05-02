@@ -37,10 +37,6 @@ const folderNames: Record<string, string> = {
 const BOOLEAN_FIELDS = ['activo', 'destacado'] as const
 const FILE_FIELD     = 'foto'
 
-/* ------------------------------------------------------------------ */
-/* Utilidades                                                         */
-/* ------------------------------------------------------------------ */
-
 function makeTimestamp() {
   const d = new Date()
   const YYYY = d.getFullYear()
@@ -68,10 +64,6 @@ function isFileLike(val: unknown): val is Blob {
     typeof (val as Blob).arrayBuffer === 'function'
   )
 }
-
-/* ------------------------------------------------------------------ */
-/* Métodos                                                            */
-/* ------------------------------------------------------------------ */
 
 export async function GET(
   _request: NextRequest,
@@ -103,7 +95,7 @@ export async function POST(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let data: Record<string, any> = {}
-  let file: globalThis.File | null = null
+  let file: Blob | null = null
 
   if (ct.includes('multipart/form-data')) {
     const form = await request.formData()
@@ -126,8 +118,16 @@ export async function POST(
       const name     = `${baseSlug}-${makeTimestamp()}.webp`
       const buf      = Buffer.from(await file.arrayBuffer())
 
-      await sharp(buf).webp().toFile(path.join(dir, name))
-      await sharp(buf).resize(200).webp().toFile(path.join(thumbs, name))
+      // Guardar original
+      const fullPath = path.join(dir, name)
+      await sharp(buf).webp().toFile(fullPath)
+      console.log('[upload] Saved original:', fullPath)
+
+      // Guardar miniatura
+      const thumbPath = path.join(thumbs, name)
+      await sharp(buf).resize(200).webp().toFile(thumbPath)
+      console.log('[upload] Saved thumbnail:', thumbPath)
+
       data[FILE_FIELD] = name
     }
   } else {

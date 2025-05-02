@@ -37,10 +37,6 @@ const folderNames: Record<string, string> = {
 const BOOLEAN_FIELDS = ['activo', 'destacado'] as const
 const FILE_FIELD     = 'foto'
 
-/* ------------------------------------------------------------------ */
-/* Utilidades                                                         */
-/* ------------------------------------------------------------------ */
-
 function makeTimestamp() {
   const d = new Date()
   const YYYY = d.getFullYear()
@@ -69,10 +65,6 @@ function isFileLike(val: unknown): val is Blob {
   )
 }
 
-/* ------------------------------------------------------------------ */
-/* PUT                                                                 */
-/* ------------------------------------------------------------------ */
-
 export async function PUT(
   request: NextRequest,
   context: { params: Promise<{ tableName: string; id: string }> },
@@ -85,12 +77,11 @@ export async function PUT(
 
   const keyId    = isNaN(+id) ? id : +id
   const existing = await model.findUnique({ where: { id: keyId } })
-
   const ct = request.headers.get('content-type') || ''
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let data: Record<string, any> = {}
-  let file: globalThis.File | null = null
+  let file: Blob | null = null
 
   if (ct.includes('multipart/form-data')) {
     const form = await request.formData()
@@ -118,8 +109,16 @@ export async function PUT(
       const name     = `${baseSlug}-${makeTimestamp()}.webp`
       const buf      = Buffer.from(await file.arrayBuffer())
 
-      await sharp(buf).webp().toFile(path.join(dir, name))
-      await sharp(buf).resize(200).webp().toFile(path.join(thumbs, name))
+      // Actualizar original
+      const fullPath = path.join(dir, name)
+      await sharp(buf).webp().toFile(fullPath)
+      console.log('[upload] Updated original:', fullPath)
+
+      // Actualizar miniatura
+      const thumbPath = path.join(thumbs, name)
+      await sharp(buf).resize(200).webp().toFile(thumbPath)
+      console.log('[upload] Updated thumbnail:', thumbPath)
+
       data[FILE_FIELD] = name
     }
   } else {
@@ -135,10 +134,6 @@ export async function PUT(
     return NextResponse.json({ error: 'Error al actualizar registro' }, { status: 500 })
   }
 }
-
-/* ------------------------------------------------------------------ */
-/* DELETE                                                              */
-/* ------------------------------------------------------------------ */
 
 export async function DELETE(
   _request: NextRequest,
