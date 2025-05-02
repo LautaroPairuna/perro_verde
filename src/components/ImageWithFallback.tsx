@@ -1,32 +1,68 @@
+// src/components/ImageWithFallback.tsx
 'use client';
 
+import React, { useState } from 'react';
 import Image, { ImageProps } from 'next/image';
-import { useState } from 'react';
+import clsx from 'clsx';
 
 interface ImageWithFallbackProps extends Omit<ImageProps, 'src'> {
   src: string;
   fallbackSrc?: string;
 }
 
-const ImageWithFallback: React.FC<ImageWithFallbackProps> = ({
+export default function ImageWithFallback({
   src,
-  fallbackSrc = '/images/productos/thumbs/placeholder.jpg',
+  fallbackSrc = '/images/productos/placeholder.jpg',
   alt,
+  fill,
+  width,
+  height,
+  className,
+  style,
   ...rest
-}) => {
-  const [imgSrc, setImgSrc] = useState(src);
+}: ImageWithFallbackProps) {
+  const [currentSrc, setCurrentSrc] = useState(src);
 
+  const handleError = () => {
+    if (currentSrc !== fallbackSrc) {
+      setCurrentSrc(fallbackSrc);
+    }
+  };
+
+  // RENDERIZADO CON fill (sin width/height explícitos)
+  if (fill) {
+    return (
+      <div
+        className={clsx('relative w-full h-full', className)}
+        style={style}
+      >
+        <Image
+          key={currentSrc}
+          src={currentSrc}
+          alt={alt || ''}
+          fill
+          className="object-cover"
+          onError={handleError}
+          unoptimized
+          {...rest}
+        />
+      </div>
+    );
+  }
+
+  // RENDERIZADO CON width/height explícitos
   return (
     <Image
+      key={currentSrc}
+      src={currentSrc}
+      alt={alt || ''}
+      width={width}
+      height={height}
+      onError={handleError}
+      unoptimized
+      className={className}
+      style={style}
       {...rest}
-      src={imgSrc}
-      alt={alt}
-      onError={() => setImgSrc(fallbackSrc)}
-      // Si no quieres especificar width/height, usa layout="fill" y envuelve en un contenedor position:relative
-      width={300}
-      height={300}
     />
   );
-};
-
-export default ImageWithFallback;
+}

@@ -83,12 +83,13 @@ export default function Cart() {
                   <tr key={item.id} className="hover:bg-green-50 transition-colors">
                     {/* Producto */}
                     <td className="px-6 py-4 flex items-center space-x-4">
-                      <div className="w-16 h-16 flex-shrink-0">
+                      <div className="relative w-16 h-16 flex-shrink-0">
                         <ImageWithFallback
                           src={item.thumbnail || ''}
                           fallbackSrc="/images/productos/thumbs/placeholder.jpg"
                           alt={item.name}
-                          className="w-full h-full object-cover rounded-lg"
+                          fill
+                          className="object-cover rounded-lg"
                         />
                       </div>
                       <span className="text-gray-800 font-medium">{item.name}</span>

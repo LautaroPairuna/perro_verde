@@ -1,89 +1,114 @@
 // src/components/catalogo/Pagination.tsx
-import React from 'react';
-import { buildPaginationUrl, Filters } from '@/utils/urlUtils';
+import React from 'react'
+import Link from 'next/link'
+import clsx from 'clsx'
+import { HiChevronLeft, HiChevronRight } from 'react-icons/hi'
+import { buildPaginationUrl, Filters } from '@/utils/urlUtils'
 
-type Page = number | "ellipsis";
+type Page = number | 'ellipsis'
 
 interface PaginationProps {
-  totalPages: number;
-  currentPage: number;
-  filters: Filters;
+  totalPages: number
+  currentPage: number
+  filters: Filters
 }
 
-const getPageNumbers = (total: number, current: number, delta = 3): Page[] => {
-  const pages: Page[] = [1];
-  const start = Math.max(2, current - delta);
-  const end = Math.min(total - 1, current + delta);
-  if (start > 2) pages.push("ellipsis");
-  for (let i = start; i <= end; i++) pages.push(i);
-  if (end < total - 1) pages.push("ellipsis");
-  if (total > 1) pages.push(total);
-  return pages;
-};
+const getPageNumbers = (total: number, current: number, delta = 2): Page[] => {
+  const pages: Page[] = [1]
+  const start = Math.max(2, current - delta)
+  const end = Math.min(total - 1, current + delta)
+
+  if (start > 2) pages.push('ellipsis')
+  for (let i = start; i <= end; i++) pages.push(i)
+  if (end < total - 1) pages.push('ellipsis')
+  if (total > 1) pages.push(total)
+
+  return pages
+}
 
 const Pagination: React.FC<PaginationProps> = ({ totalPages, currentPage, filters }) => {
-  const pages = getPageNumbers(totalPages, currentPage);
+  if (totalPages <= 1) return null
 
-  // Clases base para los botones, tanto para números como para flechas
-  const baseButtonClasses =
-    "px-3 py-2 rounded transition-colors duration-200 focus:outline-none";
-  const activeClasses = "bg-green-600 text-white";
-  const inactiveClasses = "bg-white text-green-700 hover:bg-green-50";
+  const pages = getPageNumbers(totalPages, currentPage)
+  const prevDisabled = currentPage === 1
+  const nextDisabled = currentPage === totalPages
+
+  const container = 'inline-block bg-white px-4 py-2 rounded-xl shadow-md'
+  const list = 'flex items-center space-x-3'
+  const pageBase = 'px-4 py-2 rounded-full border focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors'
+  const pageInactive = 'text-gray-700 bg-white border-gray-200 hover:bg-gray-100'
+  const pageActive = 'text-white bg-green-600 border-green-600'
+  const arrowBase = 'w-8 h-8 flex items-center justify-center rounded-full border focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors'
+  const arrowStyle = 'text-gray-700 bg-white border-gray-200 hover:bg-gray-100'
 
   return (
-    <nav aria-label="Paginación" className="mt-10 overflow-x-auto">
-      <ul className="flex justify-center items-center space-x-2 whitespace-nowrap">
-        {currentPage > 1 && (
+    <nav aria-label="Paginación" className="flex justify-center mt-8">
+      <div className={container}>
+        <ul className={list}>
+          {/* Anterior */}
           <li>
-            <a
-              href={buildPaginationUrl(filters, currentPage - 1)}
-              rel="prev"
-              className={`flex items-center justify-center ${baseButtonClasses} ${activeClasses} hover:bg-green-700`}
-              aria-label="Página anterior"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-              </svg>
-            </a>
-          </li>
-        )}
-
-        {pages.map((page, index) => (
-          <li key={index}>
-            {page === "ellipsis" ? (
-              <span className="px-2 py-1 text-gray-500">…</span>
-            ) : (
-              <a
-                href={buildPaginationUrl(filters, page as number)}
-                aria-current={page === currentPage ? "page" : undefined}
-                className={`${baseButtonClasses} ${
-                  page === currentPage ? activeClasses : inactiveClasses
-                }`}
-                aria-label={`Página ${page}`}
+            {prevDisabled ? (
+              <span
+                className={clsx(arrowBase, arrowStyle, 'opacity-50')}
+                aria-disabled="true"
               >
-                {page}
-              </a>
+                <HiChevronLeft className="w-5 h-5" />
+              </span>
+            ) : (
+              <Link
+                href={buildPaginationUrl(filters, currentPage - 1)}
+                className={clsx(arrowBase, arrowStyle)}
+                aria-label="Anterior"
+              >
+                <HiChevronLeft className="w-5 h-5" />
+              </Link>
             )}
           </li>
-        ))}
 
-        {currentPage < totalPages && (
+          {/* Páginas */}
+          {pages.map((page, idx) => (
+            <li key={idx}>
+              {page === 'ellipsis' ? (
+                <span className="px-3 text-gray-400 select-none">…</span>
+              ) : (
+                <Link
+                  href={buildPaginationUrl(filters, page as number)}
+                  className={clsx(
+                    pageBase,
+                    page === currentPage ? pageActive : pageInactive
+                  )}
+                  aria-current={page === currentPage ? 'page' : undefined}
+                  aria-label={`Página ${page}`}
+                >
+                  {page}
+                </Link>
+              )}
+            </li>
+          ))}
+
+          {/* Siguiente */}
           <li>
-            <a
-              href={buildPaginationUrl(filters, currentPage + 1)}
-              rel="next"
-              className={`flex items-center justify-center ${baseButtonClasses} ${activeClasses} hover:bg-green-700`}
-              aria-label="Página siguiente"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-              </svg>
-            </a>
+            {nextDisabled ? (
+              <span
+                className={clsx(arrowBase, arrowStyle, 'opacity-50')}
+                aria-disabled="true"
+              >
+                <HiChevronRight className="w-5 h-5" />
+              </span>
+            ) : (
+              <Link
+                href={buildPaginationUrl(filters, currentPage + 1)}
+                className={clsx(arrowBase, arrowStyle)}
+                aria-label="Siguiente"
+              >
+                <HiChevronRight className="w-5 h-5" />
+              </Link>
+            )}
           </li>
-        )}
-      </ul>
+        </ul>
+      </div>
     </nav>
-  );
-};
+  )
+}
 
-export default Pagination;
+export default Pagination

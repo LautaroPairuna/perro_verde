@@ -9,10 +9,10 @@ import { parseUrlSegments } from '@/utils/urlUtils'
 import slugify from '@/utils/slugify'
 import type { Filters as CatalogFilters, FilteredProductsResult } from '@/utils/fetchData'
 import type { Metadata } from 'next'
+
 export const dynamic = 'force-dynamic'
 export const revalidate = 60  // Regenera cada 60s (ISR)
 
-// Opcional: metadata dinámico basado en filtros
 export async function generateMetadata({
   params,
 }: {
@@ -55,7 +55,7 @@ export default async function CatalogListing({
   } catch (err: unknown) {
     console.error('Error cargando filtros:', err)
     return (
-      <section className="p-10 text-center">
+      <section className="py-20 text-center">
         <p className="text-red-600">
           Error cargando filtros. Intenta nuevamente más tarde.
         </p>
@@ -93,9 +93,9 @@ export default async function CatalogListing({
   } catch (err: unknown) {
     console.error('Error cargando productos:', err)
     return (
-      <section className="p-10 text-center">
+      <section className="py-20 text-center">
         <p className="text-red-600">
-          Error cargando productosss. Intenta nuevamente más tarde.
+          Error cargando productos. Intenta nuevamente más tarde.
         </p>
       </section>
     )
@@ -112,45 +112,54 @@ export default async function CatalogListing({
     rubro: p.rubro,
   }))
 
-  // 8) Renderizado
+  // 8) Renderizado con diseño mejorado
   return (
-    <section className="p-10 text-center bg-green-50">
-      <div className="max-w-screen-xl mx-auto">
-        <h1 className="text-3xl font-bold text-green-800">
+    <section className="bg-gradient-to-b from-green-50 to-white py-12">
+      <div className="max-w-screen-xl mx-auto px-4">
+        {/* Título */}
+        <h1 className="text-4xl font-extrabold text-green-800 text-center">
           Catálogo de Productos
         </h1>
 
-        <AdvancedSearchForm
-          marcas={marcas.map((m) => ({
-            id: m.id,
-            name: m.marca,
-            slug: slugify(m.marca),
-          }))}
-          rubros={rubros.map((r) => ({
-            id: r.id,
-            name: r.rubro,
-            slug: slugify(r.rubro),
-          }))}
-          marca_slug={filtersFromUrl.marca_slug}
-          categoria_slug={filtersFromUrl.categoria_slug}
-          keywords={filtersFromUrl.keywords}
-        />
+        {/* Buscador Avanzado */}
+        <div className="flex justify-center align-center text-center">
+          <AdvancedSearchForm
+            marcas={marcas.map((m) => ({
+              id: m.id,
+              name: m.marca,
+              slug: slugify(m.marca),
+            }))}
+            rubros={rubros.map((r) => ({
+              id: r.id,
+              name: r.rubro,
+              slug: slugify(r.rubro),
+            }))}
+            marca_slug={filtersFromUrl.marca_slug}
+            categoria_slug={filtersFromUrl.categoria_slug}
+            keywords={filtersFromUrl.keywords}
+          />
+        </div>
 
+        {/* Lista de Productos */}
         {products.length === 0 ? (
           <NoProducts message="No se encontraron productos que coincidan con los filtros seleccionados." />
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 mb-10">
               {products.map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}
             </div>
+
+            {/* Paginación */}
             {totalPages > 1 && (
-              <Pagination
-                totalPages={totalPages}
-                currentPage={filtersFromUrl.page}
-                filters={mappedFilters}
-              />
+              <div className="flex justify-center">
+                <Pagination
+                  totalPages={totalPages}
+                  currentPage={filtersFromUrl.page}
+                  filters={mappedFilters}
+                />
+              </div>
             )}
           </>
         )}

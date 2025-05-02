@@ -1,8 +1,10 @@
-// src/utils/fetchData.ts
 import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+/**
+ * Filtro de búsqueda para productos
+ */
 export interface Filters {
   page: number;
   keywords: string;
@@ -13,24 +15,41 @@ export interface Filters {
   categoria_id?: number;
 }
 
-// 1) Definimos el tipo del producto para el listado (getFilteredProducts)
-export type ProductSummary = Prisma.ProductosGetPayload<{
-  include: {
-    marca: { select: { id: true; marca: true } };
-    rubro: { select: { id: true; rubro: true } };
-    fotos: true;
-    versiones: true;
-    especificaciones: true;
-  };
-}>;
+/**
+ * Campos comunes a incluir en listados de productos
+ */
+const PRODUCT_INCLUDES = {
+  marca:           { select: { id: true, marca: true } },
+  rubro:           { select: { id: true, rubro: true } },
+  fotos:           true,
+  versiones:       true,
+  especificaciones:true,
+} as const;
 
-// 2) Tipo de retorno para getFilteredProducts
+/**
+ * Tipo resultante de los productos en listados filtrados
+ */
+export type ProductSummary = Prisma.ProductosGetPayload<{ include: typeof PRODUCT_INCLUDES }>;
+
+/**
+ * Estructura de retorno de getFilteredProducts
+ */
 export interface FilteredProductsResult {
   products: ProductSummary[];
   totalProducts: number;
   totalPages: number;
 }
 
+/**
+ * Serializa eliminando objetos especiales (como Decimal)
+ */
+function serialize<T>(data: T): T {
+  return JSON.parse(JSON.stringify(data));
+}
+
+/**
+ * Obtiene datos de filtros (marcas y rubros activos)
+ */
 export async function getFiltersData(): Promise<{
   marcas: { id: number; marca: string }[];
   rubros: { id: number; rubro: string }[];
@@ -46,88 +65,87 @@ export async function getFiltersData(): Promise<{
   return { marcas, rubros };
 }
 
+/**
+ * Obtiene productos filtrados con paginación
+ */
 export async function getFilteredProducts(
   filters: Filters,
   itemsPerPage: number
 ): Promise<FilteredProductsResult> {
+  const {
+    page = 1,
+    keywords = '',
+    marca_id,
+    categoria_id,
+  } = filters;
+  const skip = (page - 1) * itemsPerPage;
+
   const where: Prisma.ProductosWhereInput = { activo: true };
 
-  if (filters.keywords) {
-    const tokens = filters.keywords.trim().toLowerCase().split(/\s+/);
-    if (tokens.length) {
-      where.AND = tokens.map(token => ({
+  if (keywords.trim()) {
+    where.AND = keywords
+      .toLowerCase()
+      .split(/\s+/)
+      .map(token => ({
         OR: [
-          { producto: { contains: token } },
+          { producto:    { contains: token } },
           { descripcion: { contains: token } },
         ],
       }));
-    }
   }
 
-  if (filters.marca_id) where.marca_id = filters.marca_id;
-  if (filters.categoria_id) where.rubro_id = filters.categoria_id;
+  if (marca_id)     where.marca_id = marca_id;
+  if (categoria_id) where.rubro_id = categoria_id;
 
-  const [totalProducts, rows] = await Promise.all([
+  const [totalProducts, rows] = await prisma.$transaction([
     prisma.productos.count({ where }),
     prisma.productos.findMany({
       where,
-      skip: (filters.page - 1) * itemsPerPage,
+      skip,
       take: itemsPerPage,
-      include: {
-        marca: { select: { id: true, marca: true } },
-        rubro: { select: { id: true, rubro: true } },
-        fotos: true,
-        versiones: true,
-        especificaciones: true,
-      },
+      include: PRODUCT_INCLUDES,
     }),
   ]);
 
-  // Convertimos a JSON para librarnos de los Decimals al serializar
-  const products = JSON.parse(JSON.stringify(rows)) as ProductSummary[];
+  const products = serialize(rows);
+  const totalPages = Math.ceil(totalProducts / itemsPerPage);
 
-  return {
-    products,
-    totalProducts,
-    totalPages: Math.ceil(totalProducts / itemsPerPage),
-  };
+  return { products, totalProducts, totalPages };
 }
 
-// 3) Definimos el tipo para el detalle de producto (getSingleProduct)
-export type ProductDetail = Prisma.ProductosGetPayload<{
-  include: {
-    marca: { select: { id: true; marca: true } };
-    rubro: { select: { id: true; rubro: true } };
-    moneda: { select: { id: true; moneda: true; moneda_des: true } };
-    fotos: true;
-    versiones: true;
-    especificaciones: true;
-  };
-}>;
+/**
+ * Campos a incluir en detalle de producto (extiende PRODUCT_INCLUDES)
+ */
+const PRODUCT_DETAIL_INCLUDES = {
+  ...PRODUCT_INCLUDES,
+  moneda: { select: { id: true, moneda: true, moneda_des: true } },
+} as const;
 
+/**
+ * Tipo de detalle completo de un producto
+ */
+export type ProductDetail = Prisma.ProductosGetPayload<{ include: typeof PRODUCT_DETAIL_INCLUDES }>;
+
+/**
+ * Obtiene un único producto y actualiza su contador de visitas
+ */
 export async function getSingleProduct(
   productId: number
 ): Promise<ProductDetail> {
+  // Incrementamos visitas
   await prisma.productos.update({
     where: { id: productId },
-    data: { visitas: { increment: 1 } },
+    data:  { visitas: { increment: 1 } },
   });
 
   const product = await prisma.productos.findUnique({
     where: { id: productId, activo: true },
-    include: {
-      marca: { select: { id: true, marca: true } },
-      rubro: { select: { id: true, rubro: true } },
-      moneda: { select: { id: true, moneda: true, moneda_des: true } },
-      fotos: true,
-      versiones: true,
-      especificaciones: true,
-    },
+    include: PRODUCT_DETAIL_INCLUDES,
   });
 
   if (!product) {
     throw new Error(`Producto con ID ${productId} no encontrado.`);
   }
 
-  return JSON.parse(JSON.stringify(product)) as ProductDetail;
+  return serialize(product);
 }
