@@ -25,10 +25,6 @@ export const authOptions: AuthOptions = {
         // 2) Comparación directa de la contraseña
         const plainPassword = "F3rn@nd0_p3rro_v3rde" // Contraseña en texto claro
 
-        // 3) Debug: Verifica los valores de la contraseña ingresada y la almacenada
-        console.log(">>> credentials.password (en texto claro):", credentials.password)
-        console.log(">>> plainPassword (en texto claro):", plainPassword)
-
         // 4) Comparamos la contraseña en texto claro con la contraseña de la variable
         if (credentials.password !== plainPassword) {
           throw new Error("Contraseña incorrecta")
