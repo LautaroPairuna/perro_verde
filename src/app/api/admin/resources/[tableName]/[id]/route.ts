@@ -7,7 +7,6 @@ import sharp                         from 'sharp'
 
 const prisma = new PrismaClient()
 
-/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 const models: Record<string, any> = {
   CfgMarcas: prisma.cfgMarcas,
   CfgRubros: prisma.cfgRubros,
@@ -35,20 +34,21 @@ const folderNames: Record<string, string> = {
 }
 
 const BOOLEAN_FIELDS = ['activo', 'destacado'] as const
-const FILE_FIELD     = 'foto'
+const FILE_FIELD = 'foto'
+
+/* Utilidades -------------------------------------------------------- */
 
 function makeTimestamp() {
-  const d  = new Date()
-  const YY = d.getFullYear()
+  const d = new Date()
+  const YYYY = d.getFullYear()
   const MM = String(d.getMonth() + 1).padStart(2, '0')
   const DD = String(d.getDate()).padStart(2, '0')
   const hh = String(d.getHours()).padStart(2, '0')
   const mm = String(d.getMinutes()).padStart(2, '0')
   const ss = String(d.getSeconds()).padStart(2, '0')
-  return `${YY}${MM}${DD}-${hh}${mm}${ss}`
+  return `${YYYY}${MM}${DD}-${hh}${mm}${ss}`
 }
 
-/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 function normalizeBooleans(obj: Record<string, any>) {
   for (const k of BOOLEAN_FIELDS) {
     if (k in obj) {
@@ -57,6 +57,8 @@ function normalizeBooleans(obj: Record<string, any>) {
     }
   }
 }
+
+/* PUT ---------------------------------------------------------------- */
 
 export async function PUT(
   request: NextRequest,
@@ -68,13 +70,12 @@ export async function PUT(
     return NextResponse.json({ error: `Recurso “${tableName}” no existe` }, { status: 404 })
   }
 
-  const keyId     = isNaN(+id) ? id : +id
-  const existing  = await model.findUnique({ where: { id: keyId } })
-  const ct        = request.headers.get('content-type') || ''
+  const keyId = isNaN(+id) ? id : +id
+  const existing = await model.findUnique({ where: { id: keyId } })
 
-  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  const ct = request.headers.get('content-type') || ''
   let data: Record<string, any> = {}
-  let file: File | null = null
+  let file: globalThis.File | null = null // tipo global
 
   if (ct.includes('multipart/form-data')) {
     const form = await request.formData()
@@ -86,21 +87,22 @@ export async function PUT(
 
     if (file) {
       const baseDir = path.join(process.cwd(), 'public', 'images')
-      const key     = folderNames[tableName] || tableName.toLowerCase()
-      const dir     = path.join(baseDir, key)
-      const thumbs  = path.join(dir, 'thumbs')
+      const key = folderNames[tableName] || tableName.toLowerCase()
+      const dir = path.join(baseDir, key)
+      const thumbs = path.join(dir, 'thumbs')
 
+      // eliminar foto previa
       if (existing?.[FILE_FIELD]) {
-        await fs.rm(path.join(dir,    existing[FILE_FIELD]),    { force: true }).catch(() => {})
+        await fs.rm(path.join(dir, existing[FILE_FIELD]), { force: true }).catch(() => {})
         await fs.rm(path.join(thumbs, existing[FILE_FIELD]), { force: true }).catch(() => {})
       }
 
-      await fs.mkdir(dir,    { recursive: true })
+      await fs.mkdir(dir, { recursive: true })
       await fs.mkdir(thumbs, { recursive: true })
 
       const baseSlug = slugify(String(data.titulo ?? data.producto), { lower: true, strict: true })
-      const name     = `${baseSlug}-${makeTimestamp()}.webp`
-      const buf      = Buffer.from(await file.arrayBuffer())
+      const name = `${baseSlug}-${makeTimestamp()}.webp`
+      const buf = Buffer.from(await file.arrayBuffer())
 
       await sharp(buf).webp().toFile(path.join(dir, name))
       await sharp(buf).resize(200).webp().toFile(path.join(thumbs, name))
@@ -119,6 +121,8 @@ export async function PUT(
   }
 }
 
+/* DELETE ------------------------------------------------------------- */
+
 export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ tableName: string; id: string }> },
@@ -129,15 +133,15 @@ export async function DELETE(
     return NextResponse.json({ error: `Recurso “${tableName}” no existe` }, { status: 404 })
   }
 
-  const keyId    = isNaN(+id) ? id : +id
+  const keyId = isNaN(+id) ? id : +id
   const existing = await model.findUnique({ where: { id: keyId } })
 
   if (existing?.[FILE_FIELD]) {
     const baseDir = path.join(process.cwd(), 'public', 'images')
-    const key     = folderNames[tableName] || tableName.toLowerCase()
-    const dir     = path.join(baseDir, key)
-    const thumbs  = path.join(dir, 'thumbs')
-    await fs.rm(path.join(dir,    existing[FILE_FIELD]),    { force: true }).catch(() => {})
+    const key = folderNames[tableName] || tableName.toLowerCase()
+    const dir = path.join(baseDir, key)
+    const thumbs = path.join(dir, 'thumbs')
+    await fs.rm(path.join(dir, existing[FILE_FIELD]), { force: true }).catch(() => {})
     await fs.rm(path.join(thumbs, existing[FILE_FIELD]), { force: true }).catch(() => {})
   }
 
