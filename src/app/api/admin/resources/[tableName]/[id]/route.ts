@@ -35,31 +35,35 @@ const folderNames: Record<string, string> = {
 }
 
 const BOOLEAN_FIELDS = ['activo', 'destacado'] as const
-const FILE_FIELD = 'foto'
+const FILE_FIELD     = 'foto'
 
-/* Utilidades -------------------------------------------------------- */
+/* ------------------------------------------------------------------ */
+/* Utilidades                                                         */
+/* ------------------------------------------------------------------ */
 
 function makeTimestamp() {
   const d = new Date()
   const YYYY = d.getFullYear()
-  const MM = String(d.getMonth() + 1).padStart(2, '0')
-  const DD = String(d.getDate()).padStart(2, '0')
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  const ss = String(d.getSeconds()).padStart(2, '0')
-  return `${YYYY}${MM}${DD}-${hh}${mm}${ss}`
+  const MM   = String(d.getMonth() + 1).padStart(2, '0')
+  const DD   = String(d.getDate()).padStart(2, '0')
+  const hh   = String(d.getHours()).padStart(2, '0')
+  const mm2  = String(d.getMinutes()).padStart(2, '0')
+  const ss   = String(d.getSeconds()).padStart(2, '0')
+  return `${YYYY}${MM}${DD}-${hh}${mm2}${ss}`
 }
 
-function normalizeBooleans(obj: Record<string, any>) {
+function normalizeBooleans(obj: Record<string, unknown>) {
   for (const k of BOOLEAN_FIELDS) {
     if (k in obj) {
-      const v = obj[k]
+      const v = obj[k] as unknown
       obj[k] = v === true || v === 'true' || v === 1 || v === '1'
     }
   }
 }
 
-/* PUT ---------------------------------------------------------------- */
+/* ------------------------------------------------------------------ */
+/* PUT                                                                 */
+/* ------------------------------------------------------------------ */
 
 export async function PUT(
   request: NextRequest,
@@ -71,12 +75,14 @@ export async function PUT(
     return NextResponse.json({ error: `Recurso “${tableName}” no existe` }, { status: 404 })
   }
 
-  const keyId = isNaN(+id) ? id : +id
+  const keyId    = isNaN(+id) ? id : +id
   const existing = await model.findUnique({ where: { id: keyId } })
 
   const ct = request.headers.get('content-type') || ''
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let data: Record<string, any> = {}
-  let file: globalThis.File | null = null // tipo global
+  let file: globalThis.File | null = null
 
   if (ct.includes('multipart/form-data')) {
     const form = await request.formData()
@@ -88,22 +94,21 @@ export async function PUT(
 
     if (file) {
       const baseDir = path.join(process.cwd(), 'public', 'images')
-      const key = folderNames[tableName] || tableName.toLowerCase()
-      const dir = path.join(baseDir, key)
-      const thumbs = path.join(dir, 'thumbs')
+      const key     = folderNames[tableName] || tableName.toLowerCase()
+      const dir     = path.join(baseDir, key)
+      const thumbs  = path.join(dir, 'thumbs')
 
-      // eliminar foto previa
       if (existing?.[FILE_FIELD]) {
-        await fs.rm(path.join(dir, existing[FILE_FIELD]), { force: true }).catch(() => {})
-        await fs.rm(path.join(thumbs, existing[FILE_FIELD]), { force: true }).catch(() => {})
+        await fs.rm(path.join(dir,    existing[FILE_FIELD]), { force: true }).catch(()=>{})
+        await fs.rm(path.join(thumbs, existing[FILE_FIELD]), { force: true }).catch(()=>{})
       }
 
-      await fs.mkdir(dir, { recursive: true })
+      await fs.mkdir(dir,    { recursive: true })
       await fs.mkdir(thumbs, { recursive: true })
 
       const baseSlug = slugify(String(data.titulo ?? data.producto), { lower: true, strict: true })
-      const name = `${baseSlug}-${makeTimestamp()}.webp`
-      const buf = Buffer.from(await file.arrayBuffer())
+      const name     = `${baseSlug}-${makeTimestamp()}.webp`
+      const buf      = Buffer.from(await file.arrayBuffer())
 
       await sharp(buf).webp().toFile(path.join(dir, name))
       await sharp(buf).resize(200).webp().toFile(path.join(thumbs, name))
@@ -115,6 +120,7 @@ export async function PUT(
   }
 
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return NextResponse.json(await model.update({ where: { id: keyId }, data }))
   } catch (e) {
     console.error(e)
@@ -122,10 +128,12 @@ export async function PUT(
   }
 }
 
-/* DELETE ------------------------------------------------------------- */
+/* ------------------------------------------------------------------ */
+/* DELETE                                                              */
+/* ------------------------------------------------------------------ */
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   context: { params: Promise<{ tableName: string; id: string }> },
 ) {
   const { tableName, id } = await context.params
@@ -134,16 +142,16 @@ export async function DELETE(
     return NextResponse.json({ error: `Recurso “${tableName}” no existe` }, { status: 404 })
   }
 
-  const keyId = isNaN(+id) ? id : +id
+  const keyId    = isNaN(+id) ? id : +id
   const existing = await model.findUnique({ where: { id: keyId } })
 
   if (existing?.[FILE_FIELD]) {
     const baseDir = path.join(process.cwd(), 'public', 'images')
-    const key = folderNames[tableName] || tableName.toLowerCase()
-    const dir = path.join(baseDir, key)
-    const thumbs = path.join(dir, 'thumbs')
-    await fs.rm(path.join(dir, existing[FILE_FIELD]), { force: true }).catch(() => {})
-    await fs.rm(path.join(thumbs, existing[FILE_FIELD]), { force: true }).catch(() => {})
+    const key     = folderNames[tableName] || tableName.toLowerCase()
+    const dir     = path.join(baseDir, key)
+    const thumbs  = path.join(dir, 'thumbs')
+    await fs.rm(path.join(dir,    existing[FILE_FIELD]), { force: true }).catch(()=>{})
+    await fs.rm(path.join(thumbs, existing[FILE_FIELD]), { force: true }).catch(()=>{})
   }
 
   try {
