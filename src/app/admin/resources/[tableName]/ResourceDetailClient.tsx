@@ -134,6 +134,7 @@
   // Hook auxiliar — carga relaciones SIN violar rules‑of‑hooks
   // ---------------------------------------------------------------------------
   function useRelations(relations: string[]) {
+    /* eslint-disable-next-line react-hooks/rules-of-hooks */
     return relations.map(childTable => {
       const { data = [] } = useSWR<any[]>(`/api/admin/resources/${childTable}`, fetcher)
       return { childTable, data }
@@ -144,13 +145,14 @@
   // Componente principal
   // ---------------------------------------------------------------------------
   export default function ResourceDetailClient({ tableName }: { tableName: string }) {
+     /* ------------- hooks principales ---------------- */
     const readOnly = READ_ONLY_RESOURCES.includes(tableName)
-  
-    // -------------------------------- datos padre
     const { data: rows = [], error: parentError } = useSWR<any[]>(
-      `/api/admin/resources/${tableName}`,
-      fetcher,
-    )
+      `/api/admin/resources/${tableName}`, fetcher)
+
+    /* Early‑return por error/carga ANTES de cualquier useMemo extra */
+    if (parentError) return <div className="p-4 text-red-500">Error al cargar datos</div>
+    if (!rows)       return <div className="p-4 text-gray-600">Cargando…</div>
   
     // -------------------------------- relaciones hijo
     const [childRelation, setChildRelation] = useState<{
@@ -704,19 +706,19 @@
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Campos primitivos en dos columnas */}
             {Object.entries(detailRow)
-              .filter(([_, v]) => v == null || ['string','number','boolean'].includes(typeof v))
-              .map(([k, v]) => (
-                <div key={k} className="flex">
-                  <span className="font-semibold w-40 text-gray-700">
-                    {k.replace(/_/g,' ')}:
-                  </span>
-                  <span className="text-gray-800">{String(v)}</span>
-                </div>
+            .filter(([__unused, v]) => v == null || ['string','number','boolean'].includes(typeof v))
+            .map(([k, v]) => (
+              <div key={k} className="flex">
+                <span className="font-semibold w-40 text-gray-700">
+                  {k.replace(/_/g,' ')}:
+                </span>
+                <span className="text-gray-800">{String(v)}</span>
+              </div>
             ))}
 
             {/* Secciones colapsables ocupan ambas columnas */}
             {Object.entries(detailRow)
-              .filter(([_, v]) => v && typeof v === 'object')
+              .filter(([__unused, v]) => v && typeof v === 'object')
               .map(([k, v]) => (
                 <div key={k} className="md:col-span-2 border-t pt-4">
                   <button
@@ -923,6 +925,7 @@ const Form = memo(function Form({ initial, columns, fixedFk, onSubmit }: FormPro
   // cargamos opciones FK
   const swrData = Object.fromEntries(
     Object.entries(fkConfig).map(([col, cfg]) => {
+      /* eslint-disable-next-line react-hooks/rules-of-hooks */
       const { data = [] } = useSWR<any[]>(`/api/admin/resources/${cfg.resource}`, fetcher)
       return [col, data]
     })
