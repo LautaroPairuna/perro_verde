@@ -177,16 +177,26 @@
     const tableData = childRelation ? childData : rows
   
     /** columnas visibles */
-    const rawColumns = useMemo(() => Object.keys(tableData[0] || {}), [tableData])
-    const visibleCols = useMemo(() => {
+    /* ------------- columnas detectadas ------------- */
+    const rawColumns = useMemo<string[]>(() => Object.keys(tableData[0] || {}), [tableData])
+
+    /* ------------- columnas visibles (oculta FK, fallback si no hay filas) ------------- */
+    const visibleCols = useMemo<string[]>(() => {
+      if (rawColumns.length === 0) {
+        // tabla vacía: id + posibles FK
+        return childRelation
+          ? ['id', childRelation.foreignKey]
+          : ['id', ...Object.keys(fkConfig).filter(k => k.endsWith('_id'))]
+      }
       const hidden = HIDDEN_COLUMNS[tableName] ?? []
       return rawColumns.filter(c => !hidden.includes(c))
-    }, [rawColumns, tableName])
-  
-    const columns = useMemo(() => {
+    }, [rawColumns, tableName, childRelation])
+
+    /* ------------- columnas finales (orden especial para Productos) ------------- */
+    const columns = useMemo<string[]>(() => {
       if (tableName === 'Productos' && !childRelation) {
         const first = ['id', 'producto', 'precio']
-        const rest = visibleCols.filter(c => !first.includes(c))
+        const rest  = visibleCols.filter(c => !first.includes(c))
         return [...first, ...rest]
       }
       return visibleCols
@@ -508,7 +518,7 @@
                   <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Acciones</th>
 
                   {/* columnas + inserción de relaciones justo después de PRECIO */}
-                  {columns.flatMap(col => {
+                  {columns.flatMap((col: string) => {
                     const th = (
                       <th
                         key={col}
@@ -601,7 +611,7 @@
                     </td>
 
                     {/* celdas */}
-                    {columns.flatMap(col => {
+                    {columns.flatMap((col: string) => {
                       const td = (
                         <td
                           key={col}
@@ -699,7 +709,7 @@
       {/* ---------------------------------------------------------------------
          MODALES
       --------------------------------------------------------------------- */}
-            {detailRow && (
+      {detailRow && (
         <Modal title="Detalle" onClose={() => setDetailRow(null)}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Campos primitivos en dos columnas */}
@@ -784,43 +794,45 @@
 
       {createOpen && (
         <Modal title="Crear registro" onClose={() => setCreateOpen(false)}>
-          <Form
-            initial={
-              childRelation
-                ? { id: nextId, [childRelation.foreignKey]: childRelation.parentId }
-                : { id: nextId }
-            }
-            columns={
-              childRelation
-                ? (columns.includes(childRelation.foreignKey)
-                    ? columns
-                    : [...columns, childRelation.foreignKey])
-                : columns
-            }
-            fixedFk={childRelation ? childRelation.foreignKey : undefined}
-            onSubmit={handleCreate}
-          />
+          {(() => {
+            const base = childRelation
+              ? { id: nextId, [childRelation.foreignKey]: childRelation.parentId }
+              : { id: nextId }
+
+            const colsForForm =
+              visibleCols.length > 0 ? visibleCols : Object.keys(base)
+
+            return (
+              <Form
+                initial={base}
+                columns={colsForForm}
+                fixedFk={childRelation ? childRelation.foreignKey : undefined}
+                onSubmit={handleCreate}
+              />
+            )
+          })()}
         </Modal>
       )}
 
+      {/* --- Editar registro (también usa fallback cuando no hay rows previas) --- */}
       {editRow && editRow !== 'bulk' && (
         <Modal title={`Editar registro ${editRow.id}`} onClose={() => setEditRow(null)}>
-          <Form
-            initial={
-              childRelation
-                ? { ...editRow, [childRelation.foreignKey]: childRelation.parentId }
-                : editRow
-            }
-            columns={
-              childRelation
-                ? (columns.includes(childRelation.foreignKey)
-                    ? columns
-                    : [...columns, childRelation.foreignKey])
-                : columns
-            }
-            fixedFk={childRelation ? childRelation.foreignKey : undefined}
-            onSubmit={d => handleUpdate(editRow.id, d)}
-          />
+          {(() => {
+            const base = childRelation
+              ? { ...editRow, [childRelation.foreignKey]: childRelation.parentId }
+              : editRow
+            const colsForForm =
+              visibleCols.length > 0 ? visibleCols : Object.keys(base)
+
+            return (
+              <Form
+                initial={base}
+                columns={colsForForm}
+                fixedFk={childRelation ? childRelation.foreignKey : undefined}
+                onSubmit={d => handleUpdate(editRow.id, d)}
+              />
+            )
+          })()}
         </Modal>
       )}
 
