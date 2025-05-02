@@ -1,22 +1,21 @@
-// src/components/unProducto/Galeria.tsx
-'use client';
+'use client'
 
-import React from 'react';
-import Image from 'next/image';
-import { PhotoSwipeInitializer } from './PhotoSwipeInitializer';
+import React from 'react'
+import Image from 'next/image'
+import { PhotoSwipeInitializer } from './PhotoSwipeInitializer'
 
 export interface GalleryImage {
-  src: string;
-  thumb: string;
-  alt: string;
-  pswpWidth: number;
-  pswpHeight: number;
+  src: string
+  thumb: string
+  alt: string
+  pswpWidth: number
+  pswpHeight: number
 }
 
-const PLACEHOLDER = '/images/productos/fotos/placeholder.jpg';
+const PLACEHOLDER = '/images/productos/fotos/placeholder.jpg'
 
 interface GaleriaProps {
-  images: GalleryImage[];
+  images: GalleryImage[]
 }
 
 export default function Galeria({ images }: GaleriaProps) {
@@ -47,15 +46,12 @@ export default function Galeria({ images }: GaleriaProps) {
               alt={img.alt}
               fill
               style={{ objectFit: 'cover' }}
-              onError={(e) => {
-                // @ts-ignore — currentTarget es <img>
-                e.currentTarget.src = PLACEHOLDER;
-              }}
+              onError={(e) => { e.currentTarget.src = PLACEHOLDER }}
               sizes="(max-width: 1024px) 50vw, 25vw"
             />
           </a>
         ))}
       </div>
     </>
-  );
+  )
 }

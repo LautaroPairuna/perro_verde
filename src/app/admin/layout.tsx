@@ -1,23 +1,14 @@
-// src/app/admin/layout.tsx
 'use client'
 
 import { SessionProvider, useSession, signOut } from 'next-auth/react'
-import type { ReactNode } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
-import Link from 'next/link'
-import type { IconType } from 'react-icons'
+import { useRouter, usePathname }              from 'next/navigation'
+import { useState, type ReactNode }            from 'react'
+import Link                                    from 'next/link'
+import type { IconType }                       from 'react-icons'
 import {
-  HiTag,
-  HiCollection,
-  HiCurrencyDollar,
-  HiPhotograph,
-  HiShoppingCart,
-  HiUsers,
-  HiMenu,
-  HiX,
-  HiLogout,
+  HiTag, HiCollection, HiCurrencyDollar, HiPhotograph,
+  HiShoppingCart, HiUsers, HiMenu, HiX, HiLogout,
 } from 'react-icons/hi'
-import { useState } from 'react'
 
 const RESOURCES = [
   'CfgMarcas',
@@ -38,25 +29,25 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 }
 
 function AdminLayoutContent({ children }: { children: ReactNode }) {
-  const router = useRouter()
-  const rawPath = usePathname() ?? ''
+  /* ---------------- hooks SIEMPRE al inicio ---------------- */
+  const router      = useRouter()
+  const rawPath     = usePathname() ?? ''
+  const inAuthRoute = rawPath.startsWith('/admin/auth')
 
-  // Si estamos en la página de login, renderizamos solo el children (login)
-  if (rawPath.startsWith('/admin/auth')) {
-    return <>{children}</>
-  }
-
-  // Para todas las demás rutas admin, requerimos sesión
   const { data: session, status } = useSession({
-    required: true,
+    required: !inAuthRoute,
     onUnauthenticated() {
-      router.replace('/admin/auth')
+      if (!inAuthRoute) router.replace('/admin/auth')
     },
   })
 
   const [mobileOpen, setMobileOpen] = useState(false)
   const isRoot = rawPath === '/admin'
 
+  /* ---------------- early return para /admin/auth ---------- */
+  if (inAuthRoute) return <>{children}</>
+
+  /* ---------------- pantalla de carga ---------------------- */
   if (status === 'loading') {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
@@ -66,27 +57,28 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
     )
   }
 
-  // session ya está definido
-  const avatarUrl   = session.user?.image ?? '/avatar-placeholder.png'
-  const displayName = session.user?.name  ?? 'Usuario'
+  /* ---------------- sesión garantizada --------------------- */
+  const avatarUrl   = session?.user?.image ?? '/avatar-placeholder.png'
+  const displayName = session?.user?.name  ?? 'Usuario'
 
   const iconFor = (name: string): IconType => {
-    if (name.match(/Fotos|Photograph/))     return HiPhotograph
-    if (name.match(/Rubros|Collection/))    return HiCollection
-    if (name.match(/Pedidos|ShoppingCart/)) return HiShoppingCart
-    if (name.match(/Monedas|Currency/))     return HiCurrencyDollar
+    if (/Fotos|Photograph/.test(name))     return HiPhotograph
+    if (/Rubros|Collection/.test(name))    return HiCollection
+    if (/Pedidos|ShoppingCart/.test(name)) return HiShoppingCart
+    if (/Monedas|Currency/.test(name))     return HiCurrencyDollar
     return HiTag
   }
 
   return (
     <div className="flex h-screen bg-gray-100 text-gray-800">
-      {/* Mobile Top Bar */}
+      {/* ---------- Barra móvil ----------------------------- */}
       <div className="md:hidden flex items-center justify-between bg-indigo-600 text-white p-4 shadow-md">
         <button onClick={() => setMobileOpen(v => !v)} aria-label="Toggle menu">
           {mobileOpen ? <HiX className="h-6 w-6"/> : <HiMenu className="h-6 w-6"/>}
         </button>
         <span className="text-lg font-semibold">Admin Panel</span>
         <div className="flex items-center space-x-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={avatarUrl} alt="Avatar" className="h-8 w-8 rounded-full object-cover" />
           <button
             onClick={() => signOut({ callbackUrl: '/admin/auth' })}
@@ -98,7 +90,7 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      {/* Sidebar */}
+      {/* ---------- Sidebar --------------------------------- */}
       <aside
         className={`
           fixed inset-y-0 left-0 z-20 transform
@@ -108,19 +100,18 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
         `}
       >
         <div className="h-full flex flex-col">
-          {/* Logo */}
           <div className="hidden md:flex items-center px-6 py-6 border-b border-indigo-700">
             <HiUsers className="h-8 w-8 text-white"/>
             <span className="ml-3 text-2xl font-bold text-white">Admin</span>
           </div>
 
-          {/* Nav links */}
           <nav className="flex-1 overflow-y-auto px-2 py-6 space-y-2">
             {RESOURCES.map(r => {
-              const path = `/admin/resources/${r}`
+              const path   = `/admin/resources/${r}`
               const active = rawPath === path
-              const label = r.startsWith('Cfg') ? r.slice(3) : r
-              const Icon = iconFor(r)
+              const label  = r.startsWith('Cfg') ? r.slice(3) : r
+              const Icon   = iconFor(r)
+
               return (
                 <Link
                   key={r}
@@ -140,7 +131,6 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
             })}
           </nav>
 
-          {/* Logout */}
           <div className="border-t border-indigo-700 p-4">
             <button
               onClick={() => signOut({ callbackUrl: '/admin/auth' })}
@@ -153,21 +143,17 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      {/* Main content */}
+      {/* ---------- Contenido principal ---------------------- */}
       <main className={`${isRoot ? 'hidden' : 'flex-1 flex flex-col overflow-auto'}`}>
-        {/* Desktop header */}
         <header className="hidden md:flex items-center justify-between bg-white border-b px-8 py-4 shadow-sm">
           <h1 className="text-xl font-semibold">{rawPath.split('/').pop()}</h1>
           <div className="flex items-center space-x-4">
             <span className="text-gray-600">¡Hola, {displayName}!</span>
-            <img
-              src={avatarUrl}
-              alt="Avatar"
-              className="h-8 w-8 rounded-full object-cover"
-            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={avatarUrl} alt="Avatar" className="h-8 w-8 rounded-full object-cover"/>
           </div>
         </header>
-        {/* Page children */}
+
         <div className="flex-1 p-6 md:p-8 bg-gray-50">
           {children}
         </div>

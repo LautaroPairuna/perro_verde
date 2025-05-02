@@ -5,9 +5,8 @@ const prisma = new PrismaClient();
 
 // Crear un tipo que capture la estructura básica de un modelo de Prisma
 // con un método findMany que devuelve una promesa
-type PrismaModel = {
-  findMany: (args?: any) => Promise<any[]>;
-};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PrismaModel = { findMany: (args?: any) => Promise<any[]> }
 
 // Mapeo explícito de tablas a modelos de Prisma
 const models: Record<string, PrismaModel> = {
