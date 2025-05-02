@@ -32,7 +32,7 @@ export default function AuthPage() {
     if (res?.error) {
       setError(res.error)
     } else {
-      router.replace('/admin/resources')
+      router.replace('/admin/resources/Productos')
     }
   }
 
