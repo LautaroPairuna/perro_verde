@@ -7,6 +7,7 @@ import sharp                         from 'sharp'
 
 const prisma = new PrismaClient()
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const models: Record<string, any> = {
   CfgMarcas: prisma.cfgMarcas,
   CfgRubros: prisma.cfgRubros,
