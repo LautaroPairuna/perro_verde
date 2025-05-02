@@ -1,12 +1,13 @@
-// src/app/api/admin/resources/[tableName]/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient }            from '@prisma/client'
-import fs                          from 'fs/promises'
-import path                        from 'path'
-import slugify                     from 'slugify'
-import sharp                       from 'sharp'
+import { PrismaClient }              from '@prisma/client'
+import fs                            from 'fs/promises'
+import path                          from 'path'
+import slugify                       from 'slugify'
+import sharp                         from 'sharp'
 
 const prisma = new PrismaClient()
+
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 const models: Record<string, any> = {
   CfgMarcas: prisma.cfgMarcas,
   CfgRubros: prisma.cfgRubros,
@@ -20,7 +21,7 @@ const models: Record<string, any> = {
   Pedidos: prisma.pedidos,
 }
 
-const folderNames: Record<string,string> = {
+const folderNames: Record<string, string> = {
   CfgMarcas: 'marcas',
   CfgRubros: 'rubros',
   CfgFormasPagos: 'formas-pagos',
@@ -37,16 +38,17 @@ const BOOLEAN_FIELDS = ['activo', 'destacado'] as const
 const FILE_FIELD     = 'foto'
 
 function makeTimestamp() {
-  const d = new Date()
-  const YYYY = d.getFullYear()
-  const MM   = String(d.getMonth()+1).padStart(2,'0')
-  const DD   = String(d.getDate()).padStart(2,'0')
-  const hh   = String(d.getHours()).padStart(2,'0')
-  const mm2  = String(d.getMinutes()).padStart(2,'0')
-  const ss   = String(d.getSeconds()).padStart(2,'0')
-  return `${YYYY}${MM}${DD}-${hh}${mm2}${ss}`
+  const d  = new Date()
+  const YY = d.getFullYear()
+  const MM = String(d.getMonth() + 1).padStart(2, '0')
+  const DD = String(d.getDate()).padStart(2, '0')
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  const ss = String(d.getSeconds()).padStart(2, '0')
+  return `${YY}${MM}${DD}-${hh}${mm}${ss}`
 }
 
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 function normalizeBooleans(obj: Record<string, any>) {
   for (const k of BOOLEAN_FIELDS) {
     if (k in obj) {
@@ -56,7 +58,10 @@ function normalizeBooleans(obj: Record<string, any>) {
   }
 }
 
-export async function GET(request: NextRequest, context: { params: Promise<{ tableName: string }> }) {
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ tableName: string }> },
+) {
   const { tableName } = await context.params
   const model = models[tableName]
   if (!model) return NextResponse.json({ error: `Recurso “${tableName}” no existe` }, { status: 404 })
@@ -67,20 +72,25 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tab
   }
 }
 
-export async function POST(request: NextRequest, context: { params: Promise<{ tableName: string }> }) {
+export async function POST(
+  request: NextRequest,
+  context: { params: Promise<{ tableName: string }> },
+) {
   const { tableName } = await context.params
   const model = models[tableName]
   if (!model) return NextResponse.json({ error: `Recurso “${tableName}” no existe` }, { status: 404 })
 
-  const ct   = request.headers.get('content-type') || ''
-  let data   = {} as Record<string, any>
+  const ct  = request.headers.get('content-type') || ''
+
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  let data: Record<string, any> = {}
   let file: File | null = null
 
   if (ct.includes('multipart/form-data')) {
     const form = await request.formData()
-    for (const [key, val] of form.entries()) {
-      if (key === FILE_FIELD && val instanceof File) file = val
-      else if (typeof val === 'string') data[key] = /^\d+$/.test(val) ? Number(val) : val
+    for (const [k, v] of form.entries()) {
+      if (k === FILE_FIELD && v instanceof File) file = v
+      else if (typeof v === 'string') data[k] = /^\d+$/.test(v) ? Number(v) : v
     }
     normalizeBooleans(data)
 
@@ -89,7 +99,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ta
       const key     = folderNames[tableName] || tableName.toLowerCase()
       const dir     = path.join(baseDir, key)
       const thumbs  = path.join(dir, 'thumbs')
-      await fs.mkdir(dir, { recursive: true })
+
+      await fs.mkdir(dir,    { recursive: true })
       await fs.mkdir(thumbs, { recursive: true })
 
       const baseSlug = slugify(String(data.titulo ?? data.producto), { lower: true, strict: true })

@@ -1,14 +1,10 @@
-//src/app/api/admin/structure/route.ts
+import { PrismaClient } from '@prisma/client'
+const prisma = new PrismaClient()
 
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
-
-// Crear un tipo que capture la estructura básica de un modelo de Prisma
-// con un método findMany que devuelve una promesa
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PrismaModel = { findMany: (args?: any) => Promise<any[]> }
 
-// Mapeo explícito de tablas a modelos de Prisma
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 const models: Record<string, PrismaModel> = {
   CfgMarcas: prisma.cfgMarcas,
   CfgRubros: prisma.cfgRubros,
@@ -20,36 +16,27 @@ const models: Record<string, PrismaModel> = {
   ProductoVersiones: prisma.productoVersiones,
   ProductoEspecificaciones: prisma.productoEspecificaciones,
   Pedidos: prisma.pedidos,
-  // Nota: 'session' no está disponible en PrismaClient según el error
-};
-
-interface TableStructure {
-  tableName: string;
-  data: any[];
 }
 
-export async function GET(req: Request): Promise<Response> {
+interface TableStructure {
+  tableName: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any[]
+}
+
+export async function GET(_req: Request): Promise<Response> {
   try {
-    const tableInfo: TableStructure[] = [];
-    // Lista de nombres de tablas
-    const tableNames = Object.keys(models);
-    
-    for (const tableName of tableNames) {
-      console.log(`Obteniendo datos de la tabla: ${tableName}`);
-      // Ahora TypeScript sabe que tableName es una clave válida de models
-      const data = await models[tableName].findMany();
-      console.log(`Registros de ${tableName}:`, data);
-      tableInfo.push({
-        tableName,
-        data,
-      });
+    const tableInfo: TableStructure[] = []
+
+    for (const tableName of Object.keys(models)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = await models[tableName].findMany()
+      tableInfo.push({ tableName, data })
     }
-    
-    // Verificamos la respuesta antes de enviarla
-    console.log("Estructura final de las tablas:", tableInfo);
-    return new Response(JSON.stringify(tableInfo), { status: 200 });
-  } catch (error) {
-    console.error('Error al obtener los datos de las tablas:', error);
-    return new Response(JSON.stringify({ error: 'Error fetching database structure' }), { status: 500 });
+
+    return new Response(JSON.stringify(tableInfo), { status: 200 })
+  } catch (err) {
+    console.error(err)
+    return new Response(JSON.stringify({ error: 'Error fetching database structure' }), { status: 500 })
   }
 }
