@@ -5,6 +5,7 @@ import fs                            from 'fs/promises'
 import path                          from 'path'
 import slugify                       from 'slugify'
 import sharp                         from 'sharp'
+import { folderNames } from '@/lib/adminConstants'
 
 const prisma = new PrismaClient()
 
@@ -19,19 +20,6 @@ const models: Record<string, any> = {
   ProductoVersiones:    prisma.productoVersiones,
   ProductoEspecificaciones: prisma.productoEspecificaciones,
   Pedidos:              prisma.pedidos,
-}
-
-const folderNames: Record<string, string> = {
-  CfgMarcas: 'marcas',
-  CfgRubros: 'rubros',
-  CfgFormasPagos: 'formas-pagos',
-  CfgMonedas: 'monedas',
-  CfgSlider: 'slider',
-  Productos: 'productos',
-  ProductoFotos: 'producto-fotos',
-  ProductoVersiones: 'producto-versiones',
-  ProductoEspecificaciones: 'producto-especificaciones',
-  Pedidos: 'pedidos',
 }
 
 // Campos que Prisma espera como booleanos

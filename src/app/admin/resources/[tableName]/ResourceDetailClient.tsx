@@ -14,6 +14,7 @@
   } from 'react-icons/hi'
   import { ToastContainer, toast } from 'react-toastify'
   import 'react-toastify/dist/ReactToastify.css'
+  import { folderNames } from '@/lib/adminConstants'
   
   // ---------------------------------------------------------------------------
   // CONFIGURACIÓN
@@ -524,6 +525,23 @@
               </div>
             )
           }
+        }
+
+        if (col === 'foto' && typeof val === 'string' && val.trim() !== '') {
+          // Resuelve el sub‑folder según tabla
+          const key = folderNames[childRelation?.childTable ?? tableName]  // usa tu mismo mapping
+          const src = `/images/${key}/thumbs/${val}`  // miniatura
+          return (
+            <img
+              src={src}
+              alt=""
+              className="h-12 w-12 object-cover rounded shadow"
+              onError={(e) => {
+                // fallback: intenta con la original
+                (e.currentTarget as HTMLImageElement).src = `/images/${key}/${val}`
+              }}
+            />
+          )
         }
   
         if (val instanceof Date) {
