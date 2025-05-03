@@ -44,7 +44,6 @@ export async function GET(
     return NextResponse.json({ error: 'Carpeta no gestionada' }, { status: 404 })
   }
 
-  // 🔸 eslint-disable-next-line para evitar "Unexpected any"
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const model = (prisma as any)[
     tableName.charAt(0).toLowerCase() + tableName.slice(1)
@@ -56,10 +55,11 @@ export async function GET(
 
   const registro = await model.findFirst({
     where: { foto: fileName },
-    select: { id: true },
+    select: { id: true, foto: true },
   })
-  if (!registro) {
-    return NextResponse.json({ error: 'Imagen no registrada en BD' }, { status: 404 })
+  if (!registro || !registro.foto) {
+    // No hay imagen asociada: respondemos sin intentar leer fichero
+    return new NextResponse(null, { status: 204 })
   }
 
   const absPath = path.join(process.cwd(), 'public', 'images', relPath)
@@ -74,7 +74,8 @@ export async function GET(
       },
     })
   } catch (e) {
-    console.error('Fichero no encontrado:', absPath, e)
-    return NextResponse.json({ error: 'Fichero no encontrado' }, { status: 404 })
+    // Supresamos logs repetitivos para archivos faltantes
+    console.warn(`Imagen no encontrada en FS: ${absPath}`)
+    return new NextResponse(null, { status: 404 })
   }
 }

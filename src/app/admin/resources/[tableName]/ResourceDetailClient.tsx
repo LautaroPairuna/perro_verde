@@ -858,15 +858,18 @@
       )}
 
       {/* Modal Crear */}
-        {createOpen && (
+      {createOpen && (
         <Modal title="Crear registro" onClose={() => setCreateOpen(false)}>
           {(() => {
             const base = childRelation
               ? { id: nextId, [childRelation.foreignKey]: childRelation.parentId }
               : { id: nextId }
 
-            // Reutilizar DEFAULT_COLUMNS o fallback a visibleCols/base
-            const defaults = DEFAULT_COLUMNS[tableName] ?? []
+            // Determina el recurso: si hay childRelation, es la tabla hija; si no, la tabla padre
+            const resource = childRelation ? childRelation.childTable : tableName
+            // Toma las columnas por defecto de ese recurso
+            const defaults = DEFAULT_COLUMNS[resource] ?? []
+            // Usa defaults si existen, sino visibleCols, sino las keys de base
             const colsForForm = defaults.length > 0
               ? defaults
               : visibleCols.length > 0
@@ -893,8 +896,8 @@
               ? { ...editRow, [childRelation.foreignKey]: childRelation.parentId }
               : editRow
 
-            // Reutilizar DEFAULT_COLUMNS o fallback a visibleCols/base
-            const defaults = DEFAULT_COLUMNS[tableName] ?? []
+            const resource = childRelation ? childRelation.childTable : tableName
+            const defaults = DEFAULT_COLUMNS[resource] ?? []
             const colsForForm = defaults.length > 0
               ? defaults
               : visibleCols.length > 0
