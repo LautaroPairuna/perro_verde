@@ -308,22 +308,30 @@
     // -------------------------------------------------------------------------
     // CRUD handlers
     // -------------------------------------------------------------------------
-    const handleCreate = useCallback(
-      async (newData: any) => {
-        const hasFile = newData.foto instanceof File
-        const init: RequestInit = {
-          method: 'POST',
-          body: hasFile ? buildFormData(newData) : JSON.stringify(newData),
-          headers: hasFile ? undefined : { 'Content-Type': 'application/json' },
-        }
-        const res = await fetch(`/api/admin/resources/${tableName}`, init)
-        if (!res.ok) return toast.error('Error al crear')
+    const handleCreate = useCallback(async (newData: any) => {
+    const hasFile = newData.foto instanceof File
+    let init: RequestInit
+
+    if (hasFile) {
+      const fd = buildFormData(newData)
+      // —————— DEBUG: lista de claves y tipos en el FormData
+      for (const [key, value] of fd.entries()) {
+        console.log('[Client] FormData:', key, value)
+      }
+      init = { method: 'POST', body: fd }
+    } else {
+      init = {
+        method: 'POST',
+        body: JSON.stringify(newData),
+        headers: { 'Content-Type': 'application/json' },
+      }
+    }
+      const res = await fetch(`/api/admin/resources/${tableName}`, init)
+      if (!res.ok) return toast.error('Error al crear')
         toast.success('Registro creado')
         setCreateOpen(false)
         refreshParent()
-      },
-      [tableName, refreshParent],
-    )
+    }, [tableName, refreshParent])
   
     const handleUpdate = useCallback(
       async (id: any, updated: any) => {
@@ -1055,7 +1063,7 @@ const Form = memo(function Form({ initial, columns, fixedFk, onSubmit }: FormPro
               <input
                 type="file"
                 accept="image/*"
-                onChange={e => handleChange(col, e.target.files?.[0])}
+                onChange={e => handleChange('foto', e.target.files?.[0] ?? null)}
                 className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
               />
             </div>
