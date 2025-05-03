@@ -81,8 +81,8 @@ export default async function ProductDetailPage({
       height: 1200,
     },
     ...product.fotos.map(f => ({
-      src: `/images/productos/fotos/${f.foto}`,
-      thumb: `/images/productos/fotos/${f.foto}`,
+      src: `/images/producto-fotos/${f.foto}`,
+      thumb: `/images/producto-fotos/${f.foto}`,
       alt: product.producto,
       width: 1200,
       height: 800,
