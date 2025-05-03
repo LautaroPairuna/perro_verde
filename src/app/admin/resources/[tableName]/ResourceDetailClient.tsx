@@ -1073,19 +1073,24 @@ const Form = memo(function Form({ initial, columns, fixedFk, onSubmit }: FormPro
         if (col in fkConfig) {
           const cfg = fkConfig[col as keyof typeof fkConfig];
           const opciones = swrData[col] as Array<{ id: number; [key: string]: any }>;
+      
+          // isFixed sólo será true cuando fixedFk === col, y fixedFk solo se pasa en hijos
           const isFixed = fixedFk === col;
       
-          // En hijos, fixedFk = 'producto_id', aquí se bloqueará ese campo
+          // Si está fijo (hijo), mostramos el nombre; si no, un select normal
           const fixedLabel = isFixed
-            ? opciones.find(o => String(o.id) === form[col])?.[cfg.labelKey] ?? form[col]
+            ? opciones.find(o => String(o.id) === form[col])?.[cfg.labelKey] ?? ''
             : null;
       
           return (
             <div key={col} className="flex flex-col">
-              <label className="mb-1 text-gray-700 font-medium">{cfg.fieldLabel}</label>
+              <label className="mb-1 text-gray-700 font-medium">
+                {cfg.fieldLabel}
+              </label>
       
               {isFixed ? (
                 <>
+                  {/* En hijos: input hidden + campo deshabilitado */}
                   <input type="hidden" name={col} value={form[col]} />
                   <input
                     value={fixedLabel}
@@ -1094,6 +1099,7 @@ const Form = memo(function Form({ initial, columns, fixedFk, onSubmit }: FormPro
                   />
                 </>
               ) : (
+                /* En padre (o cualquier otro FK en tablas principales): select normal */
                 <select
                   value={form[col] ?? ''}
                   onChange={e => handleChange(col, e.target.value)}
