@@ -53,7 +53,7 @@ export async function GET(req: NextRequest, { params }: { params: { filePath: st
   if (!tableName) {
     return NextResponse.json({ error: 'Carpeta no gestionada' }, { status: 404 })
   }
-  let fileName = rest.pop()!
+  const fileName = rest.pop()!
   // Validar nombre de archivo
   if (!VALID_NAME_REGEX.test(fileName)) {
     return NextResponse.json({ error: 'Nombre de archivo inválido' }, { status: 400 })
@@ -139,6 +139,5 @@ export async function GET(req: NextRequest, { params }: { params: { filePath: st
   // Full content: read buffer
   const fullBuffer = await fsPromises.readFile(safePath)
   console.info('[disk-images] Serving full file:', safePath)
-  return new NextResponse(fullBuffer, { status: 200, headers })
- 
+  return new NextResponse(fullBuffer, { status: 200, headers }) 
 }
