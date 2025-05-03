@@ -34,7 +34,9 @@ const folderNames: Record<string, string> = {
   Pedidos: 'pedidos',
 }
 
-const FILE_FIELD = 'foto'
+const BOOLEAN_FIELDS = ['activo', 'destacado'] as const
+const FILE_FIELD     = 'foto'
+
 function isFileLike(v: unknown): v is Blob {
   return (
     typeof v === 'object' &&
@@ -42,20 +44,33 @@ function isFileLike(v: unknown): v is Blob {
     typeof (v as Blob).arrayBuffer === 'function'
   )
 }
+
+function normalizeBooleans(obj: Record<string, unknown>) {
+  for (const key of BOOLEAN_FIELDS) {
+    if (key in obj) {
+      const v = obj[key]
+      obj[key] = v === true ||
+                 v === 'true' ||
+                 v === '1'  ||
+                 v === 1
+    }
+  }
+}
+
 function makeTimestamp() {
   const d = new Date()
   const pad = (n: number) => String(n).padStart(2, '0')
-  return [
-    d.getFullYear(),
-    pad(d.getMonth()+1),
-    pad(d.getDate()),
-  ].join('') + '-' +
+  return (
+    d.getFullYear().toString() +
+    pad(d.getMonth()+1) +
+    pad(d.getDate()) +
+    '-' +
     pad(d.getHours()) +
     pad(d.getMinutes()) +
     pad(d.getSeconds())
+  )
 }
 
-// GET único
 export async function GET(
   _req: NextRequest,
   { params }: { params: { tableName: string; id: string } }
@@ -74,7 +89,6 @@ export async function GET(
   }
 }
 
-// PUT = actualización + posible nueva imagen
 export async function PUT(
   req: NextRequest,
   { params }: { params: { tableName: string; id: string } }
@@ -85,9 +99,10 @@ export async function PUT(
     return NextResponse.json({ error: `Recurso “${tableName}” no existe` }, { status: 404 })
   }
 
-  const key     = isNaN(+id) ? id : +id
+  const key      = isNaN(+id) ? id : +id
   const existing = await model.findUnique({ where: { id: key } })
-  const ct      = req.headers.get('content-type') || ''
+  const ct       = req.headers.get('content-type') || ''
+
   let data: Record<string, any> = {}
   let file: Blob | null = null
 
@@ -100,6 +115,7 @@ export async function PUT(
         data[k] = /^\d+$/.test(v) ? Number(v) : v
       }
     }
+    normalizeBooleans(data)
 
     if (file) {
       const baseDir = path.join(process.cwd(), 'public', 'images')
@@ -107,13 +123,12 @@ export async function PUT(
       const dir     = path.join(baseDir, keyDir)
       const thumbs  = path.join(dir, 'thumbs')
 
-      // borrar anterior
       if (existing?.[FILE_FIELD]) {
         await fs.rm(path.join(dir, existing[FILE_FIELD]), { force: true }).catch(()=>{})
         await fs.rm(path.join(thumbs, existing[FILE_FIELD]), { force: true }).catch(()=>{})
       }
 
-      await fs.mkdir(dir, { recursive: true })
+      await fs.mkdir(dir,    { recursive: true })
       await fs.mkdir(thumbs, { recursive: true })
 
       const hint = data.titulo ?? data.producto ?? tableName
@@ -121,26 +136,24 @@ export async function PUT(
       const name = `${slug}-${makeTimestamp()}.webp`
       const buf  = Buffer.from(await file.arrayBuffer())
 
-      // saved original
       const fullPath = path.join(dir, name)
       await sharp(buf).webp().toFile(fullPath)
       console.log('[upload] Updated original:', fullPath)
 
-      // thumbnail
       const thumbPath = path.join(thumbs, name)
       await sharp(buf).resize(200).webp().toFile(thumbPath)
       console.log('[upload] Updated thumbnail:', thumbPath)
 
-      data[FILE_FIELD] = name
+      data.foto = name
     }
   } else {
     data = await req.json()
-    // numéricos
     for (const k in data) {
       if (typeof data[k] === 'string' && /^\d+$/.test(data[k])) {
         data[k] = Number(data[k])
       }
     }
+    normalizeBooleans(data)
   }
 
   try {
@@ -152,7 +165,6 @@ export async function PUT(
   }
 }
 
-// DELETE = borrado + limpieza de imagen
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: { tableName: string; id: string } }
@@ -163,7 +175,7 @@ export async function DELETE(
     return NextResponse.json({ error: `Recurso “${tableName}” no existe` }, { status: 404 })
   }
 
-  const key = isNaN(+id) ? id : +id
+  const key      = isNaN(+id) ? id : +id
   const existing = await model.findUnique({ where: { id: key } })
 
   if (existing?.[FILE_FIELD]) {

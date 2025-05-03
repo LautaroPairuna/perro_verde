@@ -8,7 +8,6 @@ import sharp                         from 'sharp'
 
 const prisma = new PrismaClient()
 
-// Delegados de Prisma (any para no pelearse con signatures)
 const models: Record<string, any> = {
   CfgMarcas:            prisma.cfgMarcas,
   CfgRubros:            prisma.cfgRubros,
@@ -35,9 +34,10 @@ const folderNames: Record<string, string> = {
   Pedidos: 'pedidos',
 }
 
-const FILE_FIELD = 'foto'
+// Campos que Prisma espera como booleanos
+const BOOLEAN_FIELDS = ['activo', 'destacado'] as const
+const FILE_FIELD     = 'foto'
 
-// Detecta cualquier Blob (File en el cliente o Blob en el server)
 function isFileLike(v: unknown): v is Blob {
   return (
     typeof v === 'object' &&
@@ -46,21 +46,33 @@ function isFileLike(v: unknown): v is Blob {
   )
 }
 
-// Genera timestamp para el nombre de archivo
+// Convierte "1"/1/"true" etc. en true, y lo demás en false
+function normalizeBooleans(obj: Record<string, unknown>) {
+  for (const key of BOOLEAN_FIELDS) {
+    if (key in obj) {
+      const v = obj[key]
+      obj[key] = v === true ||
+                 v === 'true' ||
+                 v === '1' ||
+                 v === 1
+    }
+  }
+}
+
 function makeTimestamp() {
   const d = new Date()
   const pad = (n: number) => String(n).padStart(2, '0')
-  return [
-    d.getFullYear(),
-    pad(d.getMonth()+1),
-    pad(d.getDate()),
-  ].join('') + '-' +
+  return (
+    d.getFullYear().toString() +
+    pad(d.getMonth()+1) +
+    pad(d.getDate()) +
+    '-' +
     pad(d.getHours()) +
     pad(d.getMinutes()) +
     pad(d.getSeconds())
+  )
 }
 
-// GET: listado completo
 export async function GET(
   _req: NextRequest,
   { params }: { params: { tableName: string } }
@@ -78,7 +90,6 @@ export async function GET(
   }
 }
 
-// POST: creación + subida de imagen
 export async function POST(
   req: NextRequest,
   { params }: { params: { tableName: string } }
@@ -99,12 +110,11 @@ export async function POST(
       if (k === FILE_FIELD && isFileLike(v)) {
         file = v
       } else if (typeof v === 'string') {
-        // convierte cadenas numéricas a number
         data[k] = /^\d+$/.test(v) ? Number(v) : v
       }
     }
-    // No enviar nunca el ID (autoincremental)
     delete data.id
+    normalizeBooleans(data)
 
     if (file) {
       const baseDir = path.join(process.cwd(), 'public', 'images')
@@ -115,18 +125,15 @@ export async function POST(
       await fs.mkdir(dir,    { recursive: true })
       await fs.mkdir(thumbs, { recursive: true })
 
-      // nombre basado en un campo descriptivo
       const hint = data.titulo ?? data.producto ?? tableName
       const slug = slugify(String(hint), { lower: true, strict: true })
       const name = `${slug}-${makeTimestamp()}.webp`
       const buf  = Buffer.from(await file.arrayBuffer())
 
-      // guardamos original
       const fullPath  = path.join(dir, name)
       await sharp(buf).webp().toFile(fullPath)
       console.log('[upload] Saved original:', fullPath)
 
-      // guardamos thumbnail
       const thumbPath = path.join(thumbs, name)
       await sharp(buf).resize(200).webp().toFile(thumbPath)
       console.log('[upload] Saved thumbnail:', thumbPath)
@@ -135,14 +142,14 @@ export async function POST(
     }
   } else {
     data = await req.json()
-    // elimina id si vino en JSON
     delete data.id
-    // convierte cadenas numéricas
+    // convertir cadenas numéricas y luego booleanos
     for (const k in data) {
       if (typeof data[k] === 'string' && /^\d+$/.test(data[k])) {
         data[k] = Number(data[k])
       }
     }
+    normalizeBooleans(data)
   }
 
   try {
