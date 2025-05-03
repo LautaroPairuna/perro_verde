@@ -7,18 +7,28 @@ dotenv.config()
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+
+  // Si sigues usando <Image> con URLs absolutas, conserva tu remotePatterns.
   images: {
     remotePatterns: [
       {
         protocol: 'http',
         hostname: 'localhost',
-        port:     '3000',   
+        port:     '3000',
         pathname: '/images/**',
       },
     ],
   },
-  // Volvemos al comportamiento por defecto: sin proxy de /admin ni de /api
-  // Next.js servirá todo desde su propia carpeta public y sus rutas
+
+  // Redirige /images/* al handler dinámico en src/app/api/disk-images/[...filePath]/route.ts
+  async rewrites() {
+    return [
+      {
+        source: '/images/:path*',
+        destination: '/api/disk-images/:path*',
+      },
+    ]
+  },
 }
 
 export default nextConfig
