@@ -73,7 +73,7 @@ export async function GET(
         'Cache-Control': 'public, max-age=3600',
       },
     })
-  } catch (e) {
+  } catch {
     // Supresamos logs repetitivos para archivos faltantes
     console.warn(`Imagen no encontrada en FS: ${absPath}`)
     return new NextResponse(null, { status: 404 })
