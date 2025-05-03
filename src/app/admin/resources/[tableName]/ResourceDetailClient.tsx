@@ -528,19 +528,24 @@
         }
 
         if (col === 'foto' && typeof val === 'string' && val.trim() !== '') {
-          // Resuelve el sub‑folder según tabla
-          const key = folderNames[childRelation?.childTable ?? tableName]  // usa tu mismo mapping
-          const src = `/images/${key}/thumbs/${val}`  // miniatura
+          const key = folderNames[childRelation?.childTable ?? tableName]
+          const src = `/images/${key}/thumbs/${val}`
           return (
-            <img
-              src={src}
-              alt=""
-              className="h-12 w-12 object-cover rounded shadow"
-              onError={(e) => {
-                // fallback: intenta con la original
-                (e.currentTarget as HTMLImageElement).src = `/images/${key}/${val}`
-              }}
-            />
+            <div className="flex items-center space-x-2">
+              {/* Nombre de archivo */}
+              <span className="text-xs text-gray-600 truncate" style={{ maxWidth: 100 }}>
+                {val}
+              </span>
+              {/* Miniatura */}
+              <img
+                src={src}
+                alt={val}
+                className="h-12 w-12 object-cover rounded shadow flex-shrink-0"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = `/images/${key}/${val}`
+                }}
+              />
+            </div>
           )
         }
   
