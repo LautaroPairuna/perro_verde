@@ -1,6 +1,6 @@
 // src/app/api/disk-images/[...filePath]/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import fs from 'fs'
+
 import fsPromises from 'fs/promises'
 import path from 'path'
 import { lookup as mimeLookup } from 'mime-types'
@@ -28,11 +28,18 @@ const IMAGES_BASE = path.join(process.cwd(), 'public', 'images')
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 const VALID_NAME_REGEX = /^[a-zA-Z0-9_.\-]+$/
 
+interface GenericModel {
+  findFirst(args: { where: { foto: string }; select: object }): Promise<{ id: number; foto?: string } | null>
+}
+
 async function verifyRecord(tableName: string, fileName: string) {
-  const model = (prisma as any)[
-    tableName.charAt(0).toLowerCase() + tableName.slice(1)
-  ]
-  if (typeof model?.findFirst !== 'function') return false
+  // Derivar la clave de modelo dinámicamente
+  const key = tableName.charAt(0).toLowerCase() + tableName.slice(1)
+  // Obtenemos el modelo de Prisma (desactivamos TS strikt)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const model = (prisma as any)[key] as GenericModel | undefined
+  if (!model || typeof model.findFirst !== 'function') return false
+
   const record = await model.findFirst({ where: { foto: fileName }, select: { id: true, foto: true } })
   return !!record?.foto
 }
@@ -133,4 +140,5 @@ export async function GET(req: NextRequest, { params }: { params: { filePath: st
   const fullBuffer = await fsPromises.readFile(safePath)
   console.info('[disk-images] Serving full file:', safePath)
   return new NextResponse(fullBuffer, { status: 200, headers })
+ 
 }
