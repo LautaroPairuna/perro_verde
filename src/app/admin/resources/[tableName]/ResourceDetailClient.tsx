@@ -308,48 +308,77 @@
     // -------------------------------------------------------------------------
     // CRUD handlers
     // -------------------------------------------------------------------------
+    // dentro de ResourceDetailClient, reemplaza handleCreate:
     const handleCreate = useCallback(async (newData: any) => {
-    const hasFile = newData.foto instanceof File
-    let init: RequestInit
+      const resource = childRelation?.childTable ?? tableName
+      const endpoint = `/api/admin/resources/${resource}`
 
-    if (hasFile) {
-      const fd = buildFormData(newData)
-      // —————— DEBUG: lista de claves y tipos en el FormData
-      for (const [key, value] of fd.entries()) {
-        console.log('[Client] FormData:', key, value)
+      const hasFile = newData.foto instanceof File
+      const init: RequestInit = hasFile
+        ? { method: 'POST', body: buildFormData(newData) }
+        : {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newData),
+          }
+
+      const res = await fetch(endpoint, init)
+      const payload = await res.json()
+      if (!res.ok) {
+        return toast.error(payload.error || 'Error al crear')
       }
-      init = { method: 'POST', body: fd }
-    } else {
-      init = {
-        method: 'POST',
-        body: JSON.stringify(newData),
-        headers: { 'Content-Type': 'application/json' },
-      }
-    }
-      const res = await fetch(`/api/admin/resources/${tableName}`, init)
-      if (!res.ok) return toast.error('Error al crear')
-        toast.success('Registro creado')
-        setCreateOpen(false)
-        refreshParent()
-    }, [tableName, refreshParent])
+      toast.success('Registro creado')
+      setCreateOpen(false)
+      // refresca sólo la tabla hija o padre según toque
+      if (childRelation) mutate(`/api/admin/resources/${resource}`)
+      else          mutate(`/api/admin/resources/${tableName}`)
+    }, [tableName, childRelation])
+
   
     const handleUpdate = useCallback(
-      async (id: any, updated: any) => {
-        const hasFile = updated.foto instanceof File
-        const init: RequestInit = {
-          method: 'PUT',
-          body: hasFile ? buildFormData(updated) : JSON.stringify(updated),
-          headers: hasFile ? undefined : { 'Content-Type': 'application/json' },
+      async (id: number | string, updated: Record<string, any>) => {
+        // Determinamos el recurso (padre vs. hijo)
+        const resource = childRelation?.childTable ?? tableName
+        const url = `/api/admin/resources/${resource}/${id}`
+    
+        // Clonamos y limpiamos posibles campos no deseados
+        const dataToSend: Record<string, any> = { ...updated }
+        delete dataToSend.producto  // nunca enviamos el nombre
+    
+        // Preparamos el init según si hay archivos
+        let init: RequestInit
+        if (dataToSend.foto instanceof File) {
+          const fd = buildFormData(dataToSend)
+          init = { method: 'PUT', body: fd }
+        } else {
+          init = {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dataToSend),
+          }
         }
-        const res = await fetch(`/api/admin/resources/${tableName}/${id}`, init)
-        if (!res.ok) return toast.error('Error al actualizar')
-        toast.success(`Registro ${id} actualizado`)
+    
+        // Ejecutamos la petición
+        const res = await fetch(url, init)
+        const payload = await res.json()
+        if (!res.ok) {
+          toast.error(payload.error || `Error al actualizar ${resource}`)
+          return
+        }
+    
+        toast.success(`Registro ${id} actualizado en ${resource}`)
         setEditRow(null)
-        refreshParent()
-        refreshChild()
+    
+        // Refrescamos datos: primero el recurso afectado…
+        mutate(`/api/admin/resources/${resource}`)
+        // …y si es un hijo, también el padre
+        if (childRelation) {
+          mutate(`/api/admin/resources/${tableName}`)
+        }
       },
-      [tableName, refreshParent, refreshChild],
+      [tableName, childRelation]
     )
+    
   
     const handleDelete = useCallback(
       async (id: any) => {
