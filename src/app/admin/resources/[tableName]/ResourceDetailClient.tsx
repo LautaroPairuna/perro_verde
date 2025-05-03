@@ -532,10 +532,6 @@
           const src = `/images/${key}/thumbs/${val}`
           return (
             <div className="flex items-center space-x-2">
-              {/* Nombre de archivo */}
-              <span className="text-xs text-gray-600 truncate" style={{ maxWidth: 100 }}>
-                {val}
-              </span>
               {/* Miniatura */}
               <img
                 src={src}
@@ -545,6 +541,10 @@
                   (e.currentTarget as HTMLImageElement).src = `/images/${key}/${val}`
                 }}
               />
+              {/* Nombre de archivo */}
+              <span className="text-xs text-gray-600 truncate" style={{ maxWidth: 100 }}>
+                {val}
+              </span>
             </div>
           )
         }
