@@ -857,15 +857,21 @@
         </Modal>
       )}
 
-      {createOpen && (
+      {/* Modal Crear */}
+        {createOpen && (
         <Modal title="Crear registro" onClose={() => setCreateOpen(false)}>
           {(() => {
             const base = childRelation
               ? { id: nextId, [childRelation.foreignKey]: childRelation.parentId }
               : { id: nextId }
 
-            const colsForForm =
-              visibleCols.length > 0 ? visibleCols : Object.keys(base)
+            // Reutilizar DEFAULT_COLUMNS o fallback a visibleCols/base
+            const defaults = DEFAULT_COLUMNS[tableName] ?? []
+            const colsForForm = defaults.length > 0
+              ? defaults
+              : visibleCols.length > 0
+                ? visibleCols
+                : Object.keys(base)
 
             return (
               <Form
@@ -879,15 +885,21 @@
         </Modal>
       )}
 
-      {/* --- Editar registro (también usa fallback cuando no hay rows previas) --- */}
+      {/* Modal Editar */}
       {editRow && editRow !== 'bulk' && (
         <Modal title={`Editar registro ${editRow.id}`} onClose={() => setEditRow(null)}>
           {(() => {
             const base = childRelation
               ? { ...editRow, [childRelation.foreignKey]: childRelation.parentId }
               : editRow
-            const colsForForm =
-              visibleCols.length > 0 ? visibleCols : Object.keys(base)
+
+            // Reutilizar DEFAULT_COLUMNS o fallback a visibleCols/base
+            const defaults = DEFAULT_COLUMNS[tableName] ?? []
+            const colsForForm = defaults.length > 0
+              ? defaults
+              : visibleCols.length > 0
+                ? visibleCols
+                : Object.keys(base)
 
             return (
               <Form
