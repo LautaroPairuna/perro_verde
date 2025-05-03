@@ -1,4 +1,5 @@
 // src/app/api/admin/resources/[tableName]/route.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient }             from '@prisma/client'
 import { saveImage }                from '@/lib/fileStore'
