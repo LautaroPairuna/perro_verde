@@ -367,7 +367,11 @@
         setCreateOpen(false)
 
         // ⚡️ refrescamos la lista correcta
-        childRelation ? refreshChild() : refreshParent()
+        if (childRelation) {
+          refreshChild()
+        } else {
+          refreshParent()
+        }
       },
       [tableName, childRelation, refreshChild, refreshParent]
     )
