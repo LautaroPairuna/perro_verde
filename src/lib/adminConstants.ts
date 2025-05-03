@@ -1,3 +1,4 @@
+//src/lib/adminConstants.ts
 export const folderNames: Record<string, string> = {
     CfgMarcas: 'marcas',
     CfgRubros: 'rubros',
