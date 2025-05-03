@@ -1027,7 +1027,7 @@ const Form = memo(function Form({ initial, columns, fixedFk, onSubmit }: FormPro
       className="grid grid-cols-1 md:grid-cols-2 gap-4"
     >
       {columns.map(col => {
-        const cfg = fkConfig[col]
+        const cfg = fkConfig[col as keyof typeof fkConfig]
 
         // -------------------- SELECT FK
         if (cfg) {
@@ -1069,6 +1069,48 @@ const Form = memo(function Form({ initial, columns, fixedFk, onSubmit }: FormPro
             </div>
           )
         }
+
+        if (col in fkConfig) {
+          const cfg = fkConfig[col as keyof typeof fkConfig];
+          const opciones = swrData[col] as Array<{ id: number; [key: string]: any }>;
+          const isFixed = fixedFk === col;
+      
+          // En hijos, fixedFk = 'producto_id', aquí se bloqueará ese campo
+          const fixedLabel = isFixed
+            ? opciones.find(o => String(o.id) === form[col])?.[cfg.labelKey] ?? form[col]
+            : null;
+      
+          return (
+            <div key={col} className="flex flex-col">
+              <label className="mb-1 text-gray-700 font-medium">{cfg.fieldLabel}</label>
+      
+              {isFixed ? (
+                <>
+                  <input type="hidden" name={col} value={form[col]} />
+                  <input
+                    value={fixedLabel}
+                    disabled
+                    className="px-3 py-2 border rounded bg-gray-100 text-gray-600"
+                  />
+                </>
+              ) : (
+                <select
+                  value={form[col] ?? ''}
+                  onChange={e => handleChange(col, e.target.value)}
+                  className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                >
+                  <option value="">— Selecciona —</option>
+                  {opciones.map(opt => (
+                    <option key={opt.id} value={String(opt.id)}>
+                      {opt[cfg.labelKey]}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          );
+        }
+      
 
         // -------------------- input file
         if (col === 'foto') {
