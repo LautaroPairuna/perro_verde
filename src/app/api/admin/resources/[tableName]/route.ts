@@ -5,7 +5,7 @@ import { saveImage }                from '@/lib/fileStore'
 
 const prisma = new PrismaClient()
 
-// Modelos Prisma mapeados por nombre de recurso
+// Volvemos a usar `any` aquí para que coincida con los delegados de Prisma:
 const models: Record<string, any> = {
   CfgMarcas:           prisma.cfgMarcas,
   CfgRubros:           prisma.cfgRubros,
@@ -19,7 +19,6 @@ const models: Record<string, any> = {
   Pedidos:             prisma.pedidos,
 }
 
-// Carpeta en disco asociada a cada recurso
 const folderNames: Record<string, string> = {
   CfgMarcas:           'marcas',
   CfgRubros:           'rubros',
@@ -33,21 +32,16 @@ const folderNames: Record<string, string> = {
   Pedidos:             'pedidos',
 }
 
-/**
- * GET /api/admin/resources/[tableName]
- * Devuelve todos los registros de la tabla.
- */
 export async function GET(
   _req: NextRequest,
   { params }: { params: { tableName: string } }
 ) {
-  const { tableName } = params
-  const model = models[tableName]
-  if (!model) {
-    return NextResponse.json({ error: `Recurso “${tableName}” no existe` }, { status: 404 })
+  const m = models[params.tableName]
+  if (!m) {
+    return NextResponse.json({ error: `Recurso “${params.tableName}” no existe` }, { status: 404 })
   }
   try {
-    const all = await model.findMany()
+    const all = await m.findMany()
     return NextResponse.json(all)
   } catch (e) {
     console.error(e)
@@ -55,17 +49,13 @@ export async function GET(
   }
 }
 
-/**
- * POST /api/admin/resources/[tableName]
- * Crea un registro. Si viene formData con campo "foto", guarda la imagen en disco.
- */
 export async function POST(
   req: NextRequest,
   { params }: { params: { tableName: string } }
 ) {
   const { tableName } = params
-  const model = models[tableName]
-  if (!model) {
+  const m = models[tableName]
+  if (!m) {
     return NextResponse.json({ error: `Recurso “${tableName}” no existe` }, { status: 404 })
   }
 
@@ -74,15 +64,9 @@ export async function POST(
 
   if (ct.includes('multipart/form-data')) {
     const form = await req.formData()
-
-    // Extrae campos no-foto
-    for (const [key, val] of form.entries()) {
-      if (key !== 'foto') {
-        data[key] = typeof val === 'string' ? val : val
-      }
+    for (const [k, v] of form.entries()) {
+      if (k !== 'foto') data[k] = typeof v === 'string' ? v : v
     }
-
-    // Si viene archivo "foto"
     const file = form.get('foto')
     if (file instanceof Blob) {
       const folder = folderNames[tableName] || tableName.toLowerCase()
@@ -94,7 +78,7 @@ export async function POST(
   }
 
   try {
-    const created = await model.create({ data })
+    const created = await m.create({ data })
     return NextResponse.json(created, { status: 201 })
   } catch (e) {
     console.error(e)
