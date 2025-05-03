@@ -169,7 +169,7 @@
     const fd = new FormData()
     Object.entries(data).forEach(([k, v]) => {
       if (v instanceof File) fd.append(k, v)
-      else fd.append(k, String(v))
+      else fd.append(k, typeof v === 'object' ? JSON.stringify(v) : v)
     })
     return fd
   }
@@ -279,10 +279,10 @@
       () => mutate(`/api/admin/resources/${tableName}`),
       [tableName],
     )
-    const refreshChild = useCallback(
-      () => childRelation && mutate(`/api/admin/resources/${childRelation.childTable}`),
-      [childRelation],
-    )
+    const refreshChild = useCallback(() => {
+      if (!childRelation) return
+      mutate(`/api/admin/resources/${childRelation.childTable}`)
+    }, [childRelation])
   
     // -------------------------------- selección y modales
     const [selected, setSelected] = useState<any[]>([])
@@ -305,124 +305,172 @@
       setSelected(s => (s.length === allIds.length ? [] : allIds))
     }, [tableData])
   
-    // -------------------------------------------------------------------------
-    // CRUD handlers
-    // -------------------------------------------------------------------------
-    // dentro de ResourceDetailClient, reemplaza handleCreate:
-    const handleCreate = useCallback(async (newData: any) => {
-      const resource = childRelation?.childTable ?? tableName
-      const endpoint = `/api/admin/resources/${resource}`
+    // -----------------------------------------------------------------------------
+    // helpers locales
+    // -----------------------------------------------------------------------------
+    type JsonValue = string | number | boolean | null | Blob | File
 
-      const hasFile = newData.foto instanceof File
-      const init: RequestInit = hasFile
-        ? { method: 'POST', body: buildFormData(newData) }
-        : {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newData),
-          }
+    /** Convierte '1' → 1, 'true' → true, etc.  */
+    const normalizeValue = (v: JsonValue): JsonValue => {
+      if (typeof v !== 'string') return v
+      if (/^\d+$/.test(v))       return Number(v)
+      if (v === 'true')          return true
+      if (v === 'false')         return false
+      return v
+    }
 
-      const res = await fetch(endpoint, init)
-      const payload = await res.json()
-      if (!res.ok) {
-        return toast.error(payload.error || 'Error al crear')
-      }
-      toast.success('Registro creado')
-      setCreateOpen(false)
-      // refresca sólo la tabla hija o padre según toque
-      if (childRelation) mutate(`/api/admin/resources/${resource}`)
-      else          mutate(`/api/admin/resources/${tableName}`)
-    }, [tableName, childRelation])
+    /** Normaliza números/booleanos y quita claves vacías/undefined */
+    function sanitize<T extends Record<string, JsonValue>>(obj: T) {
+      const out: Record<string, JsonValue> = {}
+      Object.entries(obj).forEach(([k, v]) => {
+        if (v === undefined) return
+        out[k] = normalizeValue(v)
+      })
+      return out
+    }
 
-  
-    const handleUpdate = useCallback(
-      async (id: number | string, updated: Record<string, any>) => {
-        // Determinamos el recurso (padre vs. hijo)
-        const resource = childRelation?.childTable ?? tableName
-        const url = `/api/admin/resources/${resource}/${id}`
-    
-        // Clonamos y limpiamos posibles campos no deseados
-        const dataToSend: Record<string, any> = { ...updated }
-        delete dataToSend.producto  // nunca enviamos el nombre
-    
-        // Preparamos el init según si hay archivos
-        let init: RequestInit
-        if (dataToSend.foto instanceof File) {
-          const fd = buildFormData(dataToSend)
-          init = { method: 'PUT', body: fd }
-        } else {
-          init = {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(dataToSend),
-          }
-        }
-    
-        // Ejecutamos la petición
-        const res = await fetch(url, init)
+    /** Decide a qué recurso golpear según contexto */
+    const pickResource = (
+      tableName: string,
+      childRelation: { childTable: string } | null
+    ) => childRelation?.childTable ?? tableName
+
+    // -----------------------------------------------------------------------------
+    // CREATE
+    // -----------------------------------------------------------------------------
+    const handleCreate = useCallback(
+      async (rawData: Record<string, JsonValue>) => {
+        const resource  = pickResource(tableName, childRelation)
+        const endpoint  = `/api/admin/resources/${resource}`
+
+        /** 🚩  Nunca enviamos id: se autoincrementa en la DB  */
+        const { id: _discard, ...clean } = sanitize(rawData)
+        const hasFile = clean.foto instanceof File
+
+        const init: RequestInit = hasFile
+          ? { method: 'POST', body: buildFormData(clean) }
+          : {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(clean),
+            }
+
+        const res     = await fetch(endpoint, init)
         const payload = await res.json()
+
+        if (!res.ok) {
+          toast.error(payload.error || 'Error al crear')
+          return
+        }
+
+        toast.success('Registro creado')
+        setCreateOpen(false)
+
+        // ⚡️ refrescamos la lista correcta
+        childRelation ? refreshChild() : refreshParent()
+      },
+      [tableName, childRelation, refreshChild, refreshParent]
+    )
+
+    // -----------------------------------------------------------------------------
+    // UPDATE
+    // -----------------------------------------------------------------------------
+    const handleUpdate = useCallback(
+      async (id: number | string, raw: Record<string, JsonValue>) => {
+        const resource = pickResource(tableName, childRelation)
+        const url      = `/api/admin/resources/${resource}/${id}`
+
+        // Clonamos, limpiamos keys no deseadas y normalizamos tipos
+        const data        = sanitize({ ...raw })
+        delete data.producto                  // nunca enviamos nombre “virtual”
+        const hasNewFile  = data.foto instanceof File
+
+        const init: RequestInit = hasNewFile
+          ? { method: 'PUT', body: buildFormData(data) }
+          : {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data),
+            }
+
+        const res     = await fetch(url, init)
+        const payload = await res.json()
+
         if (!res.ok) {
           toast.error(payload.error || `Error al actualizar ${resource}`)
           return
         }
-    
-        toast.success(`Registro ${id} actualizado en ${resource}`)
+
+        toast.success(`Registro ${id} actualizado`)
         setEditRow(null)
-    
-        // Refrescamos datos: primero el recurso afectado…
+
+        // ⚡️ refrescamos ambas vistas si corresponde
         mutate(`/api/admin/resources/${resource}`)
-        // …y si es un hijo, también el padre
-        if (childRelation) {
-          mutate(`/api/admin/resources/${tableName}`)
-        }
+        childRelation ? refreshParent() : undefined
       },
-      [tableName, childRelation]
+      [tableName, childRelation, refreshParent]
     )
-    
-  
+
+    // -----------------------------------------------------------------------------
+    // DELETE
+    // -----------------------------------------------------------------------------
     const handleDelete = useCallback(
-      async (id: number | string, resource?: string) => {
-        // si no me das resource explícito, uso el contexto actual
-        const target = resource ?? (childRelation?.childTable ?? tableName);
-        const url = `/api/admin/resources/${target}/${id}`;
-        const res = await fetch(url, { method: 'DELETE' });
-        const payload = await res.json();
-    
+      async (id: number | string, forcedResource?: string) => {
+        /** Si el botón llega con resource explícito lo respetamos;
+         *  si no, usamos el contexto actual                     */
+        const target = forcedResource ?? pickResource(tableName, childRelation)
+        const url    = `/api/admin/resources/${target}/${id}`
+
+        const res     = await fetch(url, { method: 'DELETE' })
+        const payload = await res.json()
+
         if (!res.ok) {
-          toast.error(payload.error || `Error al eliminar en ${target}`);
-          return;
+          toast.error(payload.error || `Error al eliminar en ${target}`)
+          return
         }
-    
-        toast.success(`Registro ${id} eliminado de ${target}`);
-        setConfirmItems(null);
-        setSelected([]);
-    
-        // refresco tabla del recurso afectado
-        mutate(`/api/admin/resources/${target}`);
-        // si era un hijo, refresco también la del padre
-        if (resource) {
-          mutate(`/api/admin/resources/${tableName}`);
-        }
+
+        toast.success(`Registro ${id} eliminado`)
+        setConfirmItems(null)
+        setSelected([])
+
+        // ⚡️ refrescamos tabla afectada y, si era hija, también padre
+        mutate(`/api/admin/resources/${target}`)
+        if (forcedResource || childRelation) refreshParent()
       },
-      [tableName, childRelation]
-    );
+      [tableName, childRelation, refreshParent]
+    )
   
+    // -----------------------------------------------------------------------------
+    // BULK UPDATE
+    // -----------------------------------------------------------------------------
     const handleBulkUpdate = useCallback(
-      async (field: string, value: any) => {
-        const promises = selected.map(id =>
-          fetch(`/api/admin/resources/${tableName}/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ [field]: value }),
-          }),
+      async (field: string, rawValue: JsonValue) => {
+        if (!field || selected.length === 0) return
+
+        const resource   = pickResource(tableName, childRelation)
+        const value      = normalizeValue(rawValue)    // 1 → number, 'true' → boolean
+        const body       = JSON.stringify({ [field]: value })
+
+        // Lanzamos todas las peticiones en paralelo
+        await Promise.all(
+          selected.map(id =>
+            fetch(`/api/admin/resources/${resource}/${id}`, {
+              method : 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body,
+            }),
+          )
         )
-        await Promise.all(promises)
+
         toast.success(`Actualizados ${selected.length} registro(s)`)
         setEditRow(null)
         setSelected([])
-        refreshParent()
+
+        // ⚡️ refrescamos el recurso afectado y, si es hijo, también el padre
+        mutate(`/api/admin/resources/${resource}`)
+        childRelation ? refreshParent() : undefined
       },
-      [selected, tableName, refreshParent],
+      [selected, tableName, childRelation, refreshParent]
     )
   
     const selectedRows = useMemo(
@@ -520,8 +568,9 @@
       parentRow?.nombre || parentRow?.name || `${tableName} #${childRelation?.parentId}`
   
     const nextId = useMemo(() => {
-      if (!rows.length) return 1
-      const maxId = Math.max(...rows.map(r => (typeof r.id === 'number' ? r.id : 0)))
+      const source = childRelation ? rawChild : rows
+      if (!source.length) return 1
+      const maxId = Math.max(...source.map(r => typeof r.id === 'number' ? r.id : 0))
       return maxId + 1
     }, [rows])
 

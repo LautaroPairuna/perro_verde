@@ -111,8 +111,10 @@ export async function PUT(
     for (const [k, v] of form.entries()) {
       if (k === FILE_FIELD && isFileLike(v)) {
         file = v
+        continue
       } else if (typeof v === 'string') {
         data[k] = /^\d+$/.test(v) ? Number(v) : v
+        continue
       }
     }
     normalizeBooleans(data)
