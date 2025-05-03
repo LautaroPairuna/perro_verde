@@ -382,30 +382,30 @@
   
     const handleDelete = useCallback(
       async (id: number | string) => {
-        // 1. Determinar el recurso correcto (padre o hijo)
+        // 1️⃣ Determinar el recurso (padre o hijo)
         const resource = childRelation?.childTable ?? tableName;
         const url = `/api/admin/resources/${resource}/${id}`;
     
-        // 2. Ejecutar la petición DELETE
+        // 2️⃣ Ejecutar la petición DELETE
         const res = await fetch(url, { method: 'DELETE' });
         const result = await res.json();
     
-        // 3. Mostrar error si falla
+        // 3️⃣ Errores
         if (!res.ok) {
+          // Si el registro no existe en Productos, no invoques productos.delete
           toast.error(result.error || `Error al eliminar en ${resource}`);
           return;
         }
     
-        // 4. Feedback al usuario
+        // 4️⃣ Éxito
         toast.success(`Registro ${id} eliminado de ${resource}`);
-        // cerrar modales / limpiar selección si hace falta
         setConfirmItems(null);
         setSelected([]);
     
-        // 5. Refrescar listas
-        // — siempre refrescamos el recurso actual
+        // 5️⃣ Refrescar la lista del recurso afectado
         mutate(`/api/admin/resources/${resource}`);
-        // — si borramos un hijo, refrescamos también el padre
+    
+        // 6️⃣ Si borraste un hijo, también refresca la del padre
         if (childRelation) {
           mutate(`/api/admin/resources/${tableName}`);
         }
