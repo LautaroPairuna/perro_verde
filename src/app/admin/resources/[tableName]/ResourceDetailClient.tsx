@@ -381,15 +381,37 @@
     
   
     const handleDelete = useCallback(
-      async (id: any) => {
-        const res = await fetch(`/api/admin/resources/${tableName}/${id}`, { method: 'DELETE' })
-        if (!res.ok) return toast.error('Error al eliminar')
-        toast.success(`Registro ${id} eliminado`)
-        refreshParent()
-        refreshChild()
+      async (id: number | string) => {
+        // 1. Determinar el recurso correcto (padre o hijo)
+        const resource = childRelation?.childTable ?? tableName;
+        const url = `/api/admin/resources/${resource}/${id}`;
+    
+        // 2. Ejecutar la petición DELETE
+        const res = await fetch(url, { method: 'DELETE' });
+        const result = await res.json();
+    
+        // 3. Mostrar error si falla
+        if (!res.ok) {
+          toast.error(result.error || `Error al eliminar en ${resource}`);
+          return;
+        }
+    
+        // 4. Feedback al usuario
+        toast.success(`Registro ${id} eliminado de ${resource}`);
+        // cerrar modales / limpiar selección si hace falta
+        setConfirmItems(null);
+        setSelected([]);
+    
+        // 5. Refrescar listas
+        // — siempre refrescamos el recurso actual
+        mutate(`/api/admin/resources/${resource}`);
+        // — si borramos un hijo, refrescamos también el padre
+        if (childRelation) {
+          mutate(`/api/admin/resources/${tableName}`);
+        }
       },
-      [tableName, refreshParent, refreshChild],
-    )
+      [tableName, childRelation]
+    );
   
     const handleBulkUpdate = useCallback(
       async (field: string, value: any) => {
