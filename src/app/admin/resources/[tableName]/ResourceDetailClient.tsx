@@ -381,32 +381,26 @@
     
   
     const handleDelete = useCallback(
-      async (id: number | string) => {
-        // 1️⃣ Determinar el recurso (padre o hijo)
-        const resource = childRelation?.childTable ?? tableName;
-        const url = `/api/admin/resources/${resource}/${id}`;
-    
-        // 2️⃣ Ejecutar la petición DELETE
+      async (id: number | string, resource?: string) => {
+        // si no me das resource explícito, uso el contexto actual
+        const target = resource ?? (childRelation?.childTable ?? tableName);
+        const url = `/api/admin/resources/${target}/${id}`;
         const res = await fetch(url, { method: 'DELETE' });
-        const result = await res.json();
+        const payload = await res.json();
     
-        // 3️⃣ Errores
         if (!res.ok) {
-          // Si el registro no existe en Productos, no invoques productos.delete
-          toast.error(result.error || `Error al eliminar en ${resource}`);
+          toast.error(payload.error || `Error al eliminar en ${target}`);
           return;
         }
     
-        // 4️⃣ Éxito
-        toast.success(`Registro ${id} eliminado de ${resource}`);
+        toast.success(`Registro ${id} eliminado de ${target}`);
         setConfirmItems(null);
         setSelected([]);
     
-        // 5️⃣ Refrescar la lista del recurso afectado
-        mutate(`/api/admin/resources/${resource}`);
-    
-        // 6️⃣ Si borraste un hijo, también refresca la del padre
-        if (childRelation) {
+        // refresco tabla del recurso afectado
+        mutate(`/api/admin/resources/${target}`);
+        // si era un hijo, refresco también la del padre
+        if (resource) {
           mutate(`/api/admin/resources/${tableName}`);
         }
       },
@@ -979,9 +973,17 @@
           items={confirmItems}
           onCancel={() => setConfirmItems(null)}
           onConfirm={() => {
-            confirmItems.forEach(it => handleDelete(it.id))
-            setConfirmItems(null)
-            setSelected([])
+            // para cada item, le indico explícitamente el childTable si existe
+            confirmItems.forEach(it =>
+              handleDelete(
+                it.id,
+                childRelation
+                  ? childRelation.childTable
+                  : tableName
+              )
+            );
+            setConfirmItems(null);
+            setSelected([]);
           }}
         />
       )}
