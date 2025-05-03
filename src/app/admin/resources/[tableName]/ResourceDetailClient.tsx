@@ -184,6 +184,30 @@
       return { childTable, data }
     })
   }
+
+  // -----------------------------------------------------------------------------
+  // helpers locales
+  // -----------------------------------------------------------------------------
+  type JsonValue = string | number | boolean | null | Blob | File
+
+  /** Convierte '1' → 1, 'true' → true, etc.  */
+  const normalizeValue = (v: JsonValue): JsonValue => {
+    if (typeof v !== 'string') return v
+    if (/^\d+$/.test(v))       return Number(v)
+    if (v === 'true')          return true
+    if (v === 'false')         return false
+    return v
+  }
+
+  /** Normaliza números/booleanos y quita claves vacías/undefined */
+  function sanitize<T extends Record<string, JsonValue>>(obj: T) {
+    const out: Record<string, JsonValue> = {}
+    Object.entries(obj).forEach(([k, v]) => {
+      if (v === undefined) return
+      out[k] = normalizeValue(v)
+    })
+    return out
+  }
   
   // ---------------------------------------------------------------------------
   // Componente principal
@@ -304,30 +328,6 @@
       const allIds = tableData.map(r => r.id)
       setSelected(s => (s.length === allIds.length ? [] : allIds))
     }, [tableData])
-  
-    // -----------------------------------------------------------------------------
-    // helpers locales
-    // -----------------------------------------------------------------------------
-    type JsonValue = string | number | boolean | null | Blob | File
-
-    /** Convierte '1' → 1, 'true' → true, etc.  */
-    const normalizeValue = (v: JsonValue): JsonValue => {
-      if (typeof v !== 'string') return v
-      if (/^\d+$/.test(v))       return Number(v)
-      if (v === 'true')          return true
-      if (v === 'false')         return false
-      return v
-    }
-
-    /** Normaliza números/booleanos y quita claves vacías/undefined */
-    function sanitize<T extends Record<string, JsonValue>>(obj: T) {
-      const out: Record<string, JsonValue> = {}
-      Object.entries(obj).forEach(([k, v]) => {
-        if (v === undefined) return
-        out[k] = normalizeValue(v)
-      })
-      return out
-    }
 
     /** Decide a qué recurso golpear según contexto */
     const pickResource = (
@@ -369,7 +369,7 @@
         // ⚡️ refrescamos la lista correcta
         childRelation ? refreshChild() : refreshParent()
       },
-      [tableName, childRelation, refreshChild, refreshParent, sanitize]
+      [tableName, childRelation, refreshChild, refreshParent]
     )
 
     // -----------------------------------------------------------------------------
@@ -410,7 +410,7 @@
           refreshParent()
         }
       },
-      [tableName, childRelation, refreshParent, sanitize]
+      [tableName, childRelation, refreshParent]
     )
 
     // -----------------------------------------------------------------------------
@@ -439,7 +439,7 @@
         mutate(`/api/admin/resources/${target}`)
         if (forcedResource || childRelation) refreshParent()
       },
-      [tableName, childRelation, refreshParent, sanitize]
+      [tableName, childRelation, refreshParent, normalizeValue]
     )
   
     // -----------------------------------------------------------------------------
@@ -473,7 +473,7 @@
           refreshParent()
         }
       },
-      [selected, tableName, childRelation, refreshParent, sanitize]
+      [selected, tableName, childRelation, refreshParent, normalizeValue]
     )
   
     const selectedRows = useMemo(
