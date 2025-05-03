@@ -369,7 +369,7 @@
         // ⚡️ refrescamos la lista correcta
         childRelation ? refreshChild() : refreshParent()
       },
-      [tableName, childRelation, refreshChild, refreshParent]
+      [tableName, childRelation, refreshChild, refreshParent, sanitize]
     )
 
     // -----------------------------------------------------------------------------
@@ -406,9 +406,11 @@
 
         // ⚡️ refrescamos ambas vistas si corresponde
         mutate(`/api/admin/resources/${resource}`)
-        childRelation ? refreshParent() : undefined
+        if (childRelation) {
+          refreshParent()
+        }
       },
-      [tableName, childRelation, refreshParent]
+      [tableName, childRelation, refreshParent, sanitize]
     )
 
     // -----------------------------------------------------------------------------
@@ -437,7 +439,7 @@
         mutate(`/api/admin/resources/${target}`)
         if (forcedResource || childRelation) refreshParent()
       },
-      [tableName, childRelation, refreshParent]
+      [tableName, childRelation, refreshParent, sanitize]
     )
   
     // -----------------------------------------------------------------------------
@@ -467,10 +469,11 @@
         setSelected([])
 
         // ⚡️ refrescamos el recurso afectado y, si es hijo, también el padre
-        mutate(`/api/admin/resources/${resource}`)
-        childRelation ? refreshParent() : undefined
+        if (childRelation) {
+          refreshParent()
+        }
       },
-      [selected, tableName, childRelation, refreshParent]
+      [selected, tableName, childRelation, refreshParent, sanitize]
     )
   
     const selectedRows = useMemo(
