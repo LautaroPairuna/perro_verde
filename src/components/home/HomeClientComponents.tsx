@@ -4,7 +4,7 @@
 import React from 'react';
 import dynamic from 'next/dynamic';
 
-// Tipo para productos destacados
+// Tipos existentes
 export type FeaturedProduct = {
   id: number;
   producto: string;
@@ -15,15 +15,20 @@ export type FeaturedProduct = {
   marca: { id: number; marca: string };
 };
 
-// Tipo para productos más vistos (añade visitas)
 export type ViewedProduct = FeaturedProduct & {
   visitas: number;
 };
 
-// Tipo para marcas
 export interface Brand {
   id: number;
   marca: string;
+  foto: string | null;
+}
+
+// Nuevo tipo para rubros
+export interface Rubro {
+  id: number;
+  rubro: string;
   foto: string | null;
 }
 
@@ -40,16 +45,22 @@ const BrandMarquee = dynamic(
   () => import('@/components/home/BrandMarquee'),
   { ssr: false }
 );
+const RubrosGrid = dynamic(
+  () => import('@/components/home/RubrosGrid'),
+  { ssr: false }
+);
 const MostViewedProducts = dynamic(
   () => import('@/components/home/MostViewedProducts'),
   { ssr: false }
 );
 
+// Props ampliadas para recibir rubros
 interface Props {
   promotionImages: string[];
   featuredProducts: FeaturedProduct[];
   brands: Brand[];
   mostViewed: ViewedProduct[];
+  rubros: Rubro[];
 }
 
 export default function HomeClientComponents({
@@ -57,6 +68,7 @@ export default function HomeClientComponents({
   featuredProducts,
   brands,
   mostViewed,
+  rubros,
 }: Props) {
   return (
     <>
@@ -64,6 +76,7 @@ export default function HomeClientComponents({
       <FeaturedProducts products={featuredProducts} />
       <BrandMarquee brands={brands} />
       <MostViewedProducts products={mostViewed} />
+      <RubrosGrid rubros={rubros} />
     </>
   );
 }

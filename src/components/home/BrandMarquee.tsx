@@ -15,9 +15,24 @@ export default function BrandMarquee({ brands }: Props) {
   return (
     <section className="bg-white py-8 overflow-hidden group">
       <div className="max-w-7xl mx-auto px-4">
-        <h2 className="text-4xl font-extrabold text-center text-gray-800 mb-6">
-          Nuestras marcas
-        </h2>
+        <div className="pt-2 pb-6">
+          <h2 className="text-4xl font-extrabold text-center text-green-900">
+              Nuestras Marcas
+          </h2>
+          <div
+              className="
+              mt-2
+              h-1
+              w-40
+              mx-auto
+              rounded-full
+              bg-gradient-to-r
+              from-green-700
+              via-green-500
+              to-green-700
+              "
+          />
+        </div>
         {/* Compensa el padding lateral para que el marquee empiece en el borde */}
         <div className="relative whitespace-nowrap text-[0] -mx-4">
           <div className="inline-block animate-marquee">

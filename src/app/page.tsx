@@ -56,6 +56,12 @@ export default async function HomePage() {
     precio: parseFloat(p.precio.toString()),
   }))
 
+  const rubros = await prisma.cfgRubros.findMany({
+    where: { activo: true },
+    select: { id: true, rubro: true, foto: true },
+    orderBy: { rubro: 'asc' },
+  });
+
   return (
     <>
       <Head>
@@ -67,6 +73,7 @@ export default async function HomePage() {
         featuredProducts={featuredProducts}
         brands={brands}
         mostViewed={mostViewed}
+        rubros={rubros}
       />
     </>
   )
