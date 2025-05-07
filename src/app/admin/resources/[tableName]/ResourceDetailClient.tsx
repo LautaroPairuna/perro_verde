@@ -338,10 +338,15 @@
       () => mutate(`/api/admin/resources/${tableName}`),
       [tableName],
     )
-    const refreshChild = useCallback(() => {
-      if (!childRelation) return
-      mutate(`/api/admin/resources/${childRelation.childTable}`)
-    }, [childRelation])
+    const refreshChild = useCallback(
+      async () => {
+        if (!childRelation) return
+        const key = `/api/admin/resources/${childRelation.childTable}`
+        // fuerza revalidación ignorando el dedupeInterval
+        await mutate(key, undefined, { revalidate: true })
+      },
+      [childRelation],
+    )
   
     // -------------------------------- selección y modales
     const [selected, setSelected] = useState<any[]>([])
