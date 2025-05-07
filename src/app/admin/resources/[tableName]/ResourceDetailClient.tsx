@@ -244,8 +244,11 @@
       return rawChild.filter(r => r[childRelation.foreignKey] === childRelation.parentId)
     }, [rawChild, childRelation])
   
-    // -------------------------------- tabla activa
-    const tableData = childRelation ? childData : rows
+     // -------------------------------- tabla activa
+   const tableData = childRelation ? childData : rows
+
+   /* ---------- detectamos el recurso actual (tabla padre o tabla hija) ---------- */
+    const resource = childRelation ? childRelation.childTable : tableName
   
     /* ---------- columnas base detectadas ---------- */
     const rawColumns = useMemo<string[]>(
@@ -253,26 +256,26 @@
       [tableData],
     )
 
-    /* ---------- columnas visibles ---------- */
-    const visibleCols = useMemo<string[]>(() => {
-      const hidden = HIDDEN_COLUMNS[tableName] ?? []
-
+    /* ---------- columnas visibles (filtradas y con defaults si está vacía) ---------- */
+  const visibleCols = useMemo<string[]>(() => {
+      const hidden = HIDDEN_COLUMNS[resource] ?? []
+  
       if (rawColumns.length > 0) {
         // con filas: inferimos de los datos
         return rawColumns.filter(c => !hidden.includes(c))
       }
-
-      // tabla vacía: usamos DEFAULT_COLUMNS
-      const base = DEFAULT_COLUMNS[tableName] ?? ['id']
+  
+      // tabla vacía: usamos DEFAULT_COLUMNS del recurso correcto
+      const base = DEFAULT_COLUMNS[resource] ?? ['id']
       const cols = base.filter(c => !hidden.includes(c))
-
-      // Si es una vista hija vacía asegúrate de incluir la FK
+  
+      // Asegurarnos de incluir la FK en vistas hijas vacías
       if (childRelation && !cols.includes(childRelation.foreignKey)) {
         return ['id', childRelation.foreignKey, ...cols.filter(c => c !== 'id')]
       }
-
+  
       return cols
-    }, [rawColumns, tableName, childRelation])
+    }, [rawColumns, resource, childRelation])
 
     /* ---------- orden especial para Productos ---------- */
     const columns = useMemo<string[]>(() => {
