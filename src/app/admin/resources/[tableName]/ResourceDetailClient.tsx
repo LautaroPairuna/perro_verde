@@ -869,10 +869,13 @@
                       const relRows = relObj ? relObj.data : []
                       if (!relRows.length) return <td key={ct} />
 
-                      const fk = Object.keys(relRows[0]).find(k =>
-                        k.toLowerCase().endsWith('id') &&
-                        k.toLowerCase().includes(tableName.toLowerCase().replace(/s$/, ''))
-                      )
+                      const fk = relRows.length
+                        ? Object.keys(relRows[0]).find(
+                            k =>
+                              k.toLowerCase().endsWith('id') &&
+                              k.toLowerCase().includes(tableName.toLowerCase().replace(/s$/, '')),
+                          )
+                        : guessFK(ct, tableName)
                       const count = fk ? relRows.filter(r => r[fk] === row.id).length : 0
 
                       return (
