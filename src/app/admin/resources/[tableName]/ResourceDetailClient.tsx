@@ -209,6 +209,25 @@
     })
     return out
   }
+
+  const guessFK = (child: string, parent: string): string => {
+    // 1️⃣  si ya la tienes mapeada, úsala
+    const hard: Record<string, string> = {
+      ProductoFotos: 'producto_id',
+      ProductoVersiones: 'producto_id',
+      ProductoEspecificaciones: 'producto_id',
+    }
+    if (hard[child]) return hard[child]
+  
+    // 2️⃣  si no, intenta deducirla con DEFAULT_COLUMNS
+    const cols = DEFAULT_COLUMNS[child] ?? []
+    const needle = parent.toLowerCase().replace(/s$/, '')
+    return (
+      cols.find(
+        c => c.toLowerCase().endsWith('id') && c.toLowerCase().includes(needle),
+      ) ?? ''
+    )
+  }
   
   // ---------------------------------------------------------------------------
   // Componente principal
@@ -818,10 +837,13 @@
                           const relObj = relationDataArray.find(r => r.childTable === ct)
                           const relRows = relObj ? relObj.data : []
                           if (!relRows.length) return <td key={`c-${ct}`} />
-                          const fk = Object.keys(relRows[0]).find(k =>
-                            k.toLowerCase().endsWith('id') &&
-                            k.toLowerCase().includes(tableName.toLowerCase().replace(/s$/, ''))
-                          )
+                          const fk = relRows.length
+                            ? Object.keys(relRows[0]).find(
+                                k =>
+                                  k.toLowerCase().endsWith('id') &&
+                                  k.toLowerCase().includes(tableName.toLowerCase().replace(/s$/, '')),
+                              )
+                            : guessFK(ct, tableName)
                           const count = fk ? relRows.filter(r => r[fk] === row.id).length : 0
                           return (
                             <td key={`c-${ct}`} className="px-4 py-2 whitespace-nowrap text-sm text-gray-800 border-b border-indigo-100">
