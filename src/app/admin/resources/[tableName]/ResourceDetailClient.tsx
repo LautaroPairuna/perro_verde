@@ -260,9 +260,15 @@
   
     const childData = useMemo(() => {
       if (!childRelation) return []
-      // ⚠️ aseguramos el tipo number para la comparación estricta
-      const parent = Number(childRelation.parentId)
-      return rawChild.filter(r => r[childRelation.foreignKey] === parent)
+    
+      const { foreignKey, parentId } = childRelation
+    
+      return rawChild.filter(r =>
+        // 1️⃣  Comprueba que la FK exista en la fila
+        foreignKey in r &&
+        // 2️⃣  Compara siempre como cadena (evita number vs string)
+        String(r[foreignKey]) === String(parentId)
+      )
     }, [rawChild, childRelation])
   
      // -------------------------------- tabla activa
