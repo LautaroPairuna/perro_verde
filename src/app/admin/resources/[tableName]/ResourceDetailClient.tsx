@@ -270,6 +270,10 @@
         String(r[foreignKey]) === String(parentId)
       )
     }, [rawChild, childRelation])
+
+    useEffect(() => {
+      setPage(1)
+    }, [childRelation])
   
      // -------------------------------- tabla activa
    const tableData = childRelation ? childData : rows
