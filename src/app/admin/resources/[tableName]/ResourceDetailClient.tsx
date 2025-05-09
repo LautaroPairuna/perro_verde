@@ -15,6 +15,7 @@
   import { ToastContainer, toast } from 'react-toastify'
   import 'react-toastify/dist/ReactToastify.css'
   import { folderNames } from '@/lib/adminConstants'
+  import Image from 'next/image'
   
   // ---------------------------------------------------------------------------
   // CONFIGURACIÓN
@@ -161,6 +162,56 @@
       setPageSize,
       pageData,
     }
+  }
+
+  function FotoCell({
+    tableName,
+    childRelation,
+    fileName,
+  }: {
+    tableName: string;
+    childRelation?: { childTable: string } | null;
+    fileName: string;
+  }) {
+    const key = folderNames[ childRelation?.childTable ?? tableName ];
+    const thumbSrc = `/images/${key}/thumbs/${fileName}`;
+    const fullSrc  = `/images/${key}/${fileName}`;
+
+    const [src, setSrc] = useState(thumbSrc);
+    const [errored, setErrored] = useState(false);
+
+    const handleError = useCallback(() => {
+      if (src === thumbSrc) {
+        setSrc(fullSrc);           // primer fallback: imagen completa
+      } else {
+        setErrored(true);           // segundo fallo: ocultar
+      }
+    }, [src, thumbSrc, fullSrc]);
+
+    if (errored) {
+      // Si ambas rutas fallaron, solo mostramos el nombre
+      return (
+        <span className="text-xs text-gray-600 truncate" style={{ maxWidth: 100 }}>
+          {fileName}
+        </span>
+      );
+    }
+
+    return (
+      <div className="flex items-center space-x-2">
+        <Image
+          src={src}
+          alt={fileName}
+          width={64}
+          height={64}
+          className="object-cover rounded shadow flex-shrink-0"
+          onError={handleError}
+        />
+        <span className="text-xs text-gray-600 truncate" style={{ maxWidth: 100 }}>
+          {fileName}
+        </span>
+      </div>
+    );
   }
   
   // ---------------------------------------------------------------------------
@@ -567,25 +618,13 @@
         }
 
         if (col === 'foto' && typeof val === 'string' && val.trim() !== '') {
-          const key = folderNames[childRelation?.childTable ?? tableName]
-          const src = `/images/${key}/thumbs/${val}`
           return (
-            <div className="flex items-center space-x-2">
-              {/* Miniatura */}
-              <img
-                src={src}
-                alt={val}
-                className="h-12 w-12 object-cover rounded shadow flex-shrink-0"
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).src = `/images/${key}/${val}`
-                }}
-              />
-              {/* Nombre de archivo */}
-              <span className="text-xs text-gray-600 truncate" style={{ maxWidth: 100 }}>
-                {val}
-              </span>
-            </div>
-          )
+            <FotoCell
+              tableName={tableName}
+              childRelation={childRelation}
+              fileName={val}
+            />
+          );
         }
   
         if (val instanceof Date) {

@@ -1,7 +1,12 @@
 // src/app/api/auth/[...nextauth]/route.ts
+import NextAuth, { type AuthOptions } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
+import bcrypt from "bcrypt";
 
-import NextAuth, { type AuthOptions } from "next-auth"
-import CredentialsProvider from "next-auth/providers/credentials"
+const ADMIN_EMAIL = "admin@perroverde.com";
+// Hardcode temporal del hash que sabemos es correcto
+// Contraseña sin hashear: F3rn@nd0_p3rro_v3rde
+const ADMIN_PASSWORD_HASH = "$2b$10$azuGYbIH.l1RzY995XjezubvA1X.B3Fy3NzEYqptgguO1Bs5f7yZG";
 
 export const authOptions: AuthOptions = {
   session: { strategy: "jwt" },
@@ -14,32 +19,36 @@ export const authOptions: AuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials.password) {
-          throw new Error("Faltan credenciales")
+          throw new Error("Faltan credenciales");
         }
 
-        // 1) Verificamos que el email coincida
-        if (credentials.email !== process.env.ADMIN_EMAIL) {
-          throw new Error("Email incorrecto")
+        if (credentials.email !== ADMIN_EMAIL) {
+          throw new Error("Email incorrecto");
         }
 
-        // 2) Comparación directa de la contraseña
-        const plainPassword = "F3rn@nd0_p3rro_v3rde" // Contraseña en texto claro
-
-        // 4) Comparamos la contraseña en texto claro con la contraseña de la variable
-        if (credentials.password !== plainPassword) {
-          throw new Error("Contraseña incorrecta")
+        // Comparamos directamente contra el hash hardcodeado
+        const isValid = await bcrypt.compare(credentials.password, ADMIN_PASSWORD_HASH);
+        if (!isValid) {
+          throw new Error("Contraseña incorrecta");
         }
 
-        // 5) Devolvemos el usuario si la contraseña es correcta
-        return { id: "1", name: "Admin", email: credentials.email }
+        return { id: "1", name: "Admin", email: credentials.email };
       },
     }),
   ],
-  pages: {
-    signIn: "/admin/auth",  // Redirigir a tu página de login
+  pages: { signIn: "/admin/auth" },
+  secret: "temporal-dev-secret", // Puedes dejar un secreto fijo en dev
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) token.email = user.email;
+      return token;
+    },
+    async session({ session, token }) {
+      if (token.email) session.user!.email = token.email as string;
+      return session;
+    },
   },
-  secret: process.env.NEXTAUTH_SECRET,
-}
+};
 
-const handler = NextAuth(authOptions)
-export { handler as GET, handler as POST }
+const handler = NextAuth(authOptions);
+export { handler as GET, handler as POST };
