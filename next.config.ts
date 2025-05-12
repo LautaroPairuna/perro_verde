@@ -27,21 +27,32 @@ const nextConfig: NextConfig = {
     ]
   },
 
-  // async redirects() {
-  //   return [
-  //     {
-  //       source: '/:path*',
-  //       has: [
-  //         {
-  //           type: 'host',
-  //           value: '^perroverdepet\\.shop$', // redirige sin www → con www
-  //         },
-  //       ],
-  //       destination: 'https://www.perroverdepet.shop/:path*',
-  //       permanent: true,
-  //     },
-  //   ]
-  // },
+  async redirects() {
+    return [
+      {
+        source: '/:path*',
+        has: [
+          {
+            type: 'host',
+            value: '^perroverdepet\\.shop$', // redirige sin www → con www
+          },
+        ],
+        destination: 'https://www.perroverdepet.shop/:path*',
+        permanent: true,
+      },
+      {
+        source: '/:path*',
+        has: [
+          {
+            type: 'host',
+            value: '^www\\.perroverdepets\\.shop$',
+          },
+        ],
+        destination: 'https://www.perroverdepet.shop/:path*',
+        permanent: true,
+      }
+    ]
+  },
 }
 
 export default nextConfig
