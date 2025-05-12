@@ -3,40 +3,26 @@ import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs/promises'
 import path from 'path'
 import { lookup as mimeLookup } from 'mime-types'
+import { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 
 // Base de imágenes
 const IMAGES_PATH = path.join(process.cwd(), 'public', 'images')
 
-// Mapeo carpeta → tabla Prisma
+// Carpeta → nombre de tabla en BD
 const folderNames = {
-  CfgMarcas:               'marcas',
-  CfgRubros:               'rubros',
-  CfgFormasPagos:          'formas-pagos',
-  CfgMonedas:              'monedas',
-  CfgSlider:               'slider',
+  CfgMarcas:               'cfg_marcas',
+  CfgRubros:               'cfg_rubros',
+  CfgFormasPagos:          'cfg_formas_pagos',
+  CfgMonedas:              'cfg_monedas',
+  CfgSlider:               'cfg_slider',
   Productos:               'productos',
-  ProductoFotos:           'producto-fotos',
-  ProductoVersiones:       'producto-versiones',
-  ProductoEspecificaciones:'producto-especificaciones',
+  ProductoFotos:           'producto_fotos',
+  ProductoVersiones:       'producto_versiones',
+  ProductoEspecificaciones:'producto_especificaciones',
   Pedidos:                 'pedidos',
 } as const
-
 type FolderKey = keyof typeof folderNames
-
-// Map de modelos Prisma (usamos any para flexibilidad en los delegates)
-const modelMap: Record<FolderKey, any> = {
-  CfgMarcas:                prisma.cfgMarcas,
-  CfgRubros:                prisma.cfgRubros,
-  CfgFormasPagos:           prisma.cfgFormasPagos,
-  CfgMonedas:               prisma.cfgMonedas,
-  CfgSlider:                prisma.cfgSlider,
-  Productos:                prisma.productos,
-  ProductoFotos:            prisma.productoFotos,
-  ProductoVersiones:        prisma.productoVersiones,
-  ProductoEspecificaciones: prisma.productoEspecificaciones,
-  Pedidos:                  prisma.pedidos,
-}
 
 // Extensiones permitidas
 const allowedExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif'] as const
@@ -54,28 +40,33 @@ export async function GET(
   const fileName = parts[parts.length - 1]
   const relPath = path.posix.join(folder, ...parts.slice(1))
 
-  // Verifica carpeta gestionada
+  // 1) Carpeta válida
   if (!(folder in folderNames)) {
     return NextResponse.json({ error: 'Carpeta no gestionada' }, { status: 404 })
   }
 
-  // Verifica extensión
+  // 2) Extensión permitida
   const ext = path.extname(fileName).toLowerCase()
   if (!allowedExt.includes(ext as typeof allowedExt[number])) {
     return NextResponse.json({ error: 'Tipo de fichero no permitido' }, { status: 400 })
   }
 
-  // Obtiene modelo y busca registro
-  const model = modelMap[folder]
-  const registro = await model.findFirst({
-    where: { foto: fileName },
-    select: { id: true },
-  })
-  if (!registro) {
+  // 3) Buscamos el registro con raw SQL
+  const tableName = folderNames[folder]
+  const registros = await prisma.$queryRaw<
+    { id: number }[]
+  >(Prisma.sql`
+    SELECT id
+      FROM ${Prisma.raw(tableName)}
+     WHERE foto = ${fileName}
+     LIMIT 1
+  `)
+
+  if (registros.length === 0) {
     return NextResponse.json({ error: 'Imagen no registrada en BD' }, { status: 404 })
   }
 
-  // Verifica existencia en disco
+  // 4) Comprobamos archivo en disco
   const absPath = path.join(IMAGES_PATH, relPath)
   try {
     await fs.access(absPath)
@@ -83,6 +74,7 @@ export async function GET(
     return NextResponse.json({ error: 'Fichero no encontrado' }, { status: 404 })
   }
 
+  // 5) Leemos y devolvemos
   const fileBuffer = await fs.readFile(absPath)
   const contentType = mimeLookup(absPath) || 'application/octet-stream'
 
