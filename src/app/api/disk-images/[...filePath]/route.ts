@@ -24,9 +24,7 @@ const folderNames = {
 
 type FolderKey = keyof typeof folderNames
 
-type TableKey = typeof folderNames[FolderKey]
-
-// Map de modelos Prisma (casteado a any para flexibilidad)
+// Map de modelos Prisma (usamos any para flexibilidad en los delegates)
 const modelMap: Record<FolderKey, any> = {
   CfgMarcas:                prisma.cfgMarcas,
   CfgRubros:                prisma.cfgRubros,
@@ -69,7 +67,10 @@ export async function GET(
 
   // Obtiene modelo y busca registro
   const model = modelMap[folder]
-  const registro = await model.findFirst({ where: { foto: fileName }, select: { id: true } })
+  const registro = await model.findFirst({
+    where: { foto: fileName },
+    select: { id: true },
+  })
   if (!registro) {
     return NextResponse.json({ error: 'Imagen no registrada en BD' }, { status: 404 })
   }
