@@ -1,49 +1,45 @@
 // src/app/sitemap.xml/route.ts
+export const dynamic   = 'force-dynamic'
+export const revalidate = 86400    // regenera cada 24 h
+
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 
-// Función simple para slugify
 function slugify(text: string) {
   return text
-    .toString()
-    .normalize('NFKD')              // descompone acentos
-    .replace(/[\u0300-\u036F]/g, '') // quita acentos
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036F]/g, '')
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9]+/g, '-')    // reemplaza no-alfa por guión
-    .replace(/^-+|-+$/g, '')        // quita guiones al inicio o final
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
 export async function GET() {
   const baseUrl = 'https://www.perroverdepet.shop'
 
-  // 1) Rutas estáticas
-  const staticPaths = [
-    '',            // /
-    '/catalogo',
-    '/carrito',
-  ]
+  // rutas estáticas
+  const staticPaths = ['', '/catalogo', '/carrito']
 
-  // 2) Rutas de filtros: tomamos los 'rubro' de CfgRubros
-  const rubros = await prisma.cfgRubros.findMany({ select: { rubro: true } })
-  const filterPaths = rubros.map(r =>
-    `/catalogo/${slugify(r.rubro)}`
-  )
+  // rutas por rubro
+  let filterPaths: string[] = []
+  try {
+    const rubros = await prisma.cfgRubros.findMany({ select: { rubro: true } })
+    filterPaths = rubros.map(r => `/catalogo/${slugify(r.rubro)}`)
+  } catch (e) {
+    console.warn('No se pudieron leer rubros:', e)
+  }
 
-  // 3) Rutas de detalle de producto: convertimos el campo 'producto' en slug
-  const products = await prisma.productos.findMany({ select: { producto: true } })
-  const productPaths = products.map(p =>
-    `/detalle/${slugify(p.producto)}`
-  )
+  // rutas por producto
+  let productPaths: string[] = []
+  try {
+    const products = await prisma.productos.findMany({ select: { producto: true } })
+    productPaths = products.map(p => `/detalle/${slugify(p.producto)}`)
+  } catch (e) {
+    console.warn('No se pudieron leer productos:', e)
+  }
 
-  // Combina todas las rutas
-  const allPaths = [
-    ...staticPaths,
-    ...filterPaths,
-    ...productPaths,
-  ]
-
-  // Genera el XML
+  const allPaths = [...staticPaths, ...filterPaths, ...productPaths]
   const urls = allPaths.map(path => `
   <url>
     <loc>${baseUrl}${path}</loc>
