@@ -1,14 +1,12 @@
 // src/app/api/disk-images/[...filePath]/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
-import { lookup as mimeLookup } from 'mime-types';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { NextRequest, NextResponse } from 'next/server'
+import fs from 'fs/promises'
+import path from 'path'
+import { lookup as mimeLookup } from 'mime-types'
+import prisma from '@/lib/prisma'
 
 // Base de imágenes
-const IMAGES_PATH = path.join(process.cwd(), 'public', 'images');
+const IMAGES_PATH = path.join(process.cwd(), 'public', 'images')
 
 // Mapeo carpeta → tabla Prisma
 const folderNames = {
@@ -22,14 +20,14 @@ const folderNames = {
   ProductoVersiones:       'producto-versiones',
   ProductoEspecificaciones:'producto-especificaciones',
   Pedidos:                 'pedidos',
-} as const;
+} as const
 
-const tableForFolder = Object.fromEntries(
-  Object.entries(folderNames).map(([tbl, folder]) => [folder, tbl])
-) as Record<string, keyof typeof folderNames>;
+type FolderKey = keyof typeof folderNames
+
+type TableKey = typeof folderNames[FolderKey]
 
 // Map de modelos Prisma (casteado a any para flexibilidad)
-const modelMap = {
+const modelMap: Record<FolderKey, any> = {
   CfgMarcas:                prisma.cfgMarcas,
   CfgRubros:                prisma.cfgRubros,
   CfgFormasPagos:           prisma.cfgFormasPagos,
@@ -40,55 +38,53 @@ const modelMap = {
   ProductoVersiones:        prisma.productoVersiones,
   ProductoEspecificaciones: prisma.productoEspecificaciones,
   Pedidos:                  prisma.pedidos,
-} as const;
-type ModelName = keyof typeof modelMap;
+}
 
 // Extensiones permitidas
-const allowedExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+const allowedExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif'] as const
 
 export async function GET(
-  _req: NextRequest,
-  context: { params: Promise<{ filePath: string[] }> }
+  req: NextRequest,
+  { params }: { params: { filePath: string[] } }
 ) {
-  const { filePath: parts } = await context.params;
-  if (parts.length < 2) {
-    return NextResponse.json({ error: 'Ruta inválida' }, { status: 400 });
+  const parts = params.filePath
+  if (!parts || parts.length < 2) {
+    return NextResponse.json({ error: 'Ruta inválida' }, { status: 400 })
   }
 
-  const folder   = parts[0];
-  const rest     = parts.slice(1);
-  const fileName = rest.at(-1)!;
-  const relPath  = path.posix.join(folder, ...rest);
+  const folder = parts[0] as FolderKey
+  const fileName = parts[parts.length - 1]
+  const relPath = path.posix.join(folder, ...parts.slice(1))
 
-  const tableName = tableForFolder[folder];
-  if (!tableName) {
-    return NextResponse.json({ error: 'Carpeta no gestionada' }, { status: 404 });
+  // Verifica carpeta gestionada
+  if (!(folder in folderNames)) {
+    return NextResponse.json({ error: 'Carpeta no gestionada' }, { status: 404 })
   }
 
-  const ext = path.extname(fileName).toLowerCase();
-  if (!allowedExt.includes(ext)) {
-    return NextResponse.json({ error: 'Tipo de fichero no permitido' }, { status: 400 });
+  // Verifica extensión
+  const ext = path.extname(fileName).toLowerCase()
+  if (!allowedExt.includes(ext as typeof allowedExt[number])) {
+    return NextResponse.json({ error: 'Tipo de fichero no permitido' }, { status: 400 })
   }
 
-  const model = modelMap[tableName as ModelName] as any;
-  const registro = await model.findFirst({
-    where: { foto: fileName },
-    select: { id: true },
-  });
+  // Obtiene modelo y busca registro
+  const model = modelMap[folder]
+  const registro = await model.findFirst({ where: { foto: fileName }, select: { id: true } })
   if (!registro) {
-    return NextResponse.json({ error: 'Imagen no registrada en BD' }, { status: 404 });
+    return NextResponse.json({ error: 'Imagen no registrada en BD' }, { status: 404 })
   }
 
-  const absPath = path.join(IMAGES_PATH, relPath);
+  // Verifica existencia en disco
+  const absPath = path.join(IMAGES_PATH, relPath)
   try {
-    await fs.access(absPath);
+    await fs.access(absPath)
   } catch {
-    return NextResponse.json({ error: 'Fichero no encontrado' }, { status: 404 });
+    return NextResponse.json({ error: 'Fichero no encontrado' }, { status: 404 })
   }
 
-  // Lectura en Buffer para compatibilidad TS
-  const fileBuffer = await fs.readFile(absPath);
-  const contentType = mimeLookup(absPath) || 'application/octet-stream';
+  const fileBuffer = await fs.readFile(absPath)
+  const contentType = mimeLookup(absPath) || 'application/octet-stream'
+
   return new NextResponse(fileBuffer, {
     status: 200,
     headers: {
@@ -96,5 +92,5 @@ export async function GET(
       'Cache-Control': 'public, max-age=3600',
       'Accept-Ranges': 'bytes',
     },
-  });
+  })
 }
