@@ -21,6 +21,10 @@ function slugify(text: string): string {
     .replace(/\-\-+/g, '-');
 }
 
+// Número de WhatsApp y URL
+const WHATSAPP_NUMBER = '5493875354360';
+const WHATSAPP_URL = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}`;
+
 const Header: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [cartCount, setCartCount] = useState<number>(0);
@@ -126,9 +130,16 @@ const Header: React.FC = () => {
             <Link href="/catalogo/pagina-1" className="font-semibold text-lg text-gray-800 hover:bg-gray-200 px-3 py-2 rounded transition duration-300" aria-label="Ir al catálogo">
               Catálogo
             </Link>
-            <Link href="/contacto" className="font-semibold text-lg text-gray-800 hover:bg-gray-200 px-3 py-2 rounded transition duration-300" aria-label="Ir a contacto">
+            {/* Enlace WhatsApp */}
+            <a
+              href={WHATSAPP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-lg text-gray-800 hover:bg-gray-200 px-3 py-2 rounded transition duration-300"
+              aria-label="Contactar por WhatsApp"
+            >
               Contacto
-            </Link>
+            </a>
           </div>
           <Link href="/carrito" className="relative flex items-center text-gray-800 transition-transform hover:scale-105" aria-label="Ver carrito">
             <IoCartOutline className="text-3xl" />
@@ -207,9 +218,16 @@ const Header: React.FC = () => {
           <Link href="/catalogo" className="font-medium text-lg text-gray-800 hover:bg-gray-200 px-3 py-2 rounded transition transform hover:scale-105" aria-label="Ir al catálogo">
             Catálogo
           </Link>
-          <Link href="/contacto" className="font-medium text-lg text-gray-800 hover:bg-gray-200 px-3 py-2 rounded transition transform hover:scale-105" aria-label="Ir a contacto">
+          {/* Enlace WhatsApp en móvil */}
+          <a
+            href={WHATSAPP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-lg text-gray-800 hover:bg-gray-200 px-3 py-2 rounded transition transform hover:scale-105"
+            aria-label="Contactar por WhatsApp"
+          >
             Contacto
-          </Link>
+          </a>
           <Link href="/carrito" className="flex items-center space-x-2 font-medium text-lg text-gray-800 hover:bg-gray-200 px-3 py-2 rounded transition transform hover:scale-105" aria-label="Ir al carrito">
             <IoCartOutline className="text-2xl" />
             <span>Carrito</span>
