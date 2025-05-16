@@ -7,7 +7,6 @@ import {
   IoCallOutline,
   IoMailOutline,
   IoLogoFacebook,
-  IoLogoTwitter,
   IoLogoInstagram,
 } from 'react-icons/io5';
 
