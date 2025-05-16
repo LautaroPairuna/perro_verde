@@ -31,7 +31,7 @@ const Footer: React.FC = () => {
             <ul className="space-y-2 text-gray-800">
               <li className="flex items-center">
                 <IoLocationOutline className="text-xl text-green-800 mr-2" />
-                Av. los Incas °6, A4400 Salta
+                Av. los Incas N°6 Local 2, A4400 Salta
               </li>
               <li className="flex items-center">
                 <IoCallOutline className="text-xl text-green-800 mr-2" />
