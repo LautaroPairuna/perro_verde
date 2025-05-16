@@ -476,16 +476,21 @@
         const url      = `/api/admin/resources/${resource}/${id}`
 
         // Clonamos, limpiamos keys no deseadas y normalizamos tipos
-        const data        = sanitize({ ...raw })
-        delete data.producto                  // nunca enviamos nombre “virtual”
-        const hasNewFile  = data.foto instanceof File
+        const data = sanitize({ ...raw })
+
+        // ⬇️ Solo eliminamos el alias “producto” cuando NO estamos en la tabla principal
+        if (resource !== 'Productos') {
+          delete data.producto
+        }
+
+        const hasNewFile = data.foto instanceof File
 
         const init: RequestInit = hasNewFile
           ? { method: 'PUT', body: buildFormData(data) }
           : {
-              method: 'PUT',
+              method : 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(data),
+              body   : JSON.stringify(data),
             }
 
         const res     = await fetch(url, init)
@@ -505,8 +510,9 @@
           refreshParent()
         }
       },
-      [tableName, childRelation, refreshParent]
+      [tableName, childRelation, refreshParent],
     )
+
 
     // -----------------------------------------------------------------------------
     // DELETE

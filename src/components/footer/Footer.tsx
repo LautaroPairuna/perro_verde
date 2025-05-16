@@ -31,11 +31,11 @@ const Footer: React.FC = () => {
             <ul className="space-y-2 text-gray-800">
               <li className="flex items-center">
                 <IoLocationOutline className="text-xl text-green-800 mr-2" />
-                Calle Ficticia 123, Ciudad, País
+                Av. los Incas °6, A4400 Salta
               </li>
               <li className="flex items-center">
                 <IoCallOutline className="text-xl text-green-800 mr-2" />
-                +54 123 456 7890
+                +54 9 387 535-4360
               </li>
               <li className="flex items-center">
                 <IoMailOutline className="text-xl text-green-800 mr-2" />
@@ -43,7 +43,7 @@ const Footer: React.FC = () => {
                   href="mailto:info@perroverde.com"
                   className="hover:text-green-800 transition duration-300"
                 >
-                  info@perroverde.com
+                  perroverdepetshop@gmail.com
                 </a>
               </li>
             </ul>
@@ -91,7 +91,7 @@ const Footer: React.FC = () => {
             <ul className="flex justify-center md:justify-end space-x-4">
               <li>
                 <a
-                  href="https://www.facebook.com/alumell"
+                  href="https://www.facebook.com/profile.php?id=61574100808984"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-2xl text-gray-800 hover:text-green-800 transition duration-300"
@@ -102,18 +102,7 @@ const Footer: React.FC = () => {
               </li>
               <li>
                 <a
-                  href="https://www.twitter.com/alumell"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-2xl text-gray-800 hover:text-green-800 transition duration-300"
-                  aria-label="Twitter"
-                >
-                  <IoLogoTwitter />
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://www.instagram.com/alumell"
+                  href="https://www.instagram.com/perroverdepetshop/profilecard/?igsh=MTBkY2RncG82dXZlcQ=="
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-2xl text-gray-800 hover:text-green-800 transition duration-300"
