@@ -59,7 +59,7 @@ export default function Cart() {
               todas nuestras ofertas.
             </p>
             <button
-              onClick={() => router.push('/productos')}
+              onClick={() => router.push('/catalogo')}
               className="px-6 py-3 bg-green-700 text-white rounded-lg hover:bg-green-800 transition"
             >
               Ver Productos

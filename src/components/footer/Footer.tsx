@@ -101,7 +101,7 @@ const Footer: React.FC = () => {
               </li>
               <li>
                 <a
-                  href="https://www.instagram.com/perroverdepetshop/profilecard/?igsh=MTBkY2RncG82dXZlcQ=="
+                  href="https://www.instagram.com/perroverdepetshop/?igsh=MTBkY2RncG82dXZlcQ%3D%3D"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-2xl text-gray-800 hover:text-green-800 transition duration-300"
