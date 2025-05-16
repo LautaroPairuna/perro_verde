@@ -1,10 +1,12 @@
 // src/components/home/HomeClientComponents.tsx
-'use client';
+"use client";
 
-import React from 'react';
-import dynamic from 'next/dynamic';
+import React, { Suspense } from "react";
+import dynamic from "next/dynamic";
 
-// Tipos existentes
+// ——————————————————————————————————————————
+// Tipos utilizados en este componente
+// ——————————————————————————————————————————
 export type FeaturedProduct = {
   id: number;
   producto: string;
@@ -25,37 +27,41 @@ export interface Brand {
   foto: string | null;
 }
 
-// Nuevo tipo para rubros
 export interface Rubro {
   id: number;
   rubro: string;
   foto: string | null;
 }
 
+// ——————————————————————————————————————————
 // Componentes cargados dinámicamente
+// ——————————————————————————————————————————
 const PromotionsSlider = dynamic(
-  () => import('@/components/home/PromotionsSlider'),
-  { ssr: false }
+  () => import("@/components/home/PromotionsSlider"),
+  {
+    ssr: true,
+    loading: () => (
+      <div className="w-full h-60 bg-gray-200 animate-pulse rounded-xl" />
+    ),
+  }
 );
 const FeaturedProducts = dynamic(
-  () => import('@/components/home/FeaturedProducts'),
+  () => import("@/components/home/FeaturedProducts"),
   { ssr: false }
 );
 const BrandMarquee = dynamic(
-  () => import('@/components/home/BrandMarquee'),
-  { ssr: false }
-);
-const RubrosGrid = dynamic(
-  () => import('@/components/home/RubrosGrid'),
+  () => import("@/components/home/BrandMarquee"),
   { ssr: false }
 );
 const MostViewedProducts = dynamic(
-  () => import('@/components/home/MostViewedProducts'),
+  () => import("@/components/home/MostViewedProducts"),
   { ssr: false }
 );
+const RubrosGrid = dynamic(() => import("@/components/home/RubrosGrid"), {
+  ssr: false,
+});
 
-// Props ampliadas para recibir rubros
-interface Props {
+interface HomeClientComponentsProps {
   promotionImages: string[];
   featuredProducts: FeaturedProduct[];
   brands: Brand[];
@@ -69,14 +75,18 @@ export default function HomeClientComponents({
   brands,
   mostViewed,
   rubros,
-}: Props) {
+}: HomeClientComponentsProps) {
   return (
-    <>
+    <Suspense fallback={<div className="text-center py-8">Cargando...</div>}>
       <PromotionsSlider images={promotionImages} />
+
       <FeaturedProducts products={featuredProducts} />
+
       <BrandMarquee brands={brands} />
+
       <MostViewedProducts products={mostViewed} />
+
       <RubrosGrid rubros={rubros} />
-    </>
+    </Suspense>
   );
 }
