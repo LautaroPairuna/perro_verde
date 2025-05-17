@@ -6,6 +6,7 @@ import { useCart, CartItem } from '@/context/CartContext';
 import ImageWithFallback from '@/components/ImageWithFallback';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import emptyCart from  "../../../public/images/empty-cart.svg";
 
 export default function Cart() {
   const { cart, updateCart } = useCart();
@@ -31,7 +32,7 @@ export default function Cart() {
   // Convertir item.price a número para poder usar toFixed
   const total = cart.reduce((acc, item: CartItem) => acc + Number(item.price) * item.quantity, 0);
 
-  const emptyCart = () => {
+  const handleEmptyCart = () => {
     updateCart([]);
   };
 
@@ -42,13 +43,12 @@ export default function Cart() {
       </h1>
       {cart.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 space-y-6">
-            <div className="w-36 h-36">
+            <div className="w-36 h-36 mb-5">
               <Image
-                src="/images/empty-cart.svg"
+                src={emptyCart}
                 alt="Carrito vacío"
                 width={144}
                 height={144}
-                priority
               />
             </div>
             <h2 className="text-2xl font-semibold text-gray-700">
@@ -129,7 +129,7 @@ export default function Cart() {
 
           <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-6 rounded-lg shadow-lg">
             <button
-              onClick={emptyCart}
+              onClick={handleEmptyCart}
               className="w-full sm:w-auto mb-4 sm:mb-0 px-6 py-3 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition"
             >
               Vaciar Carrito

@@ -81,7 +81,7 @@ export default async function CatalogListing({
   }
 
   // 6) Cargar productos filtrados
-  const itemsPerPage = 4
+  const itemsPerPage = 12
   let rawProducts: NonNullable<FilteredProductsResult['products']>, totalPages: number
   try {
     const result: FilteredProductsResult = await getFilteredProducts(
