@@ -1,3 +1,4 @@
+//src/app/admin/layout.tsx
 'use client'
 
 import { SessionProvider, useSession, signOut } from 'next-auth/react'

@@ -10,6 +10,9 @@ import {
   IoLogoInstagram,
 } from 'react-icons/io5';
 
+const WHATSAPP_NUMBER = '5493875354360';
+const WHATSAPP_URL = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}`;
+
 const Footer: React.FC = () => {
   return (
     <footer className="bg-white shadow-sm py-12">
@@ -55,28 +58,24 @@ const Footer: React.FC = () => {
             </h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/catalogo" className="text-sm text-gray-800 hover:text-green-800 transition duration-300">
+                <Link href="/catalogo/pagina-1" className="text-sm text-gray-800 hover:text-green-800 transition duration-300">
                   Catálogo
                 </Link>
               </li>
               <li>
-                <Link href="/contacto" className="text-sm text-gray-800 hover:text-green-800 transition duration-300">
+                <a
+                  href={WHATSAPP_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-gray-800 hover:text-green-800 transition duration-300"
+                  aria-label="Contactar por WhatsApp"
+                >
                   Contacto
-                </Link>
+                </a>
               </li>
               <li>
                 <Link href="/carrito" className="text-sm text-gray-800 hover:text-green-800 transition duration-300">
                   Carrito
-                </Link>
-              </li>
-              <li>
-                <Link href="/terminos" className="text-sm text-gray-800 hover:text-green-800 transition duration-300">
-                  Términos y Condiciones
-                </Link>
-              </li>
-              <li>
-                <Link href="/privacidad" className="text-sm text-gray-800 hover:text-green-800 transition duration-300">
-                  Política de Privacidad
                 </Link>
               </li>
             </ul>

@@ -1,3 +1,5 @@
+// src/app/admin/resources/[tableName]/ResourceDetailClient.tsx
+
 /* eslint-disable react-hooks/rules-of-hooks, @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any */
   'use client'
 
