@@ -1,53 +1,51 @@
 // src/components/catalogo/AdvancedSearchForm.tsx
-"use client"
+"use client";
 
-import React, { useState, ChangeEvent, FormEvent } from 'react'
-import { HiSearch, HiX } from 'react-icons/hi'
-import clsx from 'clsx'
-import { useRouter } from 'next/navigation'
-import { buildSearchPath, SearchForm } from '@/hooks/useAdvancedSearch'
+import React, { useState, ChangeEvent, FormEvent } from 'react';
+import { HiSearch, HiX } from 'react-icons/hi';
+import clsx from 'clsx';
+import { useRouter } from 'next/navigation';
+import { buildSearchPath, SearchForm } from '@/hooks/useAdvancedSearch';
 
 interface Option { id: number; name: string; slug: string }
 
 interface AdvancedSearchFormProps {
-  marcas: Option[]
-  rubros: Option[]
-  initialMarca?: string
-  initialCategoria?: string
-  initialKeywords?: string
+  marcas: Option[];
+  rubros: Option[];
+  // Ahora sí existen estas props
+  marca_slug?: string;
+  categoria_slug?: string;
+  keywords?: string;
 }
 
 export default function AdvancedSearchForm({
   marcas,
   rubros,
-  initialMarca = '',
-  initialCategoria = '',
-  initialKeywords = '',
+  marca_slug = '',
+  categoria_slug = '',
+  keywords = '',
 }: AdvancedSearchFormProps) {
-  const router = useRouter()
-
+  const router = useRouter();
   const [form, setForm] = useState<SearchForm>({
-    keywords: initialKeywords,
-    marca: initialMarca,
-    categoria: initialCategoria,
-  })
-  const [isOpen, setIsOpen] = useState(false)
+    keywords,
+    marca: marca_slug,
+    categoria: categoria_slug,
+  });
+  const [isOpen, setIsOpen] = useState(false);
 
-  const toggle = () => setIsOpen(o => !o)
+  const toggle = () => setIsOpen(o => !o);
   const onChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
-    setForm(f => ({ ...f, [name]: value }))
-  }
-
+    const { name, value } = e.target;
+    setForm(f => ({ ...f, [name]: value }));
+  };
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    router.push(buildSearchPath(form))
-  }
-
+    e.preventDefault();
+    router.push(buildSearchPath(form));
+  };
   const onClear = () => {
-    setForm({ keywords: '', marca: '', categoria: '' })
-    router.push('/catalogo/pagina-1')
-  }
+    setForm({ keywords: '', marca: '', categoria: '' });
+    router.push('/catalogo/pagina-1');
+  };
 
   return (
     <div className="px-4 py-6">
@@ -94,7 +92,7 @@ export default function AdvancedSearchForm({
                 type="text"
                 value={form.keywords}
                 onChange={onChange}
-                placeholder="Buscar productos..."
+                placeholder="Palabras clave..."
                 className="w-full px-4 py-2 border-2 border-green-600 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-500 transition"
               />
             </div>
@@ -157,5 +155,5 @@ export default function AdvancedSearchForm({
         </div>
       </div>
     </div>
-  )
+  );
 }
