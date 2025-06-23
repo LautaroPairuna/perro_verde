@@ -1,169 +1,161 @@
-// src/app/catalogo/[...filters]/page.tsx
+import React, { useState, ChangeEvent, FormEvent } from 'react'
+import { HiSearch, HiX } from 'react-icons/hi'
+import clsx from 'clsx'
+import { useRouter } from 'next/navigation'
+import { buildSearchPath, SearchForm } from '@/hooks/useAdvancedSearch'
 
-import AdvancedSearchForm from '@/components/catalogo/AdvancedSearchForm'
-import ProductCard, { Product as ProductCardType } from '@/components/catalogo/ProductCard'
-import Pagination from '@/components/catalogo/Pagination'
-import NoProducts from '@/components/catalogo/NoProducts'
-import { getFilteredProducts, getFiltersData } from '@/utils/fetchData'
-import { parseUrlSegments } from '@/utils/urlUtils'
-import slugify from '@/utils/slugify'
-import type { Filters as CatalogFilters, FilteredProductsResult } from '@/utils/fetchData'
-import type { Metadata } from 'next'
+interface Option { id: number; name: string; slug: string }
 
-export const dynamic = 'force-dynamic'
-export const revalidate = 60  // Regenera cada 60s (ISR)
-
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ filters?: string[] }>
-}): Promise<Metadata> {
-  const { filters = [] } = await params
-  const title =
-    filters.length > 0
-      ? `Catálogo: ${filters.map(s => decodeURIComponent(s)).join(' / ')}`
-      : 'Catálogo de Productos'
-  return {
-    title,
-    description: 'Explora nuestra amplia gama de productos disponibles para ti.',
-  }
+interface AdvancedSearchFormProps {
+  marcas: Option[]
+  rubros: Option[]
+  // nombres antiguos para compatibilidad
+  marca_slug?: string
+  categoria_slug?: string
+  keywords?: string
 }
 
-export default async function CatalogListing({
-  params,
-}: {
-  params: Promise<{ filters?: string[] }>
-}) {
-  // 1) Await de params (Next.js 15: viene como Promise)
-  const { filters = [] } = await params
-  const slugArray = Array.isArray(filters) ? filters : []
+export default function AdvancedSearchForm({
+  marcas,
+  rubros,
+  // props antiguos
+  marca_slug = '',
+  categoria_slug = '',
+  keywords = '',
+}: AdvancedSearchFormProps) {
+  const router = useRouter()
 
-  // 2) Reconstruir ruta para parsear segmentos
-  const pathname =
-    slugArray.length > 0 ? `/catalogo/${slugArray.join('/')}` : '/catalogo'
+  // inicializar estado usando props antiguos
+  const [form, setForm] = useState<SearchForm>({
+    keywords,
+    marca: marca_slug,
+    categoria: categoria_slug,
+  })
+  const [isOpen, setIsOpen] = useState(false)
 
-  // 3) Extraer y normalizar filtros
-  const filtersFromUrl = parseUrlSegments(pathname) as CatalogFilters
-  const pageNum = Number(filtersFromUrl.page)
-  filtersFromUrl.page =
-    Number.isInteger(pageNum) && pageNum > 0 ? pageNum : 1
-
-  // 4) Cargar datos de filtros (marcas y rubros)
-  let marcas, rubros
-  try {
-    ;({ marcas, rubros } = await getFiltersData())
-  } catch (err: unknown) {
-    console.error('Error cargando filtros:', err)
-    return (
-      <section className="py-20 text-center">
-        <p className="text-red-600">
-          Error cargando filtros. Intenta nuevamente más tarde.
-        </p>
-      </section>
-    )
+  const toggle = () => setIsOpen(o => !o)
+  const onChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target
+    setForm(f => ({ ...f, [name]: value }))
   }
 
-  // 5) Mapear slugs a IDs
-  const mappedFilters: CatalogFilters = {
-    ...filtersFromUrl,
-    marca_id: undefined,
-    categoria_id: undefined,
-  }
-  if (filtersFromUrl.marca_slug) {
-    const m = marcas.find((m) => slugify(m.marca) === filtersFromUrl.marca_slug)
-    if (m) mappedFilters.marca_id = m.id
-  }
-  if (filtersFromUrl.categoria_slug) {
-    const r = rubros.find(
-      (r) => slugify(r.rubro) === filtersFromUrl.categoria_slug
-    )
-    if (r) mappedFilters.categoria_id = r.id
+  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    router.push(buildSearchPath(form))
   }
 
-  // 6) Cargar productos filtrados
-  const itemsPerPage = 12
-  let rawProducts: NonNullable<FilteredProductsResult['products']>, totalPages: number
-  try {
-    const result: FilteredProductsResult = await getFilteredProducts(
-      mappedFilters,
-      itemsPerPage
-    )
-    rawProducts = result.products
-    totalPages = result.totalPages
-  } catch (err: unknown) {
-    console.error('Error cargando productos:', err)
-    return (
-      <section className="py-20 text-center">
-        <p className="text-red-600">
-          Error cargando productos. Intenta nuevamente más tarde.
-        </p>
-      </section>
-    )
+  const onClear = () => {
+    setForm({ keywords: '', marca: '', categoria: '' })
+    router.push('/catalogo/pagina-1')
   }
 
-  // 7) Adaptar al tipo de ProductCard
-  const products: ProductCardType[] = rawProducts.map((p) => ({
-    id: p.id,
-    producto: p.producto,
-    descripcion: p.descripcion ?? undefined,
-    precio: Number(p.precio),
-    foto: p.foto ?? undefined,
-    visitas: p.visitas,
-    rubro: p.rubro,
-  }))
-
-  // 8) Renderizado con diseño mejorado
   return (
-    <section className="bg-gradient-to-b from-green-50 to-white py-12">
-      <div className="max-w-screen-xl mx-auto px-4">
-        {/* Título */}
-        <h1 className="text-4xl font-extrabold text-green-800 text-center">
-          Catálogo de Productos
-        </h1>
+    <div className="px-4 py-6">
+      {/* Toggle Button */}
+      <div className="flex justify-center mb-4">
+        <button
+          onClick={toggle}
+          aria-expanded={isOpen}
+          aria-controls="advanced-search-panel"
+          className={clsx(
+            'inline-flex items-center gap-2 px-5 py-2 rounded-full font-medium transition-transform',
+            'bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500',
+            isOpen ? 'scale-105' : 'scale-100'
+          )}
+        >
+          {isOpen ? <HiX className="w-5 h-5" /> : <HiSearch className="w-5 h-5" />}
+          {isOpen ? 'Ocultar Filtros' : 'Búsqueda Avanzada'}
+        </button>
+      </div>
 
-        {/* Buscador Avanzado */}
-        <div className="flex justify-center align-center text-center">
-          <AdvancedSearchForm
-            marcas={marcas.map((m) => ({
-              id: m.id,
-              name: m.marca,
-              slug: slugify(m.marca),
-            }))}
-            rubros={rubros.map((r) => ({
-              id: r.id,
-              name: r.rubro,
-              slug: slugify(r.rubro),
-            }))}
-            marca_slug={filtersFromUrl.marca_slug}
-            categoria_slug={filtersFromUrl.categoria_slug}
-            keywords={filtersFromUrl.keywords}
-          />
-        </div>
+      {/* Panel Animado */}
+      <div
+        id="advanced-search-panel"
+        aria-hidden={!isOpen}
+        className={clsx(
+          'overflow-hidden transition-[max-height,opacity] duration-300',
+          isOpen ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'
+        )}
+      >
+        <div className="bg-white rounded-2xl shadow-lg p-6 md:p-8">
+          <h2 className="text-center text-xl font-semibold text-gray-800 mb-6">
+            Filtros Avanzados
+          </h2>
 
-        {/* Lista de Productos */}
-        {products.length === 0 ? (
-          <NoProducts message="No se encontraron productos que coincidan con los filtros seleccionados." />
-        ) : (
-          <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 mb-10">
-              {products.map((product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
+          <form onSubmit={onSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Keywords */}
+            <div className="sm:col-span-2 lg:col-span-3">
+              <label htmlFor="keywords" className="block text-sm font-medium text-gray-700 mb-1">
+                Buscar
+              </label>
+              <input
+                id="keywords"
+                name="keywords"
+                type="text"
+                value={form.keywords}
+                onChange={onChange}
+                placeholder="Palabras clave..."
+                className="w-full px-4 py-2 border-2 border-green-600 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-500 transition"
+              />
             </div>
 
-            {/* Paginación */}
-            {totalPages > 1 && (
-              <div className="flex justify-center">
-                <Pagination
-                  totalPages={totalPages}
-                  currentPage={filtersFromUrl.page}
-                  filters={mappedFilters}
-                />
-              </div>
-            )}
-          </>
-        )}
+            {/* Marca */}
+            <div>
+              <label htmlFor="marca" className="block text-sm font-medium text-gray-700 mb-1">
+                Marca
+              </label>
+              <select
+                id="marca"
+                name="marca"
+                value={form.marca}
+                onChange={onChange}
+                className="w-full px-4 py-2 border-2 border-green-600 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-500 transition"
+              >
+                <option value="">Todas las marcas</option>
+                {marcas.map(m => (
+                  <option key={m.id} value={m.slug}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Categoría */}
+            <div>
+              <label htmlFor="categoria" className="block text-sm font-medium text-gray-700 mb-1">
+                Categoría
+              </label>
+              <select
+                id="categoria"
+                name="categoria"
+                value={form.categoria}
+                onChange={onChange}
+                className="w-full px-4 py-2 border-2 border-green-600 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-500 transition"
+              >
+                <option value="">Todas las categorías</option>
+                {rubros.map(r => (
+                  <option key={r.id} value={r.slug}>{r.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Acciones */}
+            <div className="sm:col-span-2 lg:col-span-3 flex justify-end space-x-4 mt-4">
+              <button
+                type="button"
+                onClick={onClear}
+                className="px-5 py-2 bg-green-400 text-white rounded-lg hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-green-400 transition"
+              >
+                Limpiar
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition"
+              >
+                Aplicar
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </section>
+    </div>
   )
 }
