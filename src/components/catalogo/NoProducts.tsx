@@ -31,7 +31,7 @@ const NoProducts: React.FC<NoProductsProps> = ({ message }) => {
         {message || "Parece que no hay productos disponibles para tu búsqueda."}
       </p>
       <Link
-        href="/catalogo"
+        href="/catalogo/pagina-1"
         className="inline-flex items-center justify-center px-10 py-4 bg-green-600 text-white text-xl font-semibold rounded-full shadow-lg hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-300 transition-all duration-300"
       >
         Volver al Catálogo

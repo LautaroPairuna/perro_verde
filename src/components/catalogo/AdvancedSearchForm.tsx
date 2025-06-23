@@ -1,55 +1,53 @@
 // src/components/catalogo/AdvancedSearchForm.tsx
-"use client";
+"use client"
 
-import React, { useState, FormEvent } from 'react';
-import { HiSearch, HiX } from 'react-icons/hi';
-import clsx from 'clsx';
+import React, { useState, ChangeEvent, FormEvent } from 'react'
+import { HiSearch, HiX } from 'react-icons/hi'
+import clsx from 'clsx'
+import { useRouter } from 'next/navigation'
+import { buildSearchPath, SearchForm } from '@/hooks/useAdvancedSearch'
 
 interface Option { id: number; name: string; slug: string }
 
 interface AdvancedSearchFormProps {
-  marcas: Option[];
-  rubros: Option[];
-  marca_slug: string;
-  categoria_slug: string;
-  keywords: string;
+  marcas: Option[]
+  rubros: Option[]
+  initialMarca?: string
+  initialCategoria?: string
+  initialKeywords?: string
 }
 
 export default function AdvancedSearchForm({
   marcas,
   rubros,
-  marca_slug,
-  categoria_slug,
-  keywords,
+  initialMarca = '',
+  initialCategoria = '',
+  initialKeywords = '',
 }: AdvancedSearchFormProps) {
-  const [form, setForm] = useState({
-    keywords: keywords || '',
-    marca: marca_slug || '',
-    categoria: categoria_slug || '',
-  });
-  const [isOpen, setIsOpen] = useState(false);
+  const router = useRouter()
 
-  const toggle = () => setIsOpen((o) => !o);
-  const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+  const [form, setForm] = useState<SearchForm>({
+    keywords: initialKeywords,
+    marca: initialMarca,
+    categoria: initialCategoria,
+  })
+  const [isOpen, setIsOpen] = useState(false)
 
-  const onSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    let href = '/catalogo';
-    if (form.keywords.trim()) {
-      const kw = form.keywords.trim().replace(/\s+/g, '-');
-      href += `/keys-${encodeURIComponent(kw)}`;
-    }
-    if (form.marca) href += `/marca-${encodeURIComponent(form.marca)}`;
-    if (form.categoria) href += `/categoria-${encodeURIComponent(form.categoria)}`;
-    href += '/pagina-1';
-    window.location.href = href;
-  };
+  const toggle = () => setIsOpen(o => !o)
+  const onChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target
+    setForm(f => ({ ...f, [name]: value }))
+  }
+
+  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    router.push(buildSearchPath(form))
+  }
 
   const onClear = () => {
-    setForm({ keywords: '', marca: '', categoria: '' });
-    window.location.href = '/catalogo/pagina-1';
-  };
+    setForm({ keywords: '', marca: '', categoria: '' })
+    router.push('/catalogo/pagina-1')
+  }
 
   return (
     <div className="px-4 py-6">
@@ -58,6 +56,7 @@ export default function AdvancedSearchForm({
         <button
           onClick={toggle}
           aria-expanded={isOpen}
+          aria-controls="advanced-search-panel"
           className={clsx(
             'inline-flex items-center gap-2 px-5 py-2 rounded-full font-medium transition-transform',
             'bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500',
@@ -69,8 +68,10 @@ export default function AdvancedSearchForm({
         </button>
       </div>
 
-      {/* Animated Panel */}
+      {/* Panel Animado */}
       <div
+        id="advanced-search-panel"
+        aria-hidden={!isOpen}
         className={clsx(
           'overflow-hidden transition-[max-height,opacity] duration-300',
           isOpen ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'
@@ -93,7 +94,7 @@ export default function AdvancedSearchForm({
                 type="text"
                 value={form.keywords}
                 onChange={onChange}
-                placeholder="Palabras clave..."
+                placeholder="Buscar productos..."
                 className="w-full px-4 py-2 border-2 border-green-600 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-500 transition"
               />
             </div>
@@ -136,7 +137,7 @@ export default function AdvancedSearchForm({
               </select>
             </div>
 
-            {/* Actions */}
+            {/* Acciones */}
             <div className="sm:col-span-2 lg:col-span-3 flex justify-end space-x-4 mt-4">
               <button
                 type="button"
@@ -156,5 +157,5 @@ export default function AdvancedSearchForm({
         </div>
       </div>
     </div>
-  );
+  )
 }

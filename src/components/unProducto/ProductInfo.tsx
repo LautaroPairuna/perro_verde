@@ -107,7 +107,7 @@ const ProductInfo: React.FC<ProductInfoProps> = ({ product }) => {
         {/* Volver al Catálogo */}
         <div>
           <Link
-            href="/catalogo"
+            href="/catalogo/pagina-1"
             className="w-full sm:w-auto px-6 py-3 border border-green-700 text-green-700 rounded-md shadow-md transition-all duration-300 hover:bg-green-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-green-500 flex items-center justify-center gap-2"
             aria-label="Volver al Catálogo"
           >

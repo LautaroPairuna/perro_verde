@@ -215,7 +215,7 @@ const Header: React.FC = () => {
           </form>
         </div>
         <div className="mt-6 flex flex-col space-y-4">
-          <Link href="/catalogo" className="font-medium text-lg text-gray-800 hover:bg-gray-200 px-3 py-2 rounded transition transform hover:scale-105" aria-label="Ir al catálogo">
+          <Link href="/catalogo/pagina-1" className="font-medium text-lg text-gray-800 hover:bg-gray-200 px-3 py-2 rounded transition transform hover:scale-105" aria-label="Ir al catálogo">
             Catálogo
           </Link>
           {/* Enlace WhatsApp en móvil */}
