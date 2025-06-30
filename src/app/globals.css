@@ -79,3 +79,42 @@ body {
   pointer-events: none;
   background: linear-gradient(to left, white, rgba(255,255,255,0));
 }
+
+/* globals.css */
+.rubros-grid-row {
+  display: grid;
+  gap: 1px; /* equivalente a gap-px */
+  /* por defecto (móvil) 1 columna */
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  /* usamos una variable --cols que fijaremos inline desde React */
+}
+
+/* >=640px (sm): hasta 2 columnas, o menos si --cols < 2 */
+@media (min-width: 640px) {
+  .rubros-grid-row {
+    grid-template-columns: repeat(
+      min(2, var(--cols)),
+      minmax(0, 1fr)
+    );
+  }
+}
+
+/* >=768px (md): hasta 3 columnas, o menos si --cols < 3 */
+@media (min-width: 768px) {
+  .rubros-grid-row {
+    grid-template-columns: repeat(
+      min(3, var(--cols)),
+      minmax(0, 1fr)
+    );
+  }
+}
+
+/* >=1024px (lg): tantas columnas como indique --cols (1–4) */
+@media (min-width: 1024px) {
+  .rubros-grid-row {
+    grid-template-columns: repeat(
+      var(--cols),
+      minmax(0, 1fr)
+    );
+  }
+}

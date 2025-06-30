@@ -7,7 +7,11 @@ import ClientShell  from '@/components/ClientShell'   // 👈 nuevo
 export const metadata: Metadata = {
   title: 'Perro Verde',
   description: 'Descripción por defecto.',
-  // …
+  icons: {
+    icon: '/favicon.ico',       
+    apple: '/favicon.ico',      
+    shortcut: '/favicon.ico'    
+  }
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
