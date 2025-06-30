@@ -4,7 +4,6 @@ import React, { useMemo } from 'react';
 import clsx from 'clsx';
 import slugify from '@/utils/slugify';
 import Link from 'next/link';
-import type { CfgRubros } from '@prisma/client';
 import ImageWithFallback from '@/components/ImageWithFallback';
 import { useBreakpointCols } from '@/hooks/useBreakpointCols';
 
