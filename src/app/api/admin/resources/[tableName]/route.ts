@@ -121,21 +121,6 @@ async function saveFotoIfAny(tableName: string, file: File | null, data: Record<
   data.foto = name
 }
 
-function formDataToObject(fd: FormData) {
-  const out: Record<string, unknown> = {}
-  fd.forEach((v, k) => {
-    if (v instanceof File) return
-    try { out[k] = JSON.parse(String(v)) }
-    catch {
-      const s = String(v)
-      if (/^\d+$/.test(s)) out[k] = Number(s)
-      else if (/^(true|false)$/i.test(s)) out[k] = /^true$/i.test(s)
-      else out[k] = s
-    }
-  })
-  return out
-}
-
 // ───────── GET (listado con paginación/orden/búsqueda/filtros) ─────────
 export async function GET(
   req: NextRequest,

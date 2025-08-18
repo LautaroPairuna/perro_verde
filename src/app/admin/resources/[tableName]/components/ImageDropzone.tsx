@@ -1,30 +1,44 @@
 'use client'
 import React from 'react'
+import Image from 'next/image'
 
 type Props = {
-  value?: File | null
+  /** Puede venir un File nuevo o un string (ruta/nombre existente) */
+  value?: File | string | null
+  /** Siempre devolvemos File (o null) al cambiar */
   onChange: (file: File | null) => void
   accept?: string
+  /**
+   * (Opcional) Resolver la ruta cuando `value` es string.
+   * Ej: (s) => `/images/productos/${s}` o a tu endpoint /api/disk-images/...
+   */
+  resolvePreviewSrc?: (src: string) => string
 }
 
-export default function ImageDropzone({ value, onChange, accept = 'image/*' }: Props) {
+export default function ImageDropzone({
+  value,
+  onChange,
+  accept = 'image/*',
+  resolvePreviewSrc,
+}: Props) {
   const inputRef = React.useRef<HTMLInputElement>(null)
-  const [dragOver, setDragOver] = React.useState(false)
-  const [preview, setPreview]   = React.useState<string | null>(null)
+  const [dragOver, setDragOver]   = React.useState(false)
+  const [blobUrl, setBlobUrl]     = React.useState<string | null>(null)
 
-  // Genera/limpia URL de preview cuando cambia el File
+  // Genera / limpia URL blob cuando value es File
   React.useEffect(() => {
     if (value instanceof File) {
       const url = URL.createObjectURL(value)
-      setPreview(url)
+      setBlobUrl(url)
       return () => URL.revokeObjectURL(url)
     }
-    setPreview(null)
+    setBlobUrl(null)
+    return
   }, [value])
 
   const handleFiles = (files: FileList | null) => {
-    const f = files?.[0]
-    if (f) onChange(f)
+    const f = files?.[0] ?? null
+    onChange(f)
   }
 
   const onDrop = (e: React.DragEvent) => {
@@ -33,6 +47,16 @@ export default function ImageDropzone({ value, onChange, accept = 'image/*' }: P
     setDragOver(false)
     handleFiles(e.dataTransfer.files)
   }
+
+  // Resuelve el src a mostrar:
+  // - si hay File => blobUrl
+  // - si hay string => usar resolvePreviewSrc si existe, sino la string tal cual
+  const previewSrc: string | null =
+    value instanceof File
+      ? blobUrl
+      : (typeof value === 'string' && value
+          ? (resolvePreviewSrc ? resolvePreviewSrc(value) : value)
+          : null)
 
   return (
     <div className="flex flex-col gap-3">
@@ -47,17 +71,15 @@ export default function ImageDropzone({ value, onChange, accept = 'image/*' }: P
         ].join(' ')}
         aria-label="Zona para arrastrar y soltar imagen"
       >
-        {preview ? (
+        {previewSrc ? (
           <div className="flex items-center justify-center">
-            {/* preview de la imagen cargada */}
-            {/* Nota: usamos <img> para evitar restricciones de next/image en inputs locales */}
-            {/* Mantiene look & feel simple acorde a tus formularios */}
-            {/* Si preferís next/image, habrá que manejar loader personalizado */}
-            {/* y no funciona con blob: por defecto */}
-            <img
-              src={preview}
-              alt="Vista previa"
-              className="h-32 w-32 object-cover rounded shadow"
+            <Image
+              src={previewSrc}
+              alt="Preview"
+              width={160}
+              height={160}
+              className="rounded border object-cover"
+              unoptimized
             />
           </div>
         ) : (

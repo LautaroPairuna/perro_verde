@@ -8,6 +8,17 @@ type ConfirmP = {
   onConfirm: () => void
   onCancel: () => void
 }
+
+function getItemLabel(row: Row): string {
+  // Evita `any`: leemos la propiedad de forma segura
+  const rec = row as Record<string, unknown>
+  const producto = rec['producto']
+  if (typeof producto === 'string' && producto.trim().length > 0) {
+    return producto
+  }
+  return String(rec['id'])
+}
+
 export const ConfirmModal = memo(function ConfirmModal({
   items, onConfirm, onCancel,
 }: ConfirmP) {
@@ -18,13 +29,15 @@ export const ConfirmModal = memo(function ConfirmModal({
         <span className="font-medium text-red-600">{items.length}</span>{' '}
         registro(s):
       </p>
+
       <ul className="list-disc list-inside max-h-40 overflow-y-auto border rounded p-4 bg-gray-50 mb-6">
-        {items.map((it, idx) => (
-          <li key={idx} className="text-gray-600">
-            {(it as any).producto || (it as any).id}
+        {items.map((it) => (
+          <li key={String((it as Record<string, unknown>)['id'])} className="text-gray-600">
+            {getItemLabel(it)}
           </li>
         ))}
       </ul>
+
       <div className="flex justify-end space-x-3">
         <button
           onClick={onCancel}

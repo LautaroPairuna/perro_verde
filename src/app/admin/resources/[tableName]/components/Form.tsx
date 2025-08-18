@@ -3,20 +3,35 @@ import React, { memo, FormEvent } from 'react'
 import { FkSelect } from './FkSelect'
 import ImageDropzone from './ImageDropzone'
 import { fkConfig } from '../config'
+import type { Json } from '../types'
+import { folderNames } from '@/lib/adminConstants'
 
 type FormP = {
-  initial: Record<string, any>
+  initial: Record<string, unknown>
   columns: string[]
   fixedFk?: string
-  onSubmit: (d: any) => void
+  onSubmit: (d: Record<string, Json>) => void
+  /** ← nuevo: nombre del recurso, ej. "Productos" */
+  resource?: string
 }
 
-export const Form = memo(function Form({
-  initial, columns, fixedFk, onSubmit,
-}: FormP) {
-  const [form, setForm] = React.useState<Record<string, any>>(() => ({ ...initial }))
-  const handle = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }))
-  const submit = (e: FormEvent) => { e.preventDefault(); onSubmit(form) }
+export function Form({ initial, columns, fixedFk, onSubmit, resource }: FormP) {
+  const [form, setForm] = React.useState<Record<string, unknown>>({ ...initial })
+
+  const handle = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }))
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    onSubmit(form as Record<string, Json>)
+  }
+
+  // Resolvemos la carpeta para previews cuando value sea string (foto existente)
+  const folderKey = React.useMemo(() => {
+    const r = resource?.trim()
+    if (!r) return null
+    const map = folderNames as Record<string, string>
+    return map[r] ?? r.toLowerCase()
+  }, [resource])
 
   return (
     <form
@@ -25,6 +40,7 @@ export const Form = memo(function Form({
       autoComplete="off"
     >
       {columns.map(col => {
+        /* FK */
         if (col in fkConfig) {
           const fixed = fixedFk === col
           return (
@@ -34,7 +50,7 @@ export const Form = memo(function Form({
               </label>
               <FkSelect
                 col={col}
-                value={form[col] ?? ''}
+                value={String(form[col] ?? '')}
                 fixed={fixed}
                 onChange={v => handle(col, v)}
               />
@@ -42,22 +58,38 @@ export const Form = memo(function Form({
           )
         }
 
-        if (col === 'foto')
+        /* FILE */
+        if (col === 'foto') {
+          const raw = form[col]
+          const dzValue =
+            raw instanceof File
+              ? raw
+              : typeof raw === 'string'
+              ? raw
+              : null
+
           return (
             <div key={col} className="flex flex-col">
               <label className="mb-1 text-gray-700 font-medium">Foto</label>
               <ImageDropzone
-                value={form[col] ?? null}
+                value={dzValue}                      // <-- ahora acepta File | string | null
                 onChange={(file) => handle(col, file)}
+                resolvePreviewSrc={
+                  folderKey
+                    ? (s) => `/images/${folderKey}/${s}` // también podrías usar /api/disk-images/${folderKey}/${s}
+                    : undefined
+                }
               />
             </div>
           )
+        }
 
+        /* OTHER */
         return (
           <div key={col} className="flex flex-col">
             <label className="mb-1 text-gray-700 font-medium">{col}</label>
             <input
-              value={form[col] ?? ''}
+              value={String(form[col] ?? '')}
               onChange={e => handle(col, e.target.value)}
               className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
@@ -75,19 +107,20 @@ export const Form = memo(function Form({
       </div>
     </form>
   )
-})
+}
 
 /* ───────────────────────────── BulkForm ───────────────────────────── */
 
-type BulkP = { onSubmit: (f: string, v: any) => void }
+type BulkValue = string | number | boolean
+type BulkP = { onSubmit: (field: string, value: BulkValue) => void }
 
 export const BulkForm = memo(function BulkForm({ onSubmit }: BulkP) {
-  const [field, setField] = React.useState('')
-  const [value, setValue] = React.useState('')
+  const [field, setField] = React.useState<string>('')
+  const [value, setValue] = React.useState<string>('')
 
   const send = (e: FormEvent) => {
     e.preventDefault()
-    onSubmit(field, value)
+    onSubmit(field, value) // parseo (num/bool) lo hacés en el handler del padre
   }
 
   return (

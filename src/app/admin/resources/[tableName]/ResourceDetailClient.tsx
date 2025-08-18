@@ -1,4 +1,4 @@
-/* eslint-disable react-hooks/rules-of-hooks, @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-imports */
+/* eslint-disable react-hooks/rules-of-hooks, @typescript-eslint/no-explicit-any */
 'use client'
 
 /* ────────────────────────────── 1. IMPORTS ─────────────────────────────── */
@@ -229,7 +229,11 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
   const handleCreate = useCallback(
     async (raw: Record<string, Json>) => {
       try {
-        const { id: _discard, ...clean } = sanitize(raw)
+        const clean = (() => {
+          const c = sanitize(raw)
+          delete c.id
+          return c
+        })()
         const endpoint = `/api/admin/resources/${resource}`
         const init: RequestInit =
           clean.foto instanceof File
@@ -726,6 +730,7 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
       {ui.createOpen && (
         <Modal title="Crear registro" onClose={() => dispatch({ type: 'openCreate', open: false })}>
           <Form
+            resource={resource}
             initial={child ? { [child.foreignKey]: child.parentId } : {}}
             columns={getDefaultColumns(DEFAULT_COLUMNS as Record<string, readonly string[]>, resource) ?? orderedColumns}
             fixedFk={child?.foreignKey}
@@ -737,6 +742,7 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
       {ui.editRow && ui.editRow !== 'bulk' && (
         <Modal title={`Editar registro ${(ui.editRow as Row).id}`} onClose={() => dispatch({ type: 'openEdit', row: null })}>
           <Form
+            resource={resource}
             initial={ui.editRow as Row}
             columns={getDefaultColumns(DEFAULT_COLUMNS as Record<string, readonly string[]>, resource) ?? orderedColumns}
             fixedFk={child?.foreignKey}

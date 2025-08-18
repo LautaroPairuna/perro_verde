@@ -1,48 +1,41 @@
 'use client'
-import { useEffect, useMemo, useState, useCallback } from 'react'
-import { smartCompare } from '../utils/compare'
-
-function useDebouncedValue<T>(value: T, delay = 220) {
-  const [v, setV] = useState(value)
-  useEffect(() => { const t = setTimeout(() => setV(value), delay); return () => clearTimeout(t) }, [value, delay])
-  return v
-}
+import React from 'react'
 
 export function useTable<T extends Record<string, unknown>>(
   data: T[],
-  opts?: { initialSort?: [string, 'asc' | 'desc'] }
+  opts?: { initialSort?: [keyof T & string, 'asc' | 'desc'] },
 ) {
-  const [search, setSearch] = useState('')
-  const [sortBy, setSortBy] = useState(opts?.initialSort?.[0] ?? '')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(opts?.initialSort?.[1] ?? 'asc')
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
-  const debouncedSearch = useDebouncedValue(search)
+  const [search, setSearch] = React.useState('')
+  const [sortBy, setSortBy] = React.useState<string>(opts?.initialSort?.[0] ?? '')
+  const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>(opts?.initialSort?.[1] ?? 'asc')
+  const [page, setPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(10)
 
-  useEffect(() => { setPage(1) }, [debouncedSearch, data, pageSize])
+  const filtered = React.useMemo(() => {
+    if (!search) return data
+    const term = search.toLowerCase()
+    return data.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(term)))
+  }, [data, search])
 
-  const filtered = useMemo(() => {
-    if (!debouncedSearch) return data
-    const term = debouncedSearch.toLowerCase()
-    return data.filter(r => Object.values(r).some(v => String(v ?? '').toLowerCase().includes(term)))
-  }, [data, debouncedSearch])
-
-  const sorted = useMemo(() => {
+  const sorted = React.useMemo(() => {
     if (!sortBy) return filtered
     return [...filtered].sort((a, b) => {
-      const res = smartCompare((a as any)[sortBy], (b as any)[sortBy])
-      return sortDir === 'asc' ? res : -res
+      const av = a[sortBy] as unknown as string
+      const bv = b[sortBy] as unknown as string
+      if (av < bv) return sortDir === 'asc' ? -1 : 1
+      if (av > bv) return sortDir === 'asc' ? 1 : -1
+      return 0
     })
   }, [filtered, sortBy, sortDir])
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
   const pageData   = sorted.slice((page - 1) * pageSize, page * pageSize)
 
-  const toggleSort = useCallback((col: string) => {
+  const toggleSort = (col: string) => {
     setPage(1)
     if (sortBy === col) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
     else { setSortBy(col); setSortDir('asc') }
-  }, [sortBy])
+  }
 
   return { search, setSearch, sortBy, sortDir, toggleSort, page, setPage, totalPages, pageSize, setPageSize, pageData }
 }

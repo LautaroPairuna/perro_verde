@@ -1,9 +1,9 @@
 'use client'
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import React from 'react'
 import { useCatalog } from '../hooks/useCatalog'
-import { fkConfig } from '../config' // Asegurate de exportar fkConfig desde config.ts
+import { fkConfig } from '../config'
 
+type FkCfg = { resource: string; labelKey: string; fieldLabel: string }
 type FkSelectP = {
   col: string
   value: string
@@ -12,27 +12,26 @@ type FkSelectP = {
 }
 
 export function FkSelect({ col, value, fixed, onChange }: FkSelectP) {
-  const cfg = (fkConfig as Record<string, { resource: string; labelKey: string; fieldLabel: string }>)[col]
-  // Si no hay config de FK, caemos a un input estándar (failsafe)
-  if (!cfg) {
-    return (
-      <>
-        <input
-          value={value ?? ''}
-          onChange={e => onChange(e.target.value)}
-          className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
-        />
-      </>
-    )
-  }
+  const cfg: FkCfg | undefined = (fkConfig as Record<string, FkCfg>)[col]
 
-  const { options, isLoading } = useCatalog(cfg.resource)
+  // Hook SIEMPRE llamado (clave vacía => SWR no fetch)
+  const { options, isLoading } = useCatalog(cfg?.resource ?? '')
   const safeOptions = Array.isArray(options) ? options : []
 
-  // label para fixed
   const fixedLabel =
-    safeOptions.find(o => String(o.id) === String(value))?.[cfg.labelKey] ??
-    (value || '')
+    safeOptions.find((o: { id: string | number }) => String(o.id) === String(value))?.[
+      cfg?.labelKey as string
+    ] ?? (value || '')
+
+  if (!cfg) {
+    return (
+      <input
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value)}
+        className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
+      />
+    )
+  }
 
   if (fixed) {
     return (
@@ -56,9 +55,9 @@ export function FkSelect({ col, value, fixed, onChange }: FkSelectP) {
       <option value="" disabled={isLoading}>
         {isLoading ? 'Cargando…' : '— Selecciona —'}
       </option>
-      {safeOptions.map((o: any) => (
-        <option key={o.id} value={String(o.id)}>
-          {o[cfg.labelKey]}
+      {safeOptions.map((o: Record<string, unknown>) => (
+        <option key={String(o.id)} value={String(o.id)}>
+          {String(o[cfg.labelKey])}
         </option>
       ))}
     </select>

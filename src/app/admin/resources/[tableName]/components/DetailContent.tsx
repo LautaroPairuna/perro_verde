@@ -2,14 +2,28 @@
 import React from 'react'
 import type { Row } from '../types'
 
+/* Type guards sin `any` */
+const isPrimitive = (v: unknown): v is string | number | boolean | null =>
+  v === null || ['string', 'number', 'boolean'].includes(typeof v)
+
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v)
+
+const isArrayOfObjects = (v: unknown): v is Array<Record<string, unknown>> =>
+  Array.isArray(v) && v.length > 0 && v.every(isPlainObject)
+
+const isArrayOfPrimitives = (v: unknown): v is Array<string | number | boolean | null> =>
+  Array.isArray(v) && v.every(isPrimitive)
+
 export function DetailContent({ row }: { row: Row }) {
   const [open, setOpen] = React.useState<Record<string, boolean>>({})
+  const entries = Object.entries(row as Record<string, unknown>)
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {Object.entries(row)
-        .filter(
-          ([, v]) => v == null || ['string', 'number', 'boolean'].includes(typeof v),
-        )
+      {/* Campos primitivos */}
+      {entries
+        .filter(([, v]) => isPrimitive(v))
         .map(([k, v]) => (
           <div key={k} className="flex">
             <span className="font-semibold w-40 text-gray-700">
@@ -19,8 +33,9 @@ export function DetailContent({ row }: { row: Row }) {
           </div>
         ))}
 
-      {Object.entries(row)
-        .filter(([, v]) => v && typeof v === 'object')
+      {/* Campos complejos */}
+      {entries
+        .filter(([, v]) => !isPrimitive(v))
         .map(([k, v]) => (
           <div key={k} className="md:col-span-2 border-t pt-4">
             <button
@@ -30,13 +45,15 @@ export function DetailContent({ row }: { row: Row }) {
               <span>{k.replace(/_/g, ' ')}</span>
               <span>{open[k] ? '▲' : '▼'}</span>
             </button>
+
             {open[k] && (
               <div className="mt-3 text-gray-800 text-sm space-y-2">
-                {Array.isArray(v) && v.length > 0 && typeof v[0] === 'object' && (
+                {/* Array de objetos → tabla */}
+                {isArrayOfObjects(v) && (
                   <table className="w-full text-sm border-collapse">
                     <thead className="bg-indigo-100">
                       <tr>
-                        {Object.keys(v[0] as Record<string, unknown>).map(c => (
+                        {Object.keys(v[0]).map(c => (
                           <th
                             key={c}
                             className="border px-2 py-1 text-left text-indigo-700"
@@ -47,14 +64,14 @@ export function DetailContent({ row }: { row: Row }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {(v as any[]).map((r: any, i: number) => (
+                      {v.map((r, i) => (
                         <tr
                           key={i}
                           className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
                         >
-                          {Object.keys(v[0] as Record<string, unknown>).map(c => (
+                          {Object.keys(v[0]).map(c => (
                             <td key={c} className="border px-2 py-1">
-                              {String(r[c])}
+                              {String((r as Record<string, unknown>)[c])}
                             </td>
                           ))}
                         </tr>
@@ -63,20 +80,19 @@ export function DetailContent({ row }: { row: Row }) {
                   </table>
                 )}
 
-                {Array.isArray(v) &&
-                  (v as any[]).every(e =>
-                    ['string', 'number', 'boolean'].includes(typeof e),
-                  ) && (
-                    <ul className="list-disc list-inside pl-4">
-                      {(v as any[]).map((it, idx) => (
-                        <li key={idx}>{String(it)}</li>
-                      ))}
-                    </ul>
-                  )}
+                {/* Array de primitivos → lista */}
+                {isArrayOfPrimitives(v) && (
+                  <ul className="list-disc list-inside pl-4">
+                    {v.map((it, idx) => (
+                      <li key={idx}>{String(it)}</li>
+                    ))}
+                  </ul>
+                )}
 
-                {!Array.isArray(v) && (
+                {/* Objeto plano → definición */}
+                {isPlainObject(v) && (
                   <dl className="space-y-1">
-                    {Object.entries(v as Record<string, unknown>).map(([prop, val]) => (
+                    {Object.entries(v).map(([prop, val]) => (
                       <div key={prop} className="flex">
                         <dt className="font-semibold w-36">
                           {prop.replace(/_/g, ' ')}:

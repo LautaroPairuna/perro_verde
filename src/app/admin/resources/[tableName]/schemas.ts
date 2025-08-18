@@ -7,7 +7,6 @@ const zBool = z.union([z.boolean(), z.string()]).transform(v => {
   return s === 'true' || s === '1' || s === 'on' || s === 'yes'
 })
 
-const zNum = z.coerce.number().finite();      // => ZodNumber (permite .nonnegative(), .min(), etc.)
 const zInt = z.coerce.number().int().finite(); // entero y finito
 
 /** Cfg* */
