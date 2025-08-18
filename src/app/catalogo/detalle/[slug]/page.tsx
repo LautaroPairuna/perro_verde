@@ -1,6 +1,5 @@
 // src/app/catalogo/detalle/[slug]/page.tsx
 import { redirect } from 'next/navigation'
-import Head from 'next/head'
 import slugify from '@/utils/slugify'
 import { getSingleProduct } from '@/utils/fetchData'
 import ProductInfo from '@/components/unProducto/ProductInfo'
@@ -10,8 +9,22 @@ import ImageWithFallback from '@/components/ImageWithFallback'
 import type { ProductDetail } from '@/utils/fetchData'
 import type { Metadata } from 'next'
 
-export const dynamic = 'force-dynamic'
-export const revalidate = 60
+// ✅ Cache ISR
+export const revalidate = 300 // 5 min
+
+// Helper JSON-LD
+function JsonLd({ data }: { data: Record<string, unknown> }) {
+  return (
+    <script
+      type="application/ld+json"
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+    />
+  )
+}
+
+const prodImg = (file?: string | null) =>
+  file ? `/images/productos/${file}` : '/images/placeholder-producto.jpg'
 
 export async function generateMetadata({
   params,
@@ -19,24 +32,41 @@ export async function generateMetadata({
   params: Promise<{ slug?: string }>
 }): Promise<Metadata> {
   const { slug } = await params
-  const defaultMeta = {
+  const fallback: Metadata = {
     title: 'Detalle de Producto',
     description: 'Producto no encontrado',
+    robots: { index: false }, // si no hay producto, no indexar
   }
-  if (!slug) return defaultMeta
+  if (!slug) return fallback
 
   const parts = slug.split('-')
   const productId = Number(parts.at(-1))
-  if (isNaN(productId)) return defaultMeta
+  if (isNaN(productId)) return fallback
 
   try {
     const raw = await getSingleProduct(productId)
+    const canonicalSlug = `${slugify(raw.producto)}-${raw.id}`
     return {
       title: `${raw.producto} | Detalle de Producto`,
       description: raw.descripcion?.slice(0, 160) || 'Descripción no disponible.',
+      alternates: { canonical: `/catalogo/detalle/${canonicalSlug}` },
+      openGraph: {
+        title: `${raw.producto} | Perro Verde`,
+        description: raw.descripcion?.slice(0, 200) || undefined,
+        url: `/catalogo/detalle/${canonicalSlug}`,
+        images: [
+          { url: prodImg(raw.foto), width: 1200, height: 1200, alt: raw.producto },
+        ],
+      },
+      twitter: {
+        card: 'summary_large_image',
+        title: `${raw.producto} | Perro Verde`,
+        description: raw.descripcion?.slice(0, 200) || undefined,
+        images: [prodImg(raw.foto)],
+      },
     }
   } catch {
-    return defaultMeta
+    return fallback
   }
 }
 
@@ -71,7 +101,7 @@ export default async function ProductDetailPage({
   const canonical = `${slugify(product.producto)}-${product.id}`
   if (slug !== canonical) redirect(`/catalogo/detalle/${canonical}`)
 
-  // Build images array
+  // Images para galería
   const images = [
     {
       src: `/images/productos/${product.foto}`,
@@ -89,15 +119,25 @@ export default async function ProductDetailPage({
     })),
   ]
 
-  // Unified fallback
   const FALLBACK = '/images/productos/placeholder.jpg'
+
+  // JSON-LD Product (sin offers)
+  const productLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.producto,
+    description: product.descripcion || undefined,
+    image: prodImg(product.foto),
+    sku: String(product.id),
+    brand: product.marca?.marca ? { '@type': 'Brand', name: product.marca.marca } : undefined,
+    category: product.rubro?.rubro,
+    url: `/catalogo/detalle/${canonical}`,
+  }
 
   return (
     <>
-      <Head>
-        <title>{`${product.producto} | Detalle de Producto`}</title>
-        <meta name="description" content={product.descripcion.slice(0, 160)} />
-      </Head>
+      {/* JSON-LD */}
+      <JsonLd data={productLd} />
 
       <main className="bg-gray-50 py-12">
         <div className="max-w-screen-xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 px-4">

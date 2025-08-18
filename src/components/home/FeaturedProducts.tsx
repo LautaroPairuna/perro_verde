@@ -12,7 +12,7 @@ interface Props {
 
 export default function FeaturedProducts({ products }: Props) {
   return (
-    <section className="relative bg-gradient-to-b from-green-50 to-white py-12 overflow-hidden group">
+    <section className="relative bg-green-100 py-12 overflow-hidden group">
       <div className="max-w-[1400px] mx-auto px-4">
         <h2 className="text-4xl md:text-5xl font-extrabold text-green-800 text-center mb-8 group">
           Productos Destacados
