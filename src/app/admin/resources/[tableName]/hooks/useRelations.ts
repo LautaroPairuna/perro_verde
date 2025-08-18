@@ -16,23 +16,21 @@ const fetchJson = async <T>(url: string): Promise<T> => {
   return (await r.json()) as T
 }
 
-/** Forzamos una vista indexable del relationMap sin perder readonly en los arrays */
+/** Vista indexable del relationMap sin perder readonly en los arrays */
 type RelationMapIndexable = Record<string, readonly string[]>
 const REL_MAP = relationMap as unknown as RelationMapIndexable
 
 /**
  * Carga en un solo hook SWR todas las relaciones definidas para `parent`.
  * - Sin `any`
- * - Sin hooks en bucles (rules-of-hooks OK)
+ * - Sin hooks en bucles/condicionales (usamos key = null para deshabilitar)
  * - Tipado estricto
  */
 export function useRelations(parent: string): RelationResult[] {
-  const children = REL_MAP[parent] ?? []
+  const children: readonly string[] = REL_MAP[parent] ?? []
 
-  // Cuando no hay relaciones, devolvemos estructura vacía SIN montar SWR
-  if (children.length === 0) return []
-
-  const swrKey = ['relations', parent, ...children] as const
+  // Key para SWR: si no hay relaciones, pasamos null (no fetch) pero el hook se llama igual.
+  const swrKey = children.length ? (['relations', parent, ...children] as const) : null
 
   const { data } = useSWRImmutable<RelationResult[]>(
     swrKey,
@@ -41,16 +39,16 @@ export function useRelations(parent: string): RelationResult[] {
         children.map(async (child) => {
           const rows = await fetchJson<Row[]>(`/api/admin/resources/${child}`)
           return { childTable: child, data: rows }
-        }),
+        })
       )
       return results
     },
     {
       revalidateOnFocus: false,
       keepPreviousData: true,
-    },
+    }
   )
 
-  // Shape estable durante carga
+  // Shape estable mientras carga o cuando no hay relaciones
   return data ?? children.map((child) => ({ childTable: child, data: [] as Row[] }))
 }
