@@ -1,3 +1,4 @@
+// src/app/api/disk-images/[...filePath]/route.ts
 import { NextRequest } from 'next/server'
 import * as fsSync from 'fs'
 import fs from 'fs/promises'
@@ -5,15 +6,15 @@ import path from 'path'
 import { lookup as mimeLookup } from 'mime-types'
 import { PrismaClient } from '@prisma/client'
 
-export const runtime = 'nodejs' // forzamos Node (fs)
+export const runtime = 'nodejs' // usamos fs nativo
 
-// ───────────────── Prisma singleton ─────────────────
-declare global { var __prisma: PrismaClient | undefined }
-const prisma = global.__prisma ?? new PrismaClient()
-if (process.env.NODE_ENV !== 'production') global.__prisma = prisma
+// ───────────────── Prisma singleton (sin `var`) ────────────────
+type GlobalWithPrisma = typeof globalThis & { __prisma?: PrismaClient }
+const g = globalThis as GlobalWithPrisma
+const prisma = g.__prisma ?? new PrismaClient()
+if (process.env.NODE_ENV !== 'production') g.__prisma = prisma
 
 // ──────────────── carpeta ⇄ tabla ────────────────
-// Debe coincidir con tus nombres en public/images/<carpeta>
 const TABLE_TO_FOLDER = {
   CfgMarcas:                'marcas',
   CfgRubros:                'rubros',
@@ -42,6 +43,21 @@ const IMAGE_FIELD_BY_TABLE: Partial<Record<TableName, string>> = {
 const ALLOWED_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif', '.svg'])
 const BASE_DIR = path.join(process.cwd(), 'public', 'images')
 
+// ───────────────── Micro-cache (evita Prisma en cada hit) ─────────────────
+type CacheVal = { ok: boolean; ts: number }
+const DB_HIT_TTL_MS = 10 * 60 * 1000 // 10m
+const dbCache = new Map<string, CacheVal>() // key = `${folder}/${file}`
+
+function dbCacheGet(key: string): boolean | null {
+  const v = dbCache.get(key)
+  if (!v) return null
+  if (Date.now() - v.ts > DB_HIT_TTL_MS) { dbCache.delete(key); return null }
+  return v.ok
+}
+function dbCacheSet(key: string, ok: boolean) {
+  dbCache.set(key, { ok, ts: Date.now() })
+}
+
 // ───────────────── helpers ─────────────────
 function jsonError(message: string, status = 400) {
   return new Response(JSON.stringify({ error: message }), {
@@ -59,18 +75,36 @@ function isInsideBase(absPath: string) {
   return normalized.startsWith(base)
 }
 function etagFromStat(stat: fsSync.Stats) {
-  // ETag débil (suficiente para imágenes locales)
   return `W/"${stat.size}-${Math.trunc(stat.mtimeMs)}"`
 }
 function cacheHeaderFor(fileName: string) {
   const looksHashed = /\.[a-f0-9]{8,}\./i.test(fileName)
-  return looksHashed ? 'public, max-age=31536000, immutable' : 'public, max-age=3600'
+  return looksHashed ? 'public, max-age=31536000, immutable'
+                     : 'public, max-age=3600, stale-while-revalidate=120'
 }
 
 type ResolveResult = {
   status: number
   headers: Record<string,string>
   absPath?: string
+}
+
+async function validateInDB(folder: FolderName, fileName: string): Promise<boolean> {
+  const tableName = FOLDER_TO_TABLE[folder]
+  const imageField = IMAGE_FIELD_BY_TABLE[tableName] ?? 'foto'
+  const modelKey = (tableName.charAt(0).toLowerCase() + tableName.slice(1)) as keyof PrismaClient
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const model = (prisma as any)[modelKey]
+  if (!model?.findFirst) return false
+  try {
+    const registro = await model.findFirst({
+      where: { [imageField]: fileName },
+      select: { id: true },
+    })
+    return !!registro
+  } catch {
+    return false
+  }
 }
 
 // Resuelve y arma headers (GET/HEAD comparten esto)
@@ -89,18 +123,14 @@ async function resolveImage(
   const ext = path.extname(fileName).toLowerCase()
   if (!ALLOWED_EXT.has(ext)) return { status: 415, headers: {}, absPath: undefined }
 
-  // valida en BD
-  const imageField = IMAGE_FIELD_BY_TABLE[tableName] ?? 'foto'
-  const modelKey = (tableName.charAt(0).toLowerCase() + tableName.slice(1)) as keyof PrismaClient
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const model = (prisma as any)[modelKey]
-  if (!model?.findFirst) return { status: 404, headers: {}, absPath: undefined }
-
-  const registro = await model.findFirst({
-    where: { [imageField]: fileName },
-    select: { id: true },
-  })
-  if (!registro) return { status: 404, headers: {}, absPath: undefined }
+  // Validación en BD con cache
+  const dbKey = `${folder}/${fileName}`
+  let ok = dbCacheGet(dbKey)
+  if (ok === null) {
+    ok = await validateInDB(folder, fileName)
+    dbCacheSet(dbKey, ok)
+  }
+  if (!ok) return { status: 404, headers: {}, absPath: undefined }
 
   const relPath = path.posix.join(folder, ...rest)
   const absPath = path.join(BASE_DIR, relPath)
@@ -130,6 +160,8 @@ async function resolveImage(
         'Content-Type': contentType,
         'X-Content-Type-Options': 'nosniff',
         'Cross-Origin-Resource-Policy': 'same-origin',
+        'Accept-Ranges': 'bytes',
+        Vary: 'If-None-Match, If-Modified-Since',
       },
       absPath,
     }
@@ -142,25 +174,25 @@ async function resolveImage(
     'Last-Modified': lastModified,
     'X-Content-Type-Options': 'nosniff',
     'Cross-Origin-Resource-Policy': 'same-origin',
+    'Accept-Ranges': 'bytes',
+    Vary: 'If-None-Match, If-Modified-Since',
   }
   if (contentType === 'image/svg+xml') {
-    headers['Content-Security-Policy'] = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'"
+    headers['Content-Security-Policy'] = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'"
   }
 
   return { status: 200, headers, absPath }
 }
 
-// ───────────────────────── GET ─────────────────────────
+// ───────────────────────── GET (streaming) ─────────────────────────
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ filePath: string[] }> }
 ) {
-  // 🔧 FIX principal: await params
   const { filePath: parts } = await context.params
-
   const result = await resolveImage(req, parts)
+
   if (result.status !== 200) {
-    // devolvemos error amigable (o 304 sin body)
     return result.status === 304
       ? new Response(null, { status: 304, headers: result.headers })
       : jsonError(
@@ -173,14 +205,23 @@ export async function GET(
         )
   }
 
-  // leemos y servimos
-  const fileBuffer = await fs.readFile(result.absPath!)
-  const body = new Uint8Array(fileBuffer) // BodyInit válido en Web Response
-  return new Response(body, { status: 200, headers: result.headers })
+  // Stream de Node → ReadableStream web
+  const nodeStream = fsSync.createReadStream(result.absPath!)
+  const stream = new ReadableStream({
+    start(controller) {
+      nodeStream.on('data', (chunk) => controller.enqueue(chunk))
+      nodeStream.on('end', () => controller.close())
+      nodeStream.on('error', (err) => controller.error(err))
+    },
+    cancel() {
+      nodeStream.destroy()
+    }
+  })
+
+  return new Response(stream, { status: 200, headers: result.headers })
 }
 
 // ───────────────────────── HEAD ─────────────────────────
-// útil para precarga/verificación de caché
 export async function HEAD(
   req: NextRequest,
   context: { params: Promise<{ filePath: string[] }> }
