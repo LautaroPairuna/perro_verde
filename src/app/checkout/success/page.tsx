@@ -1,11 +1,15 @@
-// src/app/checkout/success/page.tsx
+import type { Metadata } from 'next'
+import SuccessPageClient from './SuccessPageClient'
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 60;
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
-import SuccessPageClient from './SuccessPageClient';
+export const metadata: Metadata = {
+  title: 'Estado del pago',
+  description: 'Verificamos el estado de tu pago.',
+  alternates: { canonical: '/checkout/success' },
+}
 
-export default function SuccessPageWrapper() {
-  // Next.js renderizará el cliente en el navegador automáticamente
-  return <SuccessPageClient />;
+export default function SuccessPage() {
+  return <SuccessPageClient />
 }
