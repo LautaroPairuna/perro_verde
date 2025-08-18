@@ -1,4 +1,3 @@
-//src/app/admin/layout.tsx
 'use client'
 
 import { SessionProvider, useSession, signOut } from 'next-auth/react'
@@ -10,7 +9,7 @@ import {
   HiTag, HiCollection, HiCurrencyDollar, HiPhotograph,
   HiShoppingCart, HiUsers, HiMenu, HiX, HiLogout,
 } from 'react-icons/hi'
-
+import { UserBadgeIcon } from './resources/[tableName]/components/icons/UserBadgeIcon'
 const RESOURCES = [
   'CfgMarcas',
   'CfgRubros',
@@ -148,15 +147,24 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
       <main className={`${isRoot ? 'hidden' : 'flex-1 flex flex-col overflow-auto'}`}>
         <header className="hidden md:flex items-center justify-between bg-white border-b px-8 py-4 shadow-sm">
           <h1 className="text-xl font-semibold">{rawPath.split('/').pop()}</h1>
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
             <span className="text-gray-600">¡Hola, {displayName}!</span>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={avatarUrl} alt="Avatar" className="h-8 w-8 rounded-full object-cover"/>
+            <UserBadgeIcon className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
           </div>
         </header>
 
-        <div className="flex-1 p-6 md:p-8 bg-gray-50">
-          {children}
+        {/* === MEJORA DE LA SECCIÓN BLANCA (solo wrapper) === */}
+        <div className="flex-1 relative">
+          {/* Fondo notorio con gradientes radiales */}
+          <div className="pointer-events-none absolute inset-0 -z-10
+            bg-gradient-to-br from-indigo-50 via-white to-purple-50
+            dark:from-slate-900 dark:via-slate-950 dark:to-indigo-950
+            bg-[radial-gradient(900px_450px_at_20%_10%,rgba(99,102,241,0.10),transparent),radial-gradient(800px_400px_at_85%_15%,rgba(168,85,247,0.10),transparent)]" />
+
+          {/* Contenedor centrado más angosto para que se note el “card” */}
+          <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+            {children}
+          </div>
         </div>
       </main>
     </div>

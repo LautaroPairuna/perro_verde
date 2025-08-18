@@ -1,955 +1,684 @@
-// src/app/admin/resources/[tableName]/ResourceDetailClient.tsx
+/* eslint-disable react-hooks/rules-of-hooks, @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-imports */
+'use client'
 
-/* eslint-disable react-hooks/rules-of-hooks, @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any */
-  'use client'
+/* ────────────────────────────── 1. IMPORTS ─────────────────────────────── */
+import React, { useMemo, useCallback, useReducer, useEffect } from 'react'
+import useSWR, { mutate } from 'swr'
+import {
+  HiChevronLeft, HiChevronRight,
+  HiCheckCircle, HiXCircle, HiCalendar, HiDocumentText,
+  HiPencil, HiTrash, HiEye,
+  HiSortAscending, HiSortDescending
+} from 'react-icons/hi'
+import { ToastContainer, toast } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
 
-  import React, {
-    useState, useEffect, useMemo, useCallback, memo,
-  } from 'react'
-  import useSWR, { mutate } from 'swr'
-  import {
-    HiChevronLeft, HiChevronRight,
-    HiCheckCircle, HiXCircle, HiCalendar, HiDocumentText,
-    HiPencil, HiTrash, HiEye,
-    HiSortAscending, HiSortDescending,
-    HiPlus, HiAdjustments,
-  } from 'react-icons/hi'
-  import { ToastContainer, toast } from 'react-toastify'
-  import 'react-toastify/dist/ReactToastify.css'
-  import { folderNames } from '@/lib/adminConstants'
-  import Image from 'next/image'
-  
-  // ---------------------------------------------------------------------------
-  // CONFIGURACIÓN
-  // ---------------------------------------------------------------------------
-  
-  const fetcher = (url: string) => fetch(url).then(res => res.json())
-  
-  const READ_ONLY_RESOURCES = ['Pedidos'] // 🔸 Solo ver / editar
-  
-  const relationMap: Record<string, string[]> = {
-    Productos: ['ProductoFotos', 'ProductoVersiones', 'ProductoEspecificaciones'],
-  }
-  const relationLabels: Record<string, string> = {
-    ProductoFotos: 'Fotos',
-    ProductoVersiones: 'Versiones',
-    ProductoEspecificaciones: 'Especificaciones',
-  }
-  
-  /* ---------------------------------------------------------------------------
-   COLUMNAS QUE NO QUEREMOS MOSTRAR EN TABLAS (mismo que tenías)
-  --------------------------------------------------------------------------- */
-  const HIDDEN_COLUMNS: Record<string, string[]> = {
-    Productos:                ['marca_id', 'rubro_id', 'moneda_id'],
-    ProductoFotos:            ['producto_id'],
-    ProductoVersiones:        ['producto_id'],
-    ProductoEspecificaciones: ['producto_id'],
-  }
+import { useRelations } from './hooks/useRelations'
+import { useServerTable } from './hooks/useServerTable'
 
-  /* ---------------------------------------------------------------------------
-    MAPA COMPLETO DE COLUMNAS POR TABLA  (basado en schema.prisma)
-  --------------------------------------------------------------------------- */
-  const DEFAULT_COLUMNS: Record<string, string[]> = {
-    CfgMarcas: [
-      'id', 'marca', 'keywords', 'foto', 'activo',
-    ],
-    CfgRubros: [
-      'id', 'rubro', 'condiciones', 'keywords', 'foto', 'activo',
-    ],
-    CfgFormasPagos: [
-      'id', 'forma_pago', 'descripcion', 'permite_cuotas', 'activo',
-    ],
-    CfgMonedas: [
-      'id', 'moneda', 'moneda_des', 'activo',
-    ],
-    CfgSlider: [
-      'id', 'titulo', 'thumbs', 'foto', 'orden', 'activo',
-    ],
-    Productos: [
-      'id', 'marca_id', 'rubro_id', 'moneda_id',
-      'producto', 'descripcion', 'foto', 'precio',
-      'stock', 'destacado', 'activo', 'visitas',
-    ],
-    ProductoFotos: [
-      'id', 'producto_id', 'epigrafe', 'foto', 'orden', 'activo',
-    ],
-    ProductoVersiones: [
-      'id', 'producto_id', 'version', 'detalle', 'orden', 'activo',
-    ],
-    ProductoEspecificaciones: [
-      'id', 'producto_id', 'categoria', 'especificaciones', 'orden', 'activo',
-    ],
-    Pedidos: [
-      'id', 'datos', 'total', 'estado', 'metodo_pago',
-      'comprador_nombre', 'comprador_email', 'comprador_telefono',
-      'direccion_envio',
-      'mp_payment_id', 'transferencia_ref',
-      'tarjeta_last4', 'tarjeta_payment_method',
-      'mp_error_code', 'mp_error_message', 'mp_response',
-      'createdAt', 'updatedAt',
-    ],
+import { Modal } from './components/Modal'
+import { ConfirmModal } from './components/ConfirmModal'
+import { DetailContent } from './components/DetailContent'
+import { FotoCell } from './components/FotoCell'
+import { Form, BulkForm } from './components/Form'
+import { Toolbar } from './components/Toolbar'
+import { FiltersBar } from './components/FiltersBar'
+
+import {
+  DEFAULT_COLUMNS, HIDDEN_COLUMNS, READ_ONLY_RESOURCES, relationLabels,
+} from './config'
+import { getDefaultColumns, getHiddenColumns } from './utils/adminColumns'
+import { buildFD, sanitize } from './utils/formData'
+import type { Row, IdLike, Json } from './types'
+
+/* ───────────────────────── 2. HELPERS / CONSTANTES ──────────────────────── */
+const fetcher = (u: string) =>
+  fetch(u).then(async r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`)
+    return r.json()
+  })
+
+const dateFmt = new Intl.DateTimeFormat('es-AR')
+const csrfHdr = () => ({
+  'X-CSRF-Token': document.cookie.match(/(?:^|;\s*)csrfToken=([^;]+)/)?.[1] ?? '',
+})
+
+// columnas que pueden ser muy largas (clamp en tabla)
+const LONG_TEXT_COLS = new Set(['descripcion', 'detalle', 'especificaciones', 'condiciones'])
+
+const guessFK = (child: string, parent: string) => {
+  const hard: Record<string, string> = {
+    ProductoFotos:            'producto_id',
+    ProductoVersiones:        'producto_id',
+    ProductoEspecificaciones: 'producto_id',
   }
-  
-  const fkConfig: Record<
-    string,
-    { resource: string; labelKey: string; fieldLabel: string }
-  > = {
-    marca_id: { resource: 'CfgMarcas', labelKey: 'marca', fieldLabel: 'Marca' },
-    rubro_id: { resource: 'CfgRubros', labelKey: 'rubro', fieldLabel: 'Rubro' },
-    forma_pago_id: {
-      resource: 'CfgFormasPagos',
-      labelKey: 'descripcion',
-      fieldLabel: 'Forma de Pago',
-    },
-    moneda_id: { resource: 'CfgMonedas', labelKey: 'moneda_des', fieldLabel: 'Moneda' },
-    producto_id: {
-      resource: 'Productos',
-      labelKey: 'producto',
-      fieldLabel: 'Producto',
-    },
+  if (hard[child]) return hard[child]
+  const cols   = DEFAULT_COLUMNS[child as keyof typeof DEFAULT_COLUMNS] ?? []
+  const needle = parent.toLowerCase().replace(/s$/, '')
+  return cols.find(c => c.toLowerCase().endsWith('id') && c.toLowerCase().includes(needle)) ?? ''
+}
+
+/* ───────────────────────── 3. UI STATE ───────────────────────── */
+interface UiState {
+  selected: IdLike[]
+  createOpen: boolean
+  editRow: Row | 'bulk' | null
+  detailRow: Row | null
+  confirmRows: Row[] | null
+}
+type UiAction =
+  | { type: 'toggleSelect'; id: IdLike }
+  | { type: 'selectAll'; ids: IdLike[] }
+  | { type: 'resetSelect' }
+  | { type: 'openCreate'; open: boolean }
+  | { type: 'openEdit'; row: Row | 'bulk' | null }
+  | { type: 'openDetail'; row: Row | null }
+  | { type: 'confirmDelete'; rows: Row[] | null }
+
+const uiReducer = (s: UiState, a: UiAction): UiState => {
+  switch (a.type) {
+    case 'toggleSelect':
+      return {
+        ...s,
+        selected: s.selected.includes(a.id)
+          ? s.selected.filter(i => i !== a.id)
+          : [...s.selected, a.id],
+      }
+    case 'selectAll':
+      return { ...s, selected: s.selected.length === a.ids.length ? [] : a.ids }
+    case 'resetSelect':
+      return { ...s, selected: [] }
+    case 'openCreate':
+      return { ...s, createOpen: a.open }
+    case 'openEdit':
+      return { ...s, editRow: a.row }
+    case 'openDetail':
+      return { ...s, detailRow: a.row }
+    case 'confirmDelete':
+      return { ...s, confirmRows: a.rows }
   }
-  
-  // ---------------------------------------------------------------------------
-  // useTable – filtro, orden, paginación
-  // ---------------------------------------------------------------------------
-  function useTable(data: any[], opts?: { initialSort?: [string, 'asc' | 'desc'] }) {
-    const [search, setSearch] = useState('')
-    const [sortBy, setSortBy] = useState<string>(opts?.initialSort?.[0] || '')
-    const [sortDir, setSortDir] = useState<'asc' | 'desc'>(opts?.initialSort?.[1] || 'asc')
-    const [page, setPage] = useState(1)
-    const [pageSize, setPageSize] = useState(10)
-  
-    const filtered = useMemo(() => {
-      if (!search) return data
-      const term = search.toLowerCase()
-      return data.filter(row =>
-        Object.values(row).some(v => String(v).toLowerCase().includes(term)),
-      )
-    }, [data, search])
-  
-    const sorted = useMemo(() => {
-      if (!sortBy) return filtered
-      return [...filtered].sort((a, b) => {
-        if (a[sortBy] < b[sortBy]) return sortDir === 'asc' ? -1 : 1
-        if (a[sortBy] > b[sortBy]) return sortDir === 'asc' ? 1 : -1
-        return 0
-      })
-    }, [filtered, sortBy, sortDir])
-  
-    const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
-    const pageData = sorted.slice((page - 1) * pageSize, page * pageSize)
-  
-    const toggleSort = useCallback(
-      (col: string) => {
-        setPage(1)
-        if (sortBy === col) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
-        else {
-          setSortBy(col)
-          setSortDir('asc')
+}
+
+/* ───────────────────────── 4. FILTERS TIPOS ───────────────────────── */
+// Filtros de UI (permiten undefined/null). Así evitamos el error de tipos con FiltersBar.
+type UIFilters = Record<string, string | number | boolean | undefined | null>
+
+const compactFilters = (o: UIFilters): Record<string, string | number | boolean> =>
+  Object.fromEntries(
+    Object.entries(o).filter(([, v]) => v !== '' && v !== undefined && v !== null)
+  ) as Record<string, string | number | boolean>
+
+/* ╭────────────────────── 5. MAIN COMPONENT ────────────────────╮ */
+export default function ResourceDetailClient({ tableName }: { tableName: string }) {
+  const readOnly = READ_ONLY_RESOURCES.includes(tableName)
+
+  // para título / breadcrumb
+  const { data: parentResp, error: parentError, isValidating: loadingParent } =
+    useSWR<any>(`/api/admin/resources/${tableName}?page=1&pageSize=50`, fetcher, {
+      revalidateOnFocus: false,
+      keepPreviousData: true,
+    })
+  const rows: any[] = Array.isArray(parentResp) ? parentResp : (parentResp?.rows ?? [])
+
+  const relationsData = useRelations(tableName)
+  const [child, setChild] = React.useState<{
+    childTable: string
+    foreignKey: string
+    parentId: IdLike
+  } | null>(null)
+
+  const [ui, dispatch] = useReducer(uiReducer, {
+    selected: [],
+    createOpen: false,
+    editRow: null,
+    detailRow: null,
+    confirmRows: null,
+  })
+
+  useEffect(() => { dispatch({ type: 'resetSelect' }) }, [tableName, child])
+
+  const resource = child ? child.childTable : tableName
+
+  /* ──────────────── Tabla en servidor: página, sort, búsqueda, filtros ─────────────── */
+  const [page, setPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(10)
+  const [sortBy, setSortBy] = React.useState('id')
+  const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>('asc')
+  const [search, setSearch] = React.useState('')
+  const [uiFilters, setUIFilters] = React.useState<UIFilters>({})
+
+  // Filtros limpios para el servidor (+ FK si estamos viendo una relación hija)
+  const baseClean = useMemo(() => compactFilters(uiFilters), [uiFilters])
+  const effectiveFilters = useMemo(
+    () => (child ? { ...baseClean, [child.foreignKey]: child.parentId } : baseClean),
+    [baseClean, child]
+  )
+
+  const { rows: data, total, validating, refresh } = useServerTable(resource, {
+    page, pageSize, sortBy, sortDir, search, filters: effectiveFilters,
+  })
+
+  /* ──────────────── columnas visibles (readonly → mutable string[]) ─────────────── */
+  const rawCols = useMemo(() => {
+    const def = getDefaultColumns(DEFAULT_COLUMNS as Record<string, readonly string[]>, resource)
+    return def ?? Object.keys((data as Row[])[0] ?? {})
+  }, [data, resource])
+
+  const hidden  = getHiddenColumns(HIDDEN_COLUMNS as Record<string, readonly string[]>, resource)
+  const visibleCols = useMemo(() => rawCols.filter(c => !hidden.includes(c)), [rawCols, hidden])
+
+  const orderedColumns = useMemo(() => {
+    if (tableName === 'Productos' && !child) {
+      const first = ['id', 'producto', 'precio']
+      return [...first, ...visibleCols.filter(c => !first.includes(c))]
+    }
+    return visibleCols
+  }, [visibleCols, tableName, child])
+
+  /* ──────────────── Rel counts y FK (O(1) por fila) ─────────────── */
+  const relMeta = useMemo(() => {
+    const map: Record<string, { fk: string; counts: Map<string, number> }> = {}
+    for (const rel of relationsData) {
+      const relRows = rel.data as Row[]
+      const fk =
+        relRows.length > 0
+          ? (Object.keys(relRows[0]).find(
+              k =>
+                k.toLowerCase().endsWith('id') &&
+                k.toLowerCase().includes(tableName.toLowerCase().replace(/s$/, '')),
+            ) ?? guessFK(rel.childTable, tableName))
+          : guessFK(rel.childTable, tableName)
+
+      const counts = new Map<string, number>()
+      if (relRows?.length && fk) {
+        for (const r of relRows) {
+          const pid = String(r[fk] as IdLike)
+          counts.set(pid, (counts.get(pid) ?? 0) + 1)
         }
-      },
-      [sortBy],
-    )
-  
-    return {
-      search,
-      setSearch,
-      sortBy,
-      sortDir,
-      toggleSort,
-      page,
-      setPage,
-      totalPages,
-      pageSize,
-      setPageSize,
-      pageData,
+      }
+      map[rel.childTable] = { fk, counts }
     }
-  }
+    return map
+  }, [relationsData, tableName])
 
-  function FotoCell({
-    tableName,
-    childRelation,
-    fileName,
-  }: {
-    tableName: string;
-    childRelation?: { childTable: string } | null;
-    fileName: string;
-  }) {
-    const key = folderNames[ childRelation?.childTable ?? tableName ];
-    const thumbSrc = `/images/${key}/thumbs/${fileName}`;
-    const fullSrc  = `/images/${key}/${fileName}`;
+  /* ╭─────────────────────────── CRUD ─────────────────────────╮ */
+  const refreshAll = useCallback(() => {
+    refresh()
+    mutate(`/api/admin/resources/${tableName}?page=1&pageSize=50`)
+  }, [refresh, tableName])
 
-    const [src, setSrc] = useState(thumbSrc);
-    const [errored, setErrored] = useState(false);
-
-    const handleError = useCallback(() => {
-      if (src === thumbSrc) {
-        setSrc(fullSrc);           // primer fallback: imagen completa
-      } else {
-        setErrored(true);           // segundo fallo: ocultar
-      }
-    }, [src, thumbSrc, fullSrc]);
-
-    if (errored) {
-      // Si ambas rutas fallaron, solo mostramos el nombre
-      return (
-        <span className="text-xs text-gray-600 truncate" style={{ maxWidth: 100 }}>
-          {fileName}
-        </span>
-      );
-    }
-
-    return (
-      <div className="flex items-center space-x-2">
-        <Image
-          src={src}
-          alt={fileName}
-          width={64}
-          height={64}
-          className="object-cover rounded shadow flex-shrink-0"
-          onError={handleError}
-        />
-        <span className="text-xs text-gray-600 truncate" style={{ maxWidth: 100 }}>
-          {fileName}
-        </span>
-      </div>
-    );
-  }
-  
-  // ---------------------------------------------------------------------------
-  // Utilidades
-  // ---------------------------------------------------------------------------
-  function buildFormData(data: Record<string, any>): FormData {
-    const fd = new FormData()
-    Object.entries(data).forEach(([k, v]) => {
-      if (v instanceof File) fd.append(k, v)
-      else fd.append(k, typeof v === 'object' ? JSON.stringify(v) : v)
-    })
-    return fd
-  }
-  
-  // ---------------------------------------------------------------------------
-  // Hook auxiliar — carga relaciones SIN violar rules‑of‑hooks
-  // ---------------------------------------------------------------------------
-  function useRelations(relations: string[]) {
-    /* eslint-disable-next-line react-hooks/rules-of-hooks */
-    return relations.map(childTable => {
-      const { data = [] } = useSWR<any[]>(`/api/admin/resources/${childTable}`, fetcher)
-      return { childTable, data }
-    })
-  }
-
-  // -----------------------------------------------------------------------------
-  // helpers locales
-  // -----------------------------------------------------------------------------
-  type JsonValue = string | number | boolean | null | Blob | File
-
-  /** Convierte '1' → 1, 'true' → true, etc.  */
-  const normalizeValue = (v: JsonValue): JsonValue => {
-    if (typeof v !== 'string') return v
-    if (/^\d+$/.test(v))       return Number(v)
-    if (v === 'true')          return true
-    if (v === 'false')         return false
-    return v
-  }
-
-  /** Normaliza números/booleanos y quita claves vacías/undefined */
-  function sanitize<T extends Record<string, JsonValue>>(obj: T) {
-    const out: Record<string, JsonValue> = {}
-    Object.entries(obj).forEach(([k, v]) => {
-      if (v === undefined) return
-      out[k] = normalizeValue(v)
-    })
-    return out
-  }
-
-  const guessFK = (child: string, parent: string): string => {
-    // 1️⃣  si ya la tienes mapeada, úsala
-    const hard: Record<string, string> = {
-      ProductoFotos: 'producto_id',
-      ProductoVersiones: 'producto_id',
-      ProductoEspecificaciones: 'producto_id',
-    }
-    if (hard[child]) return hard[child]
-  
-    // 2️⃣  si no, intenta deducirla con DEFAULT_COLUMNS
-    const cols = DEFAULT_COLUMNS[child] ?? []
-    const needle = parent.toLowerCase().replace(/s$/, '')
-    return (
-      cols.find(
-        c => c.toLowerCase().endsWith('id') && c.toLowerCase().includes(needle),
-      ) ?? ''
-    )
-  }
-  
-  // ---------------------------------------------------------------------------
-  // Componente principal
-  // ---------------------------------------------------------------------------
-  export default function ResourceDetailClient({ tableName }: { tableName: string }) {
-     /* ------------- hooks principales ---------------- */
-    const readOnly = READ_ONLY_RESOURCES.includes(tableName)
-    const { data: rows = [], error: parentError } = useSWR<any[]>(
-      `/api/admin/resources/${tableName}`, fetcher)
-
-    /* Early‑return por error/carga ANTES de cualquier useMemo extra */
-    if (parentError) return <div className="p-4 text-red-500">Error al cargar datos</div>
-    if (!rows)       return <div className="p-4 text-gray-600">Cargando…</div>
-  
-    // -------------------------------- relaciones hijo
-    const [childRelation, setChildRelation] = useState<{
-      childTable: string
-      foreignKey: string
-      parentId: any
-    } | null>(null)
-  
-    const allRelations = relationMap[tableName] || []
-    const relationDataArray = useRelations(allRelations) // ✅ sin hook en loops
-  
-    const rawChild = useMemo(() => {
-      if (!childRelation) return []
-      const relObj = relationDataArray.find(r => r.childTable === childRelation.childTable)
-      return relObj ? relObj.data : []
-    }, [childRelation, relationDataArray])
-  
-    const childData = useMemo(() => {
-      if (!childRelation) return []
-    
-      const { foreignKey, parentId } = childRelation
-    
-      return rawChild.filter(r =>
-        // 1️⃣  Comprueba que la FK exista en la fila
-        foreignKey in r &&
-        // 2️⃣  Compara siempre como cadena (evita number vs string)
-        String(r[foreignKey]) === String(parentId)
-      )
-    }, [rawChild, childRelation])
-
-    useEffect(() => {
-      setPage(1)
-    }, [childRelation])
-  
-     // -------------------------------- tabla activa
-   const tableData = childRelation ? childData : rows
-
-   /* ---------- detectamos el recurso actual (tabla padre o tabla hija) ---------- */
-    const resource = childRelation ? childRelation.childTable : tableName
-  
-    /* ---------- columnas base detectadas ---------- */
-    const rawColumns = useMemo<string[]>(
-      () => Object.keys(tableData[0] || {}),
-      [tableData],
-    )
-
-    /* ---------- columnas visibles (filtradas y con defaults si está vacía) ---------- */
-  const visibleCols = useMemo<string[]>(() => {
-      const hidden = HIDDEN_COLUMNS[resource] ?? []
-  
-      if (rawColumns.length > 0) {
-        // con filas: inferimos de los datos
-        return rawColumns.filter(c => !hidden.includes(c))
-      }
-  
-      // tabla vacía: usamos DEFAULT_COLUMNS del recurso correcto
-      const base = DEFAULT_COLUMNS[resource] ?? ['id']
-      const cols = base.filter(c => !hidden.includes(c))
-  
-      // Asegurarnos de incluir la FK en vistas hijas vacías
-      if (childRelation && !cols.includes(childRelation.foreignKey)) {
-        return ['id', childRelation.foreignKey, ...cols.filter(c => c !== 'id')]
-      }
-  
-      return cols
-    }, [rawColumns, resource, childRelation])
-
-    /* ---------- orden especial para Productos ---------- */
-    const columns = useMemo<string[]>(() => {
-      if (tableName === 'Productos' && !childRelation) {
-        const first = ['id', 'producto', 'precio']
-        const rest  = visibleCols.filter(c => !first.includes(c))
-        return [...first, ...rest]
-      }
-      return visibleCols
-    }, [visibleCols, tableName, childRelation])
-  
-    // -------------------------------- useTable
-    const {
-      search,
-      setSearch,
-      sortBy,
-      sortDir,
-      toggleSort,
-      page,
-      setPage,
-      totalPages,
-      pageSize,
-      setPageSize,
-      pageData,
-    } = useTable(tableData, { initialSort: ['id', 'asc'] })
-  
-    // -------------------------------- recargas SWR
-    const refreshParent = useCallback(
-      () => mutate(`/api/admin/resources/${tableName}`),
-      [tableName],
-    )
-    const refreshChild = useCallback(
-      async () => {
-        if (!childRelation) return
-        const key = `/api/admin/resources/${childRelation.childTable}`
-        // fuerza revalidación ignorando el dedupeInterval
-        await mutate(key, undefined, { revalidate: true })
-      },
-      [childRelation],
-    )
-  
-    // -------------------------------- selección y modales
-    const [selected, setSelected] = useState<any[]>([])
-    const [confirmItems, setConfirmItems] = useState<any[] | null>(null)
-    const [detailRow, setDetailRow] = useState<any | null>(null)
-    const [editRow, setEditRow] = useState<any | 'bulk' | null>(null)
-    const [createOpen, setCreateOpen] = useState(false)
-    const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
-  
-    useEffect(() => setSelected([]), [childRelation, tableName])
-  
-    const toggleSelect = useCallback(
-      (id: any) => {
-        setSelected(s => (s.includes(id) ? s.filter(x => x !== id) : [...s, id]))
-      },
-      [],
-    )
-    const toggleSelectAll = useCallback(() => {
-      const allIds = tableData.map(r => r.id)
-      setSelected(s => (s.length === allIds.length ? [] : allIds))
-    }, [tableData])
-
-    /** Decide a qué recurso golpear según contexto */
-    const pickResource = (
-      tableName: string,
-      childRelation: { childTable: string } | null
-    ) => childRelation?.childTable ?? tableName
-
-    // -----------------------------------------------------------------------------
-    // CREATE
-    // -----------------------------------------------------------------------------
-    const handleCreate = useCallback(
-      async (rawData: Record<string, JsonValue>) => {
-        const resource  = pickResource(tableName, childRelation)
-        const endpoint  = `/api/admin/resources/${resource}`
-
-        /** 🚩  Nunca enviamos id: se autoincrementa en la DB  */
-        const { id: _discard, ...clean } = sanitize(rawData)
-        const hasFile = clean.foto instanceof File
-
-        const init: RequestInit = hasFile
-          ? { method: 'POST', body: buildFormData(clean) }
+  const doUpdate = useCallback(
+    async (id: IdLike, body: Record<string, Json>) => {
+      const url  = `/api/admin/resources/${resource}/${id}`
+      const data = sanitize(body)
+      const init: RequestInit =
+        data.foto instanceof File
+          ? { method: 'PUT', body: buildFD(data), headers: csrfHdr() }
           : {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(clean),
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', ...csrfHdr() },
+              body: JSON.stringify(data),
             }
+      const res = await fetch(url, init)
+      const out = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(out.error || 'Error')
+    },
+    [resource],
+  )
 
-        const res     = await fetch(endpoint, init)
-        const payload = await res.json()
-
-        if (!res.ok) {
-          toast.error(payload.error || 'Error al crear')
-          return
-        }
-
+  const handleCreate = useCallback(
+    async (raw: Record<string, Json>) => {
+      try {
+        const { id: _discard, ...clean } = sanitize(raw)
+        const endpoint = `/api/admin/resources/${resource}`
+        const init: RequestInit =
+          clean.foto instanceof File
+            ? { method: 'POST', body: buildFD(clean), headers: csrfHdr() }
+            : {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...csrfHdr() },
+                body: JSON.stringify(clean),
+              }
+        const res = await fetch(endpoint, init)
+        const out = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(out.error || 'Error')
         toast.success('Registro creado')
-        setCreateOpen(false)
+        dispatch({ type: 'openCreate', open: false })
+        refreshAll()
+      } catch (e: any) {
+        toast.error(e.message)
+      }
+    },
+    [resource, refreshAll],
+  )
 
-        // ⚡️ refrescamos la lista correcta
-        if (childRelation) {
-          refreshChild()
-        } else {
-          refreshParent()
-        }
-      },
-      [tableName, childRelation, refreshChild, refreshParent]
-    )
-
-    // -----------------------------------------------------------------------------
-    // UPDATE
-    // -----------------------------------------------------------------------------
-    const handleUpdate = useCallback(
-      async (id: number | string, raw: Record<string, JsonValue>) => {
-        const resource = pickResource(tableName, childRelation)
-        const url      = `/api/admin/resources/${resource}/${id}`
-
-        // Clonamos, limpiamos keys no deseadas y normalizamos tipos
-        const data = sanitize({ ...raw })
-
-        // ⬇️ Solo eliminamos el alias “producto” cuando NO estamos en la tabla principal
-        if (resource !== 'Productos') {
-          delete data.producto
-        }
-
-        const hasNewFile = data.foto instanceof File
-
-        const init: RequestInit = hasNewFile
-          ? { method: 'PUT', body: buildFormData(data) }
-          : {
-              method : 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body   : JSON.stringify(data),
-            }
-
-        const res     = await fetch(url, init)
-        const payload = await res.json()
-
-        if (!res.ok) {
-          toast.error(payload.error || `Error al actualizar ${resource}`)
-          return
-        }
-
+  const handleUpdate = useCallback(
+    async (id: IdLike, raw: Record<string, Json>) => {
+      try {
+        await doUpdate(id, raw)
         toast.success(`Registro ${id} actualizado`)
-        setEditRow(null)
+        dispatch({ type: 'openEdit', row: null })
+        refreshAll()
+      } catch (e: any) {
+        toast.error(e.message)
+      }
+    },
+    [doUpdate, refreshAll],
+  )
 
-        // ⚡️ refrescamos ambas vistas si corresponde
-        mutate(`/api/admin/resources/${resource}`)
-        if (childRelation) {
-          refreshParent()
-        }
-      },
-      [tableName, childRelation, refreshParent],
-    )
-
-
-    // -----------------------------------------------------------------------------
-    // DELETE
-    // -----------------------------------------------------------------------------
-    const handleDelete = useCallback(
-      async (id: number | string, forcedResource?: string) => {
-        /** Si el botón llega con resource explícito lo respetamos;
-         *  si no, usamos el contexto actual                     */
-        const target = forcedResource ?? pickResource(tableName, childRelation)
-        const url    = `/api/admin/resources/${target}/${id}`
-
-        const res     = await fetch(url, { method: 'DELETE' })
-        const payload = await res.json()
-
-        if (!res.ok) {
-          toast.error(payload.error || `Error al eliminar en ${target}`)
-          return
-        }
-
-        toast.success(`Registro ${id} eliminado`)
-        setConfirmItems(null)
-        setSelected([])
-
-        // ⚡️ refrescamos tabla afectada y, si era hija, también padre
-        mutate(`/api/admin/resources/${target}`)
-        if (forcedResource || childRelation) refreshParent()
-      },
-      [tableName, childRelation, refreshParent, normalizeValue]
-    )
-  
-    // -----------------------------------------------------------------------------
-    // BULK UPDATE
-    // -----------------------------------------------------------------------------
-    const handleBulkUpdate = useCallback(
-      async (field: string, rawValue: JsonValue) => {
-        if (!field || selected.length === 0) return
-
-        const resource   = pickResource(tableName, childRelation)
-        const value      = normalizeValue(rawValue)    // 1 → number, 'true' → boolean
-        const body       = JSON.stringify({ [field]: value })
-
-        // Lanzamos todas las peticiones en paralelo
-        await Promise.all(
-          selected.map(id =>
-            fetch(`/api/admin/resources/${resource}/${id}`, {
-              method : 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body,
-            }),
-          )
+  const handleBulk = useCallback(
+    async (field: string, val: Json) => {
+      if (!field) { toast.error('Definí el campo a modificar'); return }
+      try {
+        const results = await Promise.allSettled(
+          ui.selected.map(id => doUpdate(id, { [field]: val }))
         )
+        const failed = results.filter(r => r.status === 'rejected')
+        if (failed.length) toast.error(`Fallaron ${failed.length} de ${results.length}`)
+        else toast.success(`Actualizados ${ui.selected.length} registro(s)`)
+        dispatch({ type: 'openEdit', row: null })
+        dispatch({ type: 'resetSelect' })
+        refreshAll()
+      } catch (e: any) {
+        toast.error(e.message)
+      }
+    },
+    [ui.selected, doUpdate, refreshAll],
+  )
 
-        toast.success(`Actualizados ${selected.length} registro(s)`)
-        setEditRow(null)
-        setSelected([])
+  const deleteOne = useCallback(
+    async (id: IdLike, forced?: string) => {
+      const tgt = forced || resource
+      const res = await fetch(`/api/admin/resources/${tgt}/${id}`, {
+        method: 'DELETE',
+        headers: csrfHdr(),
+      })
+      const out = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(out.error || 'Error')
+    },
+    [resource],
+  )
 
-        // ⚡️ refrescamos el recurso afectado y, si es hijo, también el padre
-        if (childRelation) {
-          refreshParent()
-        }
-      },
-      [selected, tableName, childRelation, refreshParent, normalizeValue]
-    )
-  
-    const selectedRows = useMemo(
-      () => tableData.filter(r => selected.includes(r.id)),
-      [selected, tableData],
-    )
-  
-    // -------------------------------------------------------------------------
-    // Render de celdas (Pedidos: datos mejorados)
-    // -------------------------------------------------------------------------
-    const renderCell = useCallback(
-      (val: any, col: string) => {
-        if (val == null) return <span className="text-gray-400">null</span>
-  
-        // Pedidos – columna DATOS
-        if (tableName === 'Pedidos' && col.toLowerCase() === 'datos') {
-          let items: any[] = []
-  
-          if (typeof val === 'string') {
-            try {
-              items = JSON.parse(val)
-            } catch {
-              items = []
-            }
-          } else if (Array.isArray(val)) {
-            items = val
-          }
-  
-          if (items.length) {
-            return (
-              <div className="text-sm text-indigo-700 leading-tight space-y-0.5">
-                {items.slice(0, 5).map((it, idx) => {
-                  const nombre = it.name || it.nombre || it.producto || `Ítem ${idx + 1}`
-                  const cant = it.cantidad ?? it.qty ?? it.quantity ?? it.cant ?? 1
-                  return (
-                    <div key={idx}>
-                      <span className="font-medium">{cant}×</span> {nombre}
-                    </div>
-                  )
-                })}
-                {items.length > 5 && (
-                  <div className="text-xs text-gray-500">… y {items.length - 5} más</div>
-                )}
-              </div>
-            )
-          }
-        }
+  const confirmDelete = useCallback(async () => {
+    if (!ui.confirmRows) return
+    try {
+      const results = await Promise.allSettled(
+        ui.confirmRows.map(r =>
+          deleteOne(
+            r.id as IdLike,
+            child ? child.childTable : undefined,
+          ),
+        ),
+      )
+      const failed = results.filter(r => r.status === 'rejected')
+      if (failed.length) toast.error(`Fallaron ${failed.length} eliminaciones`)
+      else toast.success('Eliminados correctamente')
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      dispatch({ type: 'confirmDelete', rows: null })
+      dispatch({ type: 'resetSelect' })
+      refreshAll()
+    }
+  }, [ui.confirmRows, deleteOne, child, refreshAll])
 
-        if (col === 'foto' && typeof val === 'string' && val.trim() !== '') {
+  /* ╭─────────────────────── renderCell ────────────────────────╮ */
+  const parsedDatos = useMemo(() => {
+    if (resource !== 'Pedidos') return {} as Record<string, any[]>
+    const m: Record<string, any[]> = {}
+    ;(data as Row[]).forEach(r => {
+      const raw = (r as any).datos
+      if (!raw) return
+      try {
+        m[String(r.id)] = typeof raw === 'string' ? JSON.parse(raw) : raw
+      } catch {
+        m[String(r.id)] = []
+      }
+    })
+    return m
+  }, [data, resource])
+
+  const renderCell = useCallback(
+    (val: unknown, col: string, rowId: number) => {
+      if (val == null) return <span className="text-gray-400">null</span>
+
+      if (resource === 'Pedidos' && col === 'datos') {
+        const items = parsedDatos[String(rowId)] ?? []
+        if (items.length)
           return (
-            <FotoCell
-              tableName={tableName}
-              childRelation={childRelation}
-              fileName={val}
-            />
-          );
-        }
-  
-        if (val instanceof Date) {
-          return (
-            <div className="flex items-center text-sm text-gray-700">
-              <HiCalendar className="h-4 w-4 text-blue-400 mr-1" />
-              {val.toLocaleDateString()}
+            <div className="text-sm text-indigo-700 leading-tight">
+              {items.slice(0, 5).map((it: any, i: number) => (
+                <div key={i}>
+                  <span className="font-medium">{it.cant || it.qty || 1}×</span>{' '}
+                  {it.name || it.nombre || it.producto || `Ítem ${i + 1}`}
+                </div>
+              ))}
+              {items.length > 5 && (
+                <div className="text-xs text-gray-500">
+                  … y {items.length - 5} más
+                </div>
+              )}
             </div>
           )
-        }
-  
-        if (typeof val === 'object') {
-          const json = JSON.stringify(val)
-          return (
-            <div className="flex items-center text-sm text-gray-700">
-              <HiDocumentText className="h-4 w-4 text-green-400 mr-1" />
-              {json.length > 40 ? json.slice(0, 40) + '…' : json}
-            </div>
-          )
-        }
-  
-        if (typeof val === 'boolean') {
-          return val ? (
-            <HiCheckCircle className="h-5 w-5 text-green-500" />
-          ) : (
-            <HiXCircle className="h-5 w-5 text-red-500" />
-          )
-        }
-  
-        const str = String(val)
+      }
+
+      if (col === 'foto' && typeof val === 'string' && val.trim())
+        return <FotoCell tableName={tableName} childRelation={child} fileName={val} />
+
+      if (val instanceof Date)
         return (
-          <span className="text-sm text-gray-700">
-            {str.length > 50 ? str.slice(0, 50) + '…' : str}
+          <span className="flex items-center">
+            <HiCalendar className="h-4 w-4 mr-1 text-blue-400" />
+            {dateFmt.format(val)}
           </span>
         )
-      },
-      [tableName],
-    )
-  
-    // -------------------------------------------------------------------------
-    // Estados de carga / error
-    // -------------------------------------------------------------------------
-    if (parentError) return <div className="p-4 text-red-500">Error al cargar datos</div>
-    if (!rows) return <div className="p-4 text-gray-600">Cargando...</div>
-  
-    // nombre padre (vista hijo)
-    const parentRow = rows.find(r => r.id === childRelation?.parentId)
-    const displayName =
-      parentRow?.nombre || parentRow?.name || `${tableName} #${childRelation?.parentId}`
-  
-    const nextId = useMemo(() => {
-      const source = childRelation ? rawChild : rows
-      if (!source.length) return 1
-      const maxId = Math.max(...source.map(r => typeof r.id === 'number' ? r.id : 0))
-      return maxId + 1
-    }, [rows])
 
-  // -------------------------------------------------------------------------
-  // UI
-  // -------------------------------------------------------------------------
+      if (typeof val === 'object')
+        return (
+          <span className="flex items-center">
+            <HiDocumentText className="h-4 w-4 mr-1 text-green-500" />
+            {JSON.stringify(val).slice(0, 40)}…
+          </span>
+        )
+
+      if (typeof val === 'boolean')
+        return val ? (
+          <HiCheckCircle className="h-5 w-5 text-green-500" />
+        ) : (
+          <HiXCircle className="h-5 w-5 text-red-500" />
+        )
+
+      const s = String(val)
+      const colLower = col.toLowerCase()
+      if (LONG_TEXT_COLS.has(colLower)) {
+        return (
+          <span
+            className="block whitespace-normal break-words text-gray-800"
+            style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+            title={s}
+          >
+            {s}
+          </span>
+        )
+      }
+
+      return (
+        <span className="block whitespace-normal break-words truncate" title={s}>
+          {s}
+        </span>
+      )
+    },
+    [tableName, child, resource, parsedDatos],
+  )
+
+  /* ╭───────────────────────── UI / Títulos ─────────────────────╮ */
+  if (parentError) return <div className="p-4 text-red-500">Error al cargar datos</div>
+
+  const humanize = (s: string) =>
+    s.replace(/^Cfg/, '').replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
+     .replace(/\s+/g, ' ').trim().replace(/\b\w/g, (c) => c.toUpperCase())
+
+  const parentRow = (rows as any[]).find(r => r.id === child?.parentId)
+  const displayName = parentRow?.producto ?? parentRow?.nombre ?? parentRow?.name ?? `#${child?.parentId}`
+  const baseLabel  = humanize(tableName)
+  const childLabel = child ? humanize(relationLabels[child.childTable as keyof typeof relationLabels] ?? child.childTable) : ''
+  const friendlyTitle = child ? `${childLabel} de ${displayName}` : baseLabel
+  const eyebrow       = child ? baseLabel : 'Gestión'
+
+  useEffect(() => {
+    const prev = document.title
+    document.title = `Admin · ${friendlyTitle}`
+    return () => { document.title = prev }
+  }, [friendlyTitle])
+
+  const totalPages = Math.max(1, Math.ceil((total ?? 0) / pageSize))
+  const toggleSort = (col: string) => {
+    setPage(1)
+    if (sortBy === col) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortBy(col); setSortDir('asc') }
+  }
+
+  /* ╭────────────────────────── RENDER ────────────────────────╮ */
   return (
-    <div className="container mx-auto p-6 bg-gray-50 min-h-screen space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-gray-800">Gestión de {tableName}</h1>
-        <p className="text-sm text-gray-600">Aquí puedes crear, editar y eliminar registros.</p>
+    <div className="space-y-6">
+      {/* HEADER */}
+      <header className="flex items-center justify-between">
+        <div className="flex flex-col">
+          <span className="text-[18px] uppercase tracking-wide text-indigo-600/80">
+            {eyebrow}
+          </span>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
+            {friendlyTitle}
+          </h1>
+        </div>
+        {(loadingParent || validating) && (
+          <span className="text-indigo-600 text-sm animate-pulse">cargando…</span>
+        )}
       </header>
 
-      {childRelation && (
-        <div className="mb-4 flex items-center space-x-4">
-          <button
-            onClick={() => setChildRelation(null)}
-            className="text-indigo-600 hover:underline focus:outline-none"
-          >
+      {/* BREADCRUMB cuando hay hijo */}
+      {child && (
+        <div className="flex items-center space-x-4 mb-2">
+          <button onClick={() => setChild(null)} className="text-indigo-600 hover:underline">
             ← Volver a {tableName}
           </button>
-          <h2 className="text-xl font-semibold text-gray-800">
-            {(relationLabels[childRelation.childTable] || childRelation.childTable)} de {displayName}
+          <h2 className="text-xl font-semibold">
+            {(relationLabels[child.childTable as keyof typeof relationLabels] ?? child.childTable)} de {displayName}
           </h2>
         </div>
       )}
 
-      <div className="bg-white shadow rounded-lg p-4 space-y-4">
+      {/* ╭──────────────────── CARD PRINCIPAL ───────────────────╮ */}
+      <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl ring-1 ring-indigo-200 p-4 md:p-6 space-y-4">
         <ToastContainer position="top-right" autoClose={3000} />
 
-        {/* -------------------------------------------------------------------
-           Toolbar
-        ------------------------------------------------------------------- */}
-        <div className="flex flex-wrap items-center justify-between mb-4 space-y-2">
-          <div className="flex space-x-2">
-            {!readOnly && (
-              <button
-                onClick={() => setCreateOpen(true)}
-                className="flex items-center bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded transition"
-              >
-                <HiPlus className="mr-2" /> Nuevo
-              </button>
-            )}
+        {/* Toolbar + Filtros (server-side) */}
+        <Toolbar
+          readOnly={readOnly}
+          selectedCount={ui.selected.length}
+          onNew={() => dispatch({ type: 'openCreate', open: true })}
+          onDeleteSelected={() =>
+            dispatch({
+              type: 'confirmDelete',
+              rows: (data as Row[]).filter((r: any) => ui.selected.includes(r.id)),
+            })
+          }
+          onBulkEdit={() => dispatch({ type: 'openEdit', row: 'bulk' })}
+          search={search}
+          setSearch={(v) => { setPage(1); setSearch(v) }}
+          pageSize={pageSize}
+          setPageSize={(n) => { setPage(1); setPageSize(n) }}
+        />
 
-            {/* Eliminar y bulk editar deshabilitados en readOnly */}
-            {!readOnly && selected.length > 0 && (
-              <>
-                <button
-                  onClick={() => setConfirmItems(selectedRows)}
-                  className="flex items-center bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded transition"
-                >
-                  <HiTrash className="mr-2" /> Eliminar ({selected.length})
-                </button>
-                <button
-                  onClick={() => setEditRow('bulk')}
-                  className="flex items-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition"
-                >
-                  <HiAdjustments className="mr-2" /> Editar ({selected.length})
-                </button>
-              </>
-            )}
-          </div>
+        <FiltersBar
+          resource={resource}
+          filters={uiFilters}
+          setFilters={(f) => { setPage(1); setUIFilters(f) }}
+        />
 
-          <div className="flex space-x-2">
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar..."
-              className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            />
-            <select
-              value={pageSize}
-              onChange={e => setPageSize(+e.target.value)}
-              className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            >
-              {[5, 10, 25, 50].map(n => (
-                <option key={n} value={n}>{n} filas</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-
-        {/* -------------------------------------------------------------------
-           Tabla
-        ------------------------------------------------------------------- */}
+        {/* Tabla */}
         <div className="overflow-x-auto">
-          {pageData.length === 0 ? (
+          {data.length === 0 ? (
             <div className="p-6 text-center text-gray-500">Sin resultados</div>
           ) : (
-            <table className="min-w-full divide-y divide-indigo-100">
+            <table className="min-w-full divide-y divide-indigo-100" role="grid">
               <thead className="sticky top-0 bg-indigo-600">
                 <tr>
                   <th className="px-4 py-3">
                     <input
                       type="checkbox"
-                      checked={selected.length === pageData.length && pageData.length > 0}
-                      onChange={toggleSelectAll}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      checked={ui.selected.length === data.length && data.length > 0}
+                      onChange={() =>
+                        dispatch({
+                          type: 'selectAll',
+                          ids: (data as Row[]).map(r => r.id as IdLike),
+                        })
+                      }
                       aria-label="Seleccionar todos"
+                      className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
                     />
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Acciones</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                    Acciones
+                  </th>
 
-                  {/* columnas + inserción de relaciones justo después de PRECIO */}
-                  {columns.flatMap((col: string) => {
+                  {orderedColumns.flatMap(col => {
                     const th = (
                       <th
                         key={col}
                         onClick={() => toggleSort(col)}
-                        aria-sort={
-                          sortBy === col
-                            ? (sortDir === 'asc' ? 'ascending' : 'descending')
-                            : 'none'
-                        }
+                        aria-sort={sortBy === col ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                        scope="col"
                         className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider cursor-pointer select-none"
                       >
                         {col}
-                        {sortBy === col && (
-                          sortDir === 'asc'
-                            ? <HiSortAscending className="inline h-4 w-4 ml-1 text-white" />
-                            : <HiSortDescending className="inline h-4 w-4 ml-1 text-white" />
-                        )}
+                        {sortBy === col &&
+                          (sortDir === 'asc' ? (
+                            <HiSortAscending className="inline h-4 w-4 ml-1 text-white" />
+                          ) : (
+                            <HiSortDescending className="inline h-4 w-4 ml-1 text-white" />
+                          ))}
                       </th>
                     )
 
-                    if (tableName === 'Productos' && !childRelation && col === 'precio') {
-                      const childThs = allRelations.map(ct => (
+                    if (tableName === 'Productos' && !child && col === 'precio') {
+                      const relThs = relationsData.map(r => (
                         <th
-                          key={`c-${ct}`}
+                          key={'c-' + r.childTable}
+                          scope="col"
                           className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider"
                         >
-                          {relationLabels[ct] || ct}
+                          {relationLabels[r.childTable as keyof typeof relationLabels] ?? r.childTable}
                         </th>
                       ))
-                      return [th, ...childThs]
+                      return [th, ...relThs]
                     }
                     return th
                   })}
 
-                  {/* para otras tablas (no Productos) seguimos agregando relaciones al final */}
-                  {tableName !== 'Productos' && !childRelation && allRelations.map(ct => (
+                  {tableName !== 'Productos' && !child && relationsData.map(r => (
                     <th
-                      key={ct}
+                      key={r.childTable}
+                      scope="col"
                       className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider"
                     >
-                      {relationLabels[ct] || ct}
+                      {relationLabels[r.childTable as keyof typeof relationLabels] ?? r.childTable}
                     </th>
                   ))}
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-indigo-100">
-                {pageData.map((row) => (
+                {(data as Row[]).map((row: any) => (
                   <tr key={row.id} className="odd:bg-indigo-50 even:bg-white hover:bg-indigo-100 transition">
                     {/* checkbox */}
                     <td className="px-4 py-2">
                       <input
                         type="checkbox"
-                        checked={selected.includes(row.id)}
-                        onChange={() => toggleSelect(row.id)}
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                        checked={ui.selected.includes(row.id)}
+                        onChange={() => dispatch({ type: 'toggleSelect', id: row.id })}
                         aria-label={`Seleccionar fila ${row.id}`}
+                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
                       />
                     </td>
 
                     {/* acciones */}
-                    <td className="px-4 py-2 flex space-x-3 items-center *:justify-center *:text-center ">
-                      <button
-                        title="Ver"
-                        onClick={() => { setDetailRow(row); setEditRow(null); setConfirmItems(null) }}
-                        className="p-1 hover:text-indigo-600 transition"
-                        aria-label={`Ver fila ${row.id}`}
-                      >
-                        <HiEye className="h-5 w-5" />
-                      </button>
-                      <button
-                        title="Editar"
-                        onClick={() => setEditRow(row)}
-                        className="p-1 hover:text-indigo-600 transition"
-                        aria-label={`Editar fila ${row.id}`}
-                      >
-                        <HiPencil className="h-5 w-5" />
-                      </button>
-
-                      {!readOnly && (
+                    <td className="px-4 py-2 align-middle">
+                      <div className="inline-flex items-center gap-3">
                         <button
-                          title="Eliminar"
-                          onClick={() => setConfirmItems([row])}
-                          className="p-1 hover:text-red-600 transition"
-                          aria-label={`Eliminar fila ${row.id}`}
+                          title="Ver"
+                          onClick={() => dispatch({ type: 'openDetail', row })}
+                          className="p-1 hover:text-indigo-600"
+                          aria-label={`Ver fila ${row.id}`}
                         >
-                          <HiTrash className="h-5 w-5" />
+                          <HiEye className="h-5 w-5" />
                         </button>
-                      )}
+
+                        <button
+                          title="Editar"
+                          onClick={() => dispatch({ type: 'openEdit', row })}
+                          className="p-1 hover:text-indigo-600"
+                          aria-label={`Editar fila ${row.id}`}
+                        >
+                          <HiPencil className="h-5 w-5" />
+                        </button>
+
+                        {!readOnly && (
+                          <button
+                            title="Eliminar"
+                            onClick={() => dispatch({ type: 'confirmDelete', rows: [row] })}
+                            className="p-1 hover:text-red-600"
+                            aria-label={`Eliminar fila ${row.id}`}
+                          >
+                            <HiTrash className="h-5 w-5" />
+                          </button>
+                        )}
+                      </div>
                     </td>
 
-                    {/* celdas */}
-                    {columns.flatMap((col: string) => {
+                    {/* celdas data + relaciones */}
+                    {orderedColumns.flatMap(col => {
                       const td = (
                         <td
                           key={col}
-                          className="px-4 py-2 whitespace-nowrap text-sm text-gray-800 border-b border-indigo-100"
+                          className="px-4 py-2 whitespace-nowrap text-sm text-gray-800 border-b border-indigo-100 max-w-[220px]"
                         >
-                          {renderCell(row[col], col)}
+                          {renderCell(row[col], col, row.id)}
                         </td>
                       )
 
-                      if (tableName === 'Productos' && !childRelation && col === 'precio') {
-                        const childTds = allRelations.map(ct => {
-                          const relObj = relationDataArray.find(r => r.childTable === ct)
-                          const relRows = relObj ? relObj.data : []
-                          if (!relRows.length) return <td key={`c-${ct}`} />
-                          const fk = relRows.length
-                            ? Object.keys(relRows[0]).find(
-                                k =>
-                                  k.toLowerCase().endsWith('id') &&
-                                  k.toLowerCase().includes(tableName.toLowerCase().replace(/s$/, '')),
-                              )
-                            : guessFK(ct, tableName)
-                          const count = fk ? relRows.filter(r => r[fk] === row.id).length : 0
+                      if (tableName === 'Productos' && !child && col === 'precio') {
+                        const childrenTds = relationsData.map(rel => {
+                          const meta = relMeta[rel.childTable]
+                          const count = meta?.counts.get(String(row.id)) ?? 0
                           return (
-                            <td key={`c-${ct}`} className="px-4 py-2 whitespace-nowrap text-sm text-gray-800 border-b border-indigo-100">
+                            <td
+                              key={'c-' + rel.childTable}
+                              className="px-4 py-2 whitespace-nowrap text-sm text-gray-800 border-b border-indigo-100"
+                            >
                               <button
                                 className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs hover:bg-green-200 transition"
-                                onClick={() => setChildRelation({ childTable: ct, foreignKey: fk!, parentId: row.id })}
-                                aria-label={`Ver ${relationLabels[ct] || ct} de ${row.id}`}
+                                onClick={() => setChild({
+                                  childTable: rel.childTable,
+                                  foreignKey: meta.fk,
+                                  parentId: row.id,
+                                })}
+                                aria-label={`Ver ${
+                                  relationLabels[rel.childTable as keyof typeof relationLabels] ?? rel.childTable
+                                } de ${row.id}`}
                               >
-                                {(relationLabels[ct] || ct)} ({count})
+                                {relationLabels[rel.childTable as keyof typeof relationLabels] ?? rel.childTable} ({count})
                               </button>
                             </td>
                           )
                         })
-                        return [td, ...childTds]
+                        return [td, ...childrenTds]
                       }
 
                       return td
                     })}
 
-                    {/* otras tablas (no Productos) → conteo de hijos al final */}
-                    {tableName !== 'Productos' && !childRelation && allRelations.map(ct => {
-                      const relObj = relationDataArray.find(r => r.childTable === ct)
-                      const relRows = relObj ? relObj.data : []
-                      if (!relRows.length) return <td key={ct} />
-
-                      const fk = relRows.length
-                        ? Object.keys(relRows[0]).find(
-                            k =>
-                              k.toLowerCase().endsWith('id') &&
-                              k.toLowerCase().includes(tableName.toLowerCase().replace(/s$/, '')),
-                          )
-                        : guessFK(ct, tableName)
-                      const count = fk ? relRows.filter(r => r[fk] === row.id).length : 0
-
+                    {/* relaciones al final para otras tablas */}
+                    {tableName !== 'Productos' && !child && relationsData.map(rel => {
+                      const meta = relMeta[rel.childTable]
+                      const count = meta?.counts.get(String(row.id)) ?? 0
                       return (
-                        <td key={ct} className="px-4 py-2 whitespace-nowrap text-sm text-gray-800 border-b border-indigo-100">
+                        <td
+                          key={rel.childTable}
+                          className="px-4 py-2 whitespace-nowrap text-sm text-gray-800 border-b border-indigo-100"
+                        >
                           <button
                             className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs hover:bg-green-200 transition"
-                            onClick={() => setChildRelation({ childTable: ct, foreignKey: fk!, parentId: row.id })}
-                            aria-label={`Ver ${relationLabels[ct] || ct} de ${row.id}`}
+                            onClick={() => setChild({
+                              childTable: rel.childTable,
+                              foreignKey: meta.fk,
+                              parentId: row.id,
+                            })}
+                            aria-label={`Ver ${
+                              relationLabels[rel.childTable as keyof typeof relationLabels] ?? rel.childTable
+                            } de ${row.id}`}
                           >
-                            {(relationLabels[ct] || ct)} ({count})
+                            {relationLabels[rel.childTable as keyof typeof relationLabels] ?? rel.childTable} ({count})
                           </button>
                         </td>
                       )
@@ -961,9 +690,9 @@
           )}
         </div>
 
-        {/* paginación */}
-        {pageData.length > 0 && (
-          <footer className="flex items-center justify-between px-4 py-3 bg-indigo-50 border-t border-indigo-200">
+        {/* paginación (server) */}
+        {data.length > 0 && (
+          <footer className="flex items-center justify-between px-4 py-3 bg-indigo-50/70 rounded-xl ring-1 ring-indigo-100">
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
@@ -973,7 +702,7 @@
               <HiChevronLeft className="inline h-5 w-5 text-indigo-600" />
             </button>
             <span className="text-sm text-gray-700">
-              Página {page} de {totalPages}
+              Página {page} de {totalPages} — {total} registro(s)
             </span>
             <button
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
@@ -987,440 +716,48 @@
         )}
       </div>
 
-      {/* ---------------------------------------------------------------------
-         MODALES
-      --------------------------------------------------------------------- */}
-      {detailRow && (
-        <Modal title="Detalle" onClose={() => setDetailRow(null)}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Campos primitivos en dos columnas */}
-            {Object.entries(detailRow)
-            .filter(([__unused, v]) => v == null || ['string','number','boolean'].includes(typeof v))
-            .map(([k, v]) => (
-              <div key={k} className="flex">
-                <span className="font-semibold w-40 text-gray-700">
-                  {k.replace(/_/g,' ')}:
-                </span>
-                <span className="text-gray-800">{String(v)}</span>
-              </div>
-            ))}
-
-            {/* Secciones colapsables ocupan ambas columnas */}
-            {Object.entries(detailRow)
-              .filter(([__unused, v]) => v && typeof v === 'object')
-              .map(([k, v]) => (
-                <div key={k} className="md:col-span-2 border-t pt-4">
-                  <button
-                    onClick={() => setOpenSections(s => ({ ...s, [k]: !s[k] }))}
-                    className="w-full flex justify-between items-center text-left text-gray-700 font-medium hover:text-gray-900"
-                  >
-                    <span>{k.replace(/_/g,' ')}</span>
-                    <span>{openSections[k] ? '▲' : '▼'}</span>
-                  </button>
-                  {openSections[k] && (
-                    <div className="mt-3 text-gray-800 text-sm space-y-2">
-                      {/* Array de objetos: mini-tabla */}
-                      {Array.isArray(v as any[]) && (v as any[]).length > 0 && typeof (v as any[])[0] === 'object' && (
-                        <table className="w-full text-sm border-collapse">
-                          <thead className="bg-indigo-100">
-                            <tr>
-                              <th className="border px-2 py-1 text-left text-indigo-700">ID</th>
-                              <th className="border px-2 py-1 text-left text-indigo-700">Nombre</th>
-                              <th className="border px-2 py-1 text-right text-indigo-700">Precio</th>
-                              <th className="border px-2 py-1 text-right text-indigo-700">Cantidad</th>
-                              {/* si hay más campos, puedes agregarlos aquí con su traducción */}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(v as any[]).map((row, i) => (
-                              <tr
-                                key={i}
-                                className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
-                              >
-                                <td className="border px-2 py-1">{row.id}</td>
-                                <td className="border px-2 py-1">{row.name}</td>
-                                <td className="border px-2 py-1 text-right">${row.price}</td>
-                                <td className="border px-2 py-1 text-right">{row.quantity}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-
-                      {/* Array de primitivos: lista */}
-                      {Array.isArray(v as any[]) && (v as any[]).every(e => ['string','number','boolean'].includes(typeof e)) && (
-                        <ul className="list-disc list-inside pl-4">
-                          {(v as any[]).map((item, j) => <li key={j}>{String(item)}</li>)}
-                        </ul>
-                      )}
-
-                      {/* Objeto simple: lista de definiciones */}
-                      {!Array.isArray(v as any[]) && (
-                        <dl className="space-y-1">
-                          {Object.entries(v as Record<string, any>).map(([prop, val]) => (
-                            <div key={prop} className="flex">
-                              <dt className="font-semibold w-36">{prop.replace(/_/g,' ')}:</dt>
-                              <dd className="flex-1">{String(val)}</dd>
-                            </div>
-                          ))}
-                        </dl>
-                      )}
-                    </div>
-                  )}
-                </div>
-            ))}
-          </div>
+      {/* ╭──────────────────────── MODALES ───────────────────────╮ */}
+      {ui.detailRow && (
+        <Modal title="Detalle" onClose={() => dispatch({ type: 'openDetail', row: null })}>
+          <DetailContent row={ui.detailRow as Row} />
         </Modal>
       )}
 
-      {/* Modal Crear */}
-      {createOpen && (
-        <Modal title="Crear registro" onClose={() => setCreateOpen(false)}>
-          {(() => {
-            const base = childRelation
-              ? { id: nextId, [childRelation.foreignKey]: childRelation.parentId }
-              : { id: nextId }
-
-            // Determina el recurso: si hay childRelation, es la tabla hija; si no, la tabla padre
-            const resource = childRelation ? childRelation.childTable : tableName
-            // Toma las columnas por defecto de ese recurso
-            const defaults = DEFAULT_COLUMNS[resource] ?? []
-            // Usa defaults si existen, sino visibleCols, sino las keys de base
-            const colsForForm = defaults.length > 0
-              ? defaults
-              : visibleCols.length > 0
-                ? visibleCols
-                : Object.keys(base)
-
-            return (
-              <Form
-                initial={base}
-                columns={colsForForm}
-                fixedFk={childRelation ? childRelation.foreignKey : undefined}
-                onSubmit={handleCreate}
-              />
-            )
-          })()}
+      {ui.createOpen && (
+        <Modal title="Crear registro" onClose={() => dispatch({ type: 'openCreate', open: false })}>
+          <Form
+            initial={child ? { [child.foreignKey]: child.parentId } : {}}
+            columns={getDefaultColumns(DEFAULT_COLUMNS as Record<string, readonly string[]>, resource) ?? orderedColumns}
+            fixedFk={child?.foreignKey}
+            onSubmit={handleCreate}
+          />
         </Modal>
       )}
 
-      {/* Modal Editar */}
-      {editRow && editRow !== 'bulk' && (
-        <Modal title={`Editar registro ${editRow.id}`} onClose={() => setEditRow(null)}>
-          {(() => {
-            const base = childRelation
-              ? { ...editRow, [childRelation.foreignKey]: childRelation.parentId }
-              : editRow
-
-            const resource = childRelation ? childRelation.childTable : tableName
-            const defaults = DEFAULT_COLUMNS[resource] ?? []
-            const colsForForm = defaults.length > 0
-              ? defaults
-              : visibleCols.length > 0
-                ? visibleCols
-                : Object.keys(base)
-
-            return (
-              <Form
-                initial={base}
-                columns={colsForForm}
-                fixedFk={childRelation ? childRelation.foreignKey : undefined}
-                onSubmit={d => handleUpdate(editRow.id, d)}
-              />
-            )
-          })()}
+      {ui.editRow && ui.editRow !== 'bulk' && (
+        <Modal title={`Editar registro ${(ui.editRow as Row).id}`} onClose={() => dispatch({ type: 'openEdit', row: null })}>
+          <Form
+            initial={ui.editRow as Row}
+            columns={getDefaultColumns(DEFAULT_COLUMNS as Record<string, readonly string[]>, resource) ?? orderedColumns}
+            fixedFk={child?.foreignKey}
+            onSubmit={d => handleUpdate((ui.editRow as Row).id as IdLike, d)}
+          />
         </Modal>
       )}
 
-      {/* 🔸 modal bulk */}
-      {editRow === 'bulk' && (
-        <Modal title={`Edición masiva (${selected.length})`} onClose={() => setEditRow(null)}>
-          <BulkForm onSubmit={(field, value) => handleBulkUpdate(field, value)} />
+      {ui.editRow === 'bulk' && (
+        <Modal title={`Edición masiva (${ui.selected.length})`} onClose={() => dispatch({ type: 'openEdit', row: null })}>
+          <BulkForm onSubmit={handleBulk} />
         </Modal>
       )}
 
-      {!readOnly && confirmItems && (
+      {ui.confirmRows && (
         <ConfirmModal
-          items={confirmItems}
-          onCancel={() => setConfirmItems(null)}
-          onConfirm={() => {
-            // para cada item, le indico explícitamente el childTable si existe
-            confirmItems.forEach(it =>
-              handleDelete(
-                it.id,
-                childRelation
-                  ? childRelation.childTable
-                  : tableName
-              )
-            );
-            setConfirmItems(null);
-            setSelected([]);
-          }}
+          items={ui.confirmRows}
+          onCancel={() => dispatch({ type: 'confirmDelete', rows: null })}
+          onConfirm={confirmDelete}
         />
       )}
     </div>
   )
 }
-
-// ---------------------------------------------------------------------------
-// Modal
-// ---------------------------------------------------------------------------
-type ModalProps = { title: string; onClose: () => void; children: React.ReactNode }
-const Modal = memo(function Modal({ title, onClose, children }: ModalProps) {
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden">
-        <header className="flex justify-between items-center px-6 py-3 bg-gray-100 border-b">
-          <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
-          <button
-            onClick={onClose}
-            aria-label="Cerrar"
-            className="text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
-          >
-            ✕
-          </button>
-        </header>
-        <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-          {children}
-        </div>
-      </div>
-    </div>
-  )
-})
-
-// ---------------------------------------------------------------------------
-// ConfirmModal
-// ---------------------------------------------------------------------------
-type ConfirmModalProps = { items: any[]; onConfirm: () => void; onCancel: () => void }
-const ConfirmModal = memo(function ConfirmModal({ items, onConfirm, onCancel }: ConfirmModalProps) {
-  return (
-    <Modal title="Confirmar eliminación" onClose={onCancel}>
-      <p className="text-gray-700 mb-4">
-        Vas a eliminar <span className="font-medium text-red-600">{items.length}</span> registro(s):
-      </p>
-      <ul className="list-disc list-inside max-h-40 overflow-y-auto border rounded p-4 bg-gray-50 mb-6">
-        {items.map((it, idx) => (
-          <li key={idx} className="text-gray-600">{it.producto || it.id}</li>
-        ))}
-      </ul>
-      <div className="flex justify-end space-x-3">
-        <button
-          onClick={onCancel}
-          className="px-4 py-2 border rounded hover:bg-gray-100 transition"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={onConfirm}
-          className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded transition"
-        >
-          Eliminar
-        </button>
-      </div>
-    </Modal>
-  )
-})
-
-// ---------------------------------------------------------------------------
-// Form  (creación / edición) – bloquea FK fijo con nombre del padre
-// ---------------------------------------------------------------------------
-type FormProps = { initial: Record<string, any>; columns: string[]; fixedFk?: string; onSubmit: (d: any) => void }
-
-const Form = memo(function Form({ initial, columns, fixedFk, onSubmit }: FormProps) {
-  const [form, setForm] = useState<Record<string, any>>(() => {
-    const copy = { ...initial }
-    if (fixedFk && copy[fixedFk] != null) copy[fixedFk] = String(copy[fixedFk])
-    return copy
-  })
-
-  const handleChange = (key: string, value: any) =>
-    setForm(f => ({ ...f, [key]: value }))
-
-  // cargamos opciones FK
-  const swrData = Object.fromEntries(
-    Object.entries(fkConfig).map(([col, cfg]) => {
-      /* eslint-disable-next-line react-hooks/rules-of-hooks */
-      const { data = [] } = useSWR<any[]>(`/api/admin/resources/${cfg.resource}`, fetcher)
-      return [col, data]
-    })
-  ) as Record<string, any[]>
-
-  return (
-    <form
-      onSubmit={e => { e.preventDefault(); onSubmit(form) }}
-      className="grid grid-cols-1 md:grid-cols-2 gap-4"
-    >
-      {columns.map(col => {
-        const cfg = fkConfig[col as keyof typeof fkConfig]
-
-        // -------------------- SELECT FK
-        if (cfg) {
-          const opciones = swrData[col] || []
-          const isFixed  = fixedFk === col
-
-          // buscamos etiqueta para mostrar si está fijo
-          const fixedLabel = isFixed
-            ? opciones.find(o => String(o.id) === form[col])?.[cfg.labelKey] ?? form[col]
-            : null
-
-          return (
-            <div key={col} className="flex flex-col">
-              <label className="mb-1 text-gray-700 font-medium">{cfg.fieldLabel}</label>
-
-              {isFixed ? (
-                <>
-                  <input type="hidden" name={col} value={form[col]} />
-                  <input
-                    value={fixedLabel}
-                    disabled
-                    className="px-3 py-2 border rounded bg-gray-100 text-gray-600"
-                  />
-                </>
-              ) : (
-                <select
-                  value={form[col] ?? ''}
-                  onChange={e => handleChange(col, e.target.value)}
-                  className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                >
-                  <option value="">— Selecciona —</option>
-                  {opciones.map(opt => (
-                    <option key={opt.id} value={String(opt.id)}>
-                      {opt[cfg.labelKey]}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )
-        }
-
-        if (col in fkConfig) {
-          const cfg = fkConfig[col as keyof typeof fkConfig];
-          const opciones = swrData[col] as Array<{ id: number; [key: string]: any }>;
-      
-          // isFixed sólo será true cuando fixedFk === col, y fixedFk solo se pasa en hijos
-          const isFixed = fixedFk === col;
-      
-          // Si está fijo (hijo), mostramos el nombre; si no, un select normal
-          const fixedLabel = isFixed
-            ? opciones.find(o => String(o.id) === form[col])?.[cfg.labelKey] ?? ''
-            : null;
-      
-          return (
-            <div key={col} className="flex flex-col">
-              <label className="mb-1 text-gray-700 font-medium">
-                {cfg.fieldLabel}
-              </label>
-      
-              {isFixed ? (
-                <>
-                  {/* En hijos: input hidden + campo deshabilitado */}
-                  <input type="hidden" name={col} value={form[col]} />
-                  <input
-                    value={fixedLabel}
-                    disabled
-                    className="px-3 py-2 border rounded bg-gray-100 text-gray-600"
-                  />
-                </>
-              ) : (
-                /* En padre (o cualquier otro FK en tablas principales): select normal */
-                <select
-                  value={form[col] ?? ''}
-                  onChange={e => handleChange(col, e.target.value)}
-                  className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                >
-                  <option value="">— Selecciona —</option>
-                  {opciones.map(opt => (
-                    <option key={opt.id} value={String(opt.id)}>
-                      {opt[cfg.labelKey]}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          );
-        }
-      
-
-        // -------------------- input file
-        if (col === 'foto') {
-          return (
-            <div key={col} className="flex flex-col">
-              <label className="mb-1 text-gray-700 font-medium">{col}</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={e => handleChange('foto', e.target.files?.[0] ?? null)}
-                className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              />
-            </div>
-          )
-        }
-
-        // -------------------- input texto
-        return (
-          <div key={col} className="flex flex-col">
-            <label className="mb-1 text-gray-700 font-medium">{col}</label>
-            <input
-              value={form[col] ?? ''}
-              onChange={e => handleChange(col, e.target.value)}
-              className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            />
-          </div>
-        )
-      })}
-
-      <div className="md:col-span-2 flex justify-end">
-        <button
-          type="submit"
-          className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded transition focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          Guardar
-        </button>
-      </div>
-    </form>
-  )
-})
-
-// ---------------------------------------------------------------------------
-// BulkForm
-// ---------------------------------------------------------------------------
-type BulkFormProps = { onSubmit: (f: string, v: any) => void }
-
-const BulkForm = memo(function BulkForm({ onSubmit }: BulkFormProps) {
-  const [field, setField] = useState('')
-  const [value, setValue] = useState('')
-
-  return (
-    <form
-      onSubmit={e => { e.preventDefault(); onSubmit(field, value) }}
-      className="grid grid-cols-1 md:grid-cols-2 gap-4"
-    >
-      <div className="flex flex-col">
-        <label className="mb-1 text-gray-700 font-medium">Campo a editar</label>
-        <input
-          value={field}
-          onChange={e => setField(e.target.value)}
-          placeholder="nombreDelCampo"
-          className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
-        />
-      </div>
-      <div className="flex flex-col">
-        <label className="mb-1 text-gray-700 font-medium">Nuevo valor</label>
-        <input
-          value={value}
-          onChange={e => setValue(e.target.value)}
-          className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
-        />
-      </div>
-      <div className="md:col-span-2 flex justify-end">
-        <button
-          type="submit"
-          className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded transition focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          Aplicar
-        </button>
-      </div>
-    </form>
-  )
-})
