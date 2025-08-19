@@ -9,8 +9,7 @@ import slugify from '@/utils/slugify'
 import type { Filters as CatalogFilters, FilteredProductsResult } from '@/utils/fetchData'
 import type { Metadata } from 'next'
 
-// ✅ Cache ISR por path de filtros
-export const revalidate = 300 // 5 min
+export const dynamic = 'force-dynamic'
 
 // Helper JSON-LD inline
 function JsonLd({ data }: { data: Record<string, unknown> }) {

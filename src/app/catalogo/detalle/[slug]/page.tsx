@@ -9,8 +9,7 @@ import ImageWithFallback from '@/components/ImageWithFallback'
 import type { ProductDetail } from '@/utils/fetchData'
 import type { Metadata } from 'next'
 
-// ✅ Cache ISR
-export const revalidate = 300 // 5 min
+export const dynamic = 'force-dynamic'
 
 // Helper JSON-LD
 function JsonLd({ data }: { data: Record<string, unknown> }) {

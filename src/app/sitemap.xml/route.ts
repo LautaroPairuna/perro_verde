@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 
-export const revalidate = 86400 // 24h
+export const dynamic = 'force-dynamic'
 
 const BASE = 'https://www.perroverdepet.shop'
 const HARD_LIMIT = 49000 // seguridad < 50k

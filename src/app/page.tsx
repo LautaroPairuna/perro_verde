@@ -4,7 +4,7 @@ import HomeClientComponents from '@/components/home/HomeClientComponents'
 import prisma from '@/lib/prisma'
 
 // ✅ Cache ISR (sirve versión cacheada y regenera cada X minutos)
-export const revalidate = 300 // 5 min (ajusta a 60 si querés más fresco)
+export const dynamic = 'force-dynamic'
 
 // Metadatos SOLO de la home (el layout ya define el template global)
 export const metadata: Metadata = {
