@@ -1,5 +1,10 @@
+// src/app/admin/resources/[tableName]/hooks/useServerTable.ts
 'use client'
 import useSWR from 'swr'
+
+export type Primitive = string | number | boolean
+export type FilterValue = Primitive | Primitive[]
+export type Filters = Record<string, FilterValue>
 
 export type ServerTableParams = {
   page: number
@@ -7,7 +12,8 @@ export type ServerTableParams = {
   sortBy?: string
   sortDir?: 'asc' | 'desc'
   search?: string
-  filters?: Record<string, string | number | boolean>
+  qFields?: string[]
+  filters?: Filters
 }
 
 export type ServerTableResult<T extends Record<string, unknown>> = {
@@ -17,11 +23,25 @@ export type ServerTableResult<T extends Record<string, unknown>> = {
   refresh: () => void
 }
 
-const fetcher = (u: string) => fetch(u).then(r => r.json())
+const fetcher = async <T,>(u: string): Promise<T> => {
+  const r = await fetch(u)
+  if (!r.ok) throw new Error(`HTTP ${r.status} al cargar ${u}`)
+  return (await r.json()) as T
+}
+
+// stringify estable: misma key si el contenido no cambió (aunque cambie orden de claves)
+function stableStringify(obj: unknown): string {
+  if (Array.isArray(obj)) return `[${obj.map(stableStringify).join(',')}]`
+  if (obj && typeof obj === 'object') {
+    const entries = Object.entries(obj as Record<string, unknown>).sort(([a],[b]) => a.localeCompare(b))
+    return `{${entries.map(([k,v]) => JSON.stringify(k)+':'+stableStringify(v)).join(',')}}`
+  }
+  return JSON.stringify(obj)
+}
 
 export function useServerTable<T extends Record<string, unknown>>(
   resource: string,
-  { page, pageSize, sortBy, sortDir, search, filters = {} }: ServerTableParams
+  { page, pageSize, sortBy, sortDir, search, qFields, filters = {} }: ServerTableParams
 ): ServerTableResult<T> {
   const qs = new URLSearchParams({
     page: String(page),
@@ -29,14 +49,22 @@ export function useServerTable<T extends Record<string, unknown>>(
     ...(sortBy ? { sortBy } : {}),
     ...(sortDir ? { sortDir } : {}),
     ...(search ? { q: search } : {}),
-    ...(Object.fromEntries(Object.entries(filters).map(([k, v]) => [k, String(v)]))),
+    ...(qFields && qFields.length ? { qFields: qFields.join(',') } : {}),
   })
-  const key = `/api/admin/resources/${resource}?${qs.toString()}`
 
-  const { data, isValidating, mutate } = useSWR<{ rows: T[]; total: number }>(key, fetcher, {
-    keepPreviousData: true,
-    revalidateOnFocus: false,
-  })
+  // El API lee `filters` como JSON ⇒ lo enviamos así
+  const filtersJson = Object.keys(filters).length ? stableStringify(filters) : ''
+  if (filtersJson) qs.set('filters', filtersJson)
+
+  const key = resource
+    ? `/api/admin/resources/${encodeURIComponent(resource)}?${qs.toString()}`
+    : null
+
+  const { data, isValidating, mutate } = useSWR<{ rows: T[]; total: number }>(
+    key,
+    fetcher,
+    { keepPreviousData: true, revalidateOnFocus: false }
+  )
 
   return {
     rows: data?.rows ?? [],

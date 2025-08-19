@@ -43,7 +43,7 @@ const csrfHdr = () => ({
   'X-CSRF-Token': document.cookie.match(/(?:^|;\s*)csrfToken=([^;]+)/)?.[1] ?? '',
 })
 
-// columnas que pueden ser muy largas (clamp en tabla)
+// columnas largas → clamp
 const LONG_TEXT_COLS = new Set(['descripcion', 'detalle', 'especificaciones', 'condiciones'])
 
 const guessFK = (child: string, parent: string) => {
@@ -100,27 +100,32 @@ const uiReducer = (s: UiState, a: UiAction): UiState => {
 }
 
 /* ───────────────────────── 4. FILTERS TIPOS ───────────────────────── */
-// Filtros de UI (permiten undefined/null). Así evitamos el error de tipos con FiltersBar.
 type UIFilters = Record<string, string | number | boolean | undefined | null>
-
 const compactFilters = (o: UIFilters): Record<string, string | number | boolean> =>
   Object.fromEntries(
     Object.entries(o).filter(([, v]) => v !== '' && v !== undefined && v !== null)
   ) as Record<string, string | number | boolean>
 
+function shallowEqual(a: Record<string, unknown>, b: Record<string, unknown>) {
+  const ak = Object.keys(a), bk = Object.keys(b)
+  if (ak.length !== bk.length) return false
+  for (const k of ak) if (a[k] !== b[k]) return false
+  return true
+}
 /* ╭────────────────────── 5. MAIN COMPONENT ────────────────────╮ */
 export default function ResourceDetailClient({ tableName }: { tableName: string }) {
   const readOnly = READ_ONLY_RESOURCES.includes(tableName)
 
-  // para título / breadcrumb
+  // Para “friendlyTitle” en vista hija necesitamos el parent
   const { data: parentResp, error: parentError, isValidating: loadingParent } =
     useSWR<any>(`/api/admin/resources/${tableName}?page=1&pageSize=50`, fetcher, {
       revalidateOnFocus: false,
       keepPreviousData: true,
     })
-  const rows: any[] = Array.isArray(parentResp) ? parentResp : (parentResp?.rows ?? [])
+  const parentRows: any[] = Array.isArray(parentResp) ? parentResp : (parentResp?.rows ?? [])
 
-  const relationsData = useRelations(tableName)
+  // Relaciones (solo nombres)
+  const relations = useRelations(tableName)
   const [child, setChild] = React.useState<{
     childTable: string
     foreignKey: string
@@ -135,11 +140,26 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
     confirmRows: null,
   })
 
+  const compact = (o: Record<string, unknown>) =>
+    Object.fromEntries(
+      Object.entries(o ?? {}).filter(([, v]) => v !== '' && v !== undefined && v !== null)
+  );
+
+  const shallowEqual = (a: Record<string, unknown>, b: Record<string, unknown>) => {
+    const A = compact(a);
+    const B = compact(b);
+    const aKeys = Object.keys(A);
+    const bKeys = Object.keys(B);
+    if (aKeys.length !== bKeys.length) return false;
+    for (const k of aKeys) if (A[k] !== B[k]) return false;
+    return true;
+  };
+
   useEffect(() => { dispatch({ type: 'resetSelect' }) }, [tableName, child])
 
   const resource = child ? child.childTable : tableName
 
-  /* ──────────────── Tabla en servidor: página, sort, búsqueda, filtros ─────────────── */
+  /* ──────────────── Tabla server-side ─────────────── */
   const [page, setPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(10)
   const [sortBy, setSortBy] = React.useState('id')
@@ -147,18 +167,37 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
   const [search, setSearch] = React.useState('')
   const [uiFilters, setUIFilters] = React.useState<UIFilters>({})
 
-  // Filtros limpios para el servidor (+ FK si estamos viendo una relación hija)
+  React.useEffect(() => {
+    setPage(1)
+  }, [resource])
+
   const baseClean = useMemo(() => compactFilters(uiFilters), [uiFilters])
   const effectiveFilters = useMemo(
     () => (child ? { ...baseClean, [child.foreignKey]: child.parentId } : baseClean),
     [baseClean, child]
   )
 
-  const { rows: data, total, validating, refresh } = useServerTable(resource, {
-    page, pageSize, sortBy, sortDir, search, filters: effectiveFilters,
-  })
+  const setFiltersSmart = React.useCallback(
+    (next: UIFilters) => {
+      setUIFilters(prev => {
+        const prevClean = compactFilters(prev)
+        const nextClean = compactFilters(next)
+        if (!shallowEqual(prevClean, nextClean)) setPage(1)
+        return next
+      })
+    },
+    []
+  )
 
-  /* ──────────────── columnas visibles (readonly → mutable string[]) ─────────────── */
+  const { rows: data, total, validating } = useServerTable<Row>(resource, {
+    page, pageSize, sortBy, sortDir,
+    search,
+    qFields: resource === 'Productos' ? ['producto','descripcion'] : undefined,
+    filters: effectiveFilters, // tu objeto limpio
+  })
+  const refresh = useCallback(() => mutate(`/api/admin/resources/${resource}?page=${page}&pageSize=${pageSize}`), [resource, page, pageSize])
+
+  /* ──────────────── columnas visibles ─────────────── */
   const rawCols = useMemo(() => {
     const def = getDefaultColumns(DEFAULT_COLUMNS as Record<string, readonly string[]>, resource)
     return def ?? Object.keys((data as Row[])[0] ?? {})
@@ -174,32 +213,6 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
     }
     return visibleCols
   }, [visibleCols, tableName, child])
-
-  /* ──────────────── Rel counts y FK (O(1) por fila) ─────────────── */
-  const relMeta = useMemo(() => {
-    const map: Record<string, { fk: string; counts: Map<string, number> }> = {}
-    for (const rel of relationsData) {
-      const relRows = rel.data as Row[]
-      const fk =
-        relRows.length > 0
-          ? (Object.keys(relRows[0]).find(
-              k =>
-                k.toLowerCase().endsWith('id') &&
-                k.toLowerCase().includes(tableName.toLowerCase().replace(/s$/, '')),
-            ) ?? guessFK(rel.childTable, tableName))
-          : guessFK(rel.childTable, tableName)
-
-      const counts = new Map<string, number>()
-      if (relRows?.length && fk) {
-        for (const r of relRows) {
-          const pid = String(r[fk] as IdLike)
-          counts.set(pid, (counts.get(pid) ?? 0) + 1)
-        }
-      }
-      map[rel.childTable] = { fk, counts }
-    }
-    return map
-  }, [relationsData, tableName])
 
   /* ╭─────────────────────────── CRUD ─────────────────────────╮ */
   const refreshAll = useCallback(() => {
@@ -422,7 +435,7 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
     s.replace(/^Cfg/, '').replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
      .replace(/\s+/g, ' ').trim().replace(/\b\w/g, (c) => c.toUpperCase())
 
-  const parentRow = (rows as any[]).find(r => r.id === child?.parentId)
+  const parentRow = (parentRows as any[]).find(r => r.id === child?.parentId)
   const displayName = parentRow?.producto ?? parentRow?.nombre ?? parentRow?.name ?? `#${child?.parentId}`
   const baseLabel  = humanize(tableName)
   const childLabel = child ? humanize(relationLabels[child.childTable as keyof typeof relationLabels] ?? child.childTable) : ''
@@ -441,6 +454,31 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
     if (sortBy === col) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
     else { setSortBy(col); setSortDir('asc') }
   }
+
+  const setSearchSafe = React.useCallback((next: string) => {
+  setSearch(prev => {
+    if (prev === next) return prev;  // no cambió => no resetear page
+    setPage(1);
+    return next;
+  });
+}, []);
+
+  const setPageSizeSafe = React.useCallback((next: number) => {
+    setPageSize(prev => {
+      if (prev === next) return prev;
+      setPage(1);
+      return next;
+    });
+  }, []);
+
+  const setFiltersSafe = React.useCallback((next: UIFilters) => {
+    setUIFilters(prev => {
+      // si no cambian los filtros EFECTIVOS, no resetees
+      if (shallowEqual(prev, next)) return prev;
+      setPage(1);
+      return next;
+    });
+  }, []);
 
   /* ╭────────────────────────── RENDER ────────────────────────╮ */
   return (
@@ -489,15 +527,15 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
           }
           onBulkEdit={() => dispatch({ type: 'openEdit', row: 'bulk' })}
           search={search}
-          setSearch={(v) => { setPage(1); setSearch(v) }}
+          setSearch={setSearchSafe}
           pageSize={pageSize}
-          setPageSize={(n) => { setPage(1); setPageSize(n) }}
+          setPageSize={setPageSizeSafe}
         />
 
         <FiltersBar
           resource={resource}
           filters={uiFilters}
-          setFilters={(f) => { setPage(1); setUIFilters(f) }}
+          setFilters={setFiltersSmart}
         />
 
         {/* Tabla */}
@@ -546,7 +584,7 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
                     )
 
                     if (tableName === 'Productos' && !child && col === 'precio') {
-                      const relThs = relationsData.map(r => (
+                      const relThs = relations.map(r => (
                         <th
                           key={'c-' + r.childTable}
                           scope="col"
@@ -560,7 +598,7 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
                     return th
                   })}
 
-                  {tableName !== 'Productos' && !child && relationsData.map(r => (
+                  {tableName !== 'Productos' && !child && relations.map(r => (
                     <th
                       key={r.childTable}
                       scope="col"
@@ -632,30 +670,26 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
                       )
 
                       if (tableName === 'Productos' && !child && col === 'precio') {
-                        const childrenTds = relationsData.map(rel => {
-                          const meta = relMeta[rel.childTable]
-                          const count = meta?.counts.get(String(row.id)) ?? 0
-                          return (
-                            <td
-                              key={'c-' + rel.childTable}
-                              className="px-4 py-2 whitespace-nowrap text-sm text-gray-800 border-b border-indigo-100"
+                        const childrenTds = relations.map(rel => (
+                          <td
+                            key={'c-' + rel.childTable}
+                            className="px-4 py-2 whitespace-nowrap text-sm text-gray-800 border-b border-indigo-100"
+                          >
+                            <button
+                              className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs hover:bg-green-200 transition"
+                              onClick={() => setChild({
+                                childTable: rel.childTable,
+                                foreignKey: guessFK(rel.childTable, tableName),
+                                parentId: row.id,
+                              })}
+                              aria-label={`Ver ${
+                                relationLabels[rel.childTable as keyof typeof relationLabels] ?? rel.childTable
+                              } de ${row.id}`}
                             >
-                              <button
-                                className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs hover:bg-green-200 transition"
-                                onClick={() => setChild({
-                                  childTable: rel.childTable,
-                                  foreignKey: meta.fk,
-                                  parentId: row.id,
-                                })}
-                                aria-label={`Ver ${
-                                  relationLabels[rel.childTable as keyof typeof relationLabels] ?? rel.childTable
-                                } de ${row.id}`}
-                              >
-                                {relationLabels[rel.childTable as keyof typeof relationLabels] ?? rel.childTable} ({count})
-                              </button>
-                            </td>
-                          )
-                        })
+                              {relationLabels[rel.childTable as keyof typeof relationLabels] ?? rel.childTable}
+                            </button>
+                          </td>
+                        ))
                         return [td, ...childrenTds]
                       }
 
@@ -663,30 +697,26 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
                     })}
 
                     {/* relaciones al final para otras tablas */}
-                    {tableName !== 'Productos' && !child && relationsData.map(rel => {
-                      const meta = relMeta[rel.childTable]
-                      const count = meta?.counts.get(String(row.id)) ?? 0
-                      return (
-                        <td
-                          key={rel.childTable}
-                          className="px-4 py-2 whitespace-nowrap text-sm text-gray-800 border-b border-indigo-100"
+                    {tableName !== 'Productos' && !child && relations.map(rel => (
+                      <td
+                        key={rel.childTable}
+                        className="px-4 py-2 whitespace-nowrap text-sm text-gray-800 border-b border-indigo-100"
+                      >
+                        <button
+                          className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs hover:bg-green-200 transition"
+                          onClick={() => setChild({
+                            childTable: rel.childTable,
+                            foreignKey: guessFK(rel.childTable, tableName),
+                            parentId: row.id,
+                          })}
+                          aria-label={`Ver ${
+                            relationLabels[rel.childTable as keyof typeof relationLabels] ?? rel.childTable
+                          } de ${row.id}`}
                         >
-                          <button
-                            className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs hover:bg-green-200 transition"
-                            onClick={() => setChild({
-                              childTable: rel.childTable,
-                              foreignKey: meta.fk,
-                              parentId: row.id,
-                            })}
-                            aria-label={`Ver ${
-                              relationLabels[rel.childTable as keyof typeof relationLabels] ?? rel.childTable
-                            } de ${row.id}`}
-                          >
-                            {relationLabels[rel.childTable as keyof typeof relationLabels] ?? rel.childTable} ({count})
-                          </button>
-                        </td>
-                      )
-                    })}
+                          {relationLabels[rel.childTable as keyof typeof relationLabels] ?? rel.childTable}
+                        </button>
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
