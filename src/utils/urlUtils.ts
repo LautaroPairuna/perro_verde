@@ -67,17 +67,11 @@ export function parseUrlSegments(pathname: string): Filters {
 /**
  * Construye una URL de paginación basada en los filtros activos y la página deseada.
  */
-export function buildPaginationUrl(filters: Filters, page: number): string {
-  if (page < 1) {
-    console.error('El número de página debe ser un entero positivo. Recibido:', page);
-    page = 1;
-  }
-
+export function buildCatalogPath(filters: Filters, pageOverride?: number): string {
   let href = '/catalogo';
 
   if (filters.keywords) {
-    // Reemplaza los espacios por guiones y codifica la URL
-    href += `/keys-${encodeURIComponent(filters.keywords.replace(/\s+/g, '-'))}`;
+    href += `/keys-${encodeURIComponent(filters.keywords.trim().replace(/\s+/g, '-'))}`;
   }
   if (filters.marca_slug) {
     href += `/marca-${encodeURIComponent(filters.marca_slug)}`;
@@ -88,7 +82,22 @@ export function buildPaginationUrl(filters: Filters, page: number): string {
   if (filters.producto_slug) {
     href += `/producto-${encodeURIComponent(filters.producto_slug)}`;
   }
-  href += `/pagina-${page}`;
+
+  const raw = typeof pageOverride === 'number' ? pageOverride : filters.page;
+  const page = Number.isFinite(raw) ? Number(raw) : 1;
+
+  if (page > 1) {
+    href += `/pagina-${page}`;
+  }
 
   return href;
+}
+
+/** (Opcional pero recomendado) reutilizar la misma lógica en la paginación */
+export function buildPaginationUrl(filters: Filters, page: number): string {
+  if (page < 1) {
+    console.error('El número de página debe ser un entero positivo. Recibido:', page);
+    page = 1;
+  }
+  return buildCatalogPath(filters, page); // omite /pagina-1
 }

@@ -4,7 +4,7 @@ import ProductCard, { Product as ProductCardType } from '@/components/catalogo/P
 import Pagination from '@/components/catalogo/Pagination'
 import NoProducts from '@/components/catalogo/NoProducts'
 import { getFilteredProducts, getFiltersData } from '@/utils/fetchData'
-import { parseUrlSegments } from '@/utils/urlUtils'
+import { parseUrlSegments, buildCatalogPath } from '@/utils/urlUtils'
 import slugify from '@/utils/slugify'
 import type { Filters as CatalogFilters, FilteredProductsResult } from '@/utils/fetchData'
 import type { Metadata } from 'next'
@@ -27,25 +27,61 @@ const prodUrl = (id: number | string) => `/catalogo/detalle/${id}` // ⚠️ cam
 const prodImg = (file?: string | null) =>
   file ? `/images/productos/${file}` : '/images/placeholder-producto.jpg'
 
+
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ filters?: string[] }>
 }): Promise<Metadata> {
-  const { filters = [] } = await params
-  const decoded = filters.map(s => decodeURIComponent(s))
-  const title =
-    decoded.length > 0 ? `Catálogo: ${decoded.join(' / ')}` : 'Catálogo de Productos'
+  const { filters = [] } = await params;
 
-  // Canonical (normalizamos a la ruta sin trailing slash duplicado)
-  const canonicalPath = decoded.length > 0 ? `/catalogo/${decoded.join('/')}` : '/catalogo'
+  const pathname = filters.length ? `/catalogo/${filters.join('/')}` : '/catalogo';
+  const f = parseUrlSegments(pathname) as CatalogFilters;
+
+  // Page #
+  const n = Number(f.page);
+  const page = Number.isInteger(n) && n > 1 ? n : undefined;
+
+  // Resolver nombres legibles
+  let brandName: string | undefined;
+  let categoryName: string | undefined;
+  try {
+    const { marcas, rubros } = await getFiltersData();
+    if (f.marca_slug) {
+      const m = marcas.find(x => slugify(x.marca) === f.marca_slug);
+      brandName = m?.marca;
+    }
+    if (f.categoria_slug) {
+      const r = rubros.find(x => slugify(x.rubro) === f.categoria_slug);
+      categoryName = r?.rubro;
+    }
+  } catch {/* opcional */}
+
+  const kw = f.keywords?.trim();
+
+  // Title legible
+  const parts = [categoryName, brandName, kw ? `“${kw}”` : undefined].filter(Boolean) as string[];
+  let base = parts.length ? parts.join(' · ') : 'Catálogo de Productos';
+  if (page) base += ` — Página ${page}`;
+  const title = base.length > 60 ? base.slice(0, 59).trimEnd() + '…' : base;
+
+  // Canonical sin page/1
+  const canonical = buildCatalogPath(f, page ?? 1);
+
+  // Description contextual
+  const descParts = [
+    categoryName ? `Productos de ${categoryName}` : 'Explorá nuestro catálogo',
+    brandName ? `de ${brandName}` : undefined,
+    kw ? `para “${kw}”` : undefined,
+    'en Salta.',
+  ].filter(Boolean);
+  const description = (descParts.join(' ') || 'Explorá nuestro catálogo de productos para tu mascota en Salta.').slice(0, 160);
 
   return {
     title,
-    description: 'Explora nuestra amplia gama de productos disponibles para ti.',
-    alternates: { canonical: canonicalPath },
-    // Mantener indexable; si quisieras noindexar combos muy finos, podrías condicionar robots aquí
-  }
+    description,
+    alternates: { canonical },
+  };
 }
 
 export default async function CatalogListing({
@@ -143,7 +179,7 @@ export default async function CatalogListing({
 
   // 9) Render
   return (
-    <section className="bg-gradient-to-b from-green-50 to-white py-12">
+    <section className="bg-green-100 py-12">
       {/* JSON-LD */}
       <JsonLd data={itemListLd} />
 

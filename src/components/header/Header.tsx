@@ -1,34 +1,29 @@
-// src/components/Header.tsx
-"use client";
+'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { 
-  IoSearchOutline, 
-  IoMenuOutline, 
-  IoCloseOutline, 
-  IoCartOutline 
+import { useRouter } from 'next/navigation';
+import {
+  IoSearchOutline,
+  IoMenuOutline,
+  IoCloseOutline,
+  IoCartOutline,
+  IoLogoWhatsapp,
 } from 'react-icons/io5';
+import { buildPaginationUrl } from '@/utils/urlUtils'; // -> garantiza /pagina-1
 
-function slugify(text: string): string {
-  return text
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^\w\-]+/g, '')
-    .replace(/\-\-+/g, '-');
-}
-
-// Número de WhatsApp y URL
 const WHATSAPP_NUMBER = '5493875354360';
 const WHATSAPP_URL = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}`;
 
-const Header: React.FC = () => {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
-  const [cartCount, setCartCount] = useState<number>(0);
+export default function Header() {
+  const router = useRouter();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
+  const desktopSearchRef = useRef<HTMLInputElement>(null);
+  const mobileSearchRef = useRef<HTMLInputElement>(null);
 
+  // abrir/cerrar menú móvil
   const openMobileMenu = useCallback(() => {
     setMobileMenuOpen(true);
     document.body.classList.add('overflow-hidden');
@@ -38,207 +33,265 @@ const Header: React.FC = () => {
     document.body.classList.remove('overflow-hidden');
   }, []);
 
-  const handleSearchSubmit = useCallback((inputId: string) => {
-    const inputElement = document.getElementById(inputId) as HTMLInputElement | null;
-    if (inputElement) {
-      const keywords = inputElement.value;
-      const slugifiedKeywords = slugify(keywords);
-      const href = slugifiedKeywords
-        ? `/catalogo/keys-${encodeURIComponent(slugifiedKeywords)}/pagina-1`
-        : '/catalogo/pagina-1';
-      window.location.href = href;
-    } else {
-      console.error(`Elemento con ID "${inputId}" no encontrado.`);
-    }
-  }, []);
-
+  // contador carrito (event-driven)
   const updateCartCount = useCallback(() => {
     try {
-      const cart = JSON.parse(localStorage.getItem('cart') || '[]');
-      const count = cart.reduce((acc: number, item: { quantity: number }) => acc + item.quantity, 0);
-      setCartCount(count);
-    } catch (error) {
-      console.error('Error al parsear el carrito:', error);
+      const raw = localStorage.getItem('cart');
+      const cart: Array<{ quantity?: number }> = raw ? JSON.parse(raw) : [];
+      const next = cart.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0);
+      setCartCount(next);
+    } catch {
       setCartCount(0);
     }
   }, []);
 
   useEffect(() => {
     updateCartCount();
-    const handleCartUpdated = () => updateCartCount();
-    document.addEventListener('cartUpdated', handleCartUpdated);
-    window.addEventListener('storage', updateCartCount);
-    const interval = setInterval(updateCartCount, 500);
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && mobileMenuOpen) {
-        closeMobileMenu();
+    const onCartUpdated = () => updateCartCount();
+    const onStorage = (e: StorageEvent) => e.key === 'cart' && updateCartCount();
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) ||
+          ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) {
+        e.preventDefault();
+        (desktopSearchRef.current ?? mobileSearchRef.current)?.focus();
       }
+      if (e.key === 'Escape' && mobileMenuOpen) closeMobileMenu();
     };
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('cartUpdated', onCartUpdated as EventListener);
+    window.addEventListener('storage', onStorage);
+    document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('cartUpdated', handleCartUpdated);
-      window.removeEventListener('storage', updateCartCount);
-      document.removeEventListener('keydown', handleKeyDown);
-      clearInterval(interval);
+      document.removeEventListener('cartUpdated', onCartUpdated as EventListener);
+      window.removeEventListener('storage', onStorage);
+      document.removeEventListener('keydown', onKey);
     };
-  }, [updateCartCount, mobileMenuOpen, closeMobileMenu]);
+  }, [mobileMenuOpen, closeMobileMenu, updateCartCount]);
+
+  // búsqueda -> /catalogo/(keys?)/pagina-1
+  const goSearch = useCallback((keywords: string) => {
+    const href = buildPaginationUrl(
+      { page: 1, keywords: keywords.trim(), marca_slug: '', categoria_slug: '', producto_slug: '' },
+      1
+    );
+    router.push(href);
+  }, [router]);
+
+  const onSubmitDesktop = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    goSearch(desktopSearchRef.current?.value ?? '');
+  }, [goSearch]);
+
+  const onSubmitMobile = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    goSearch(mobileSearchRef.current?.value ?? '');
+    closeMobileMenu();
+  }, [goSearch, closeMobileMenu]);
+
+  // href fijo para botón “Catálogo”
+  const catalogHref = buildPaginationUrl(
+    { page: 1, keywords: '', marca_slug: '', categoria_slug: '', producto_slug: '' },
+    1
+  );
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-30 bg-white shadow-sm transition-all duration-300">
-      <nav className="grid grid-cols-2 md:grid-cols-3 items-center px-4 py-6 md:px-8" aria-label="Navegación principal ecommerce">
-        {/* Logo */}
-        <div className="flex justify-start">
-          <Link href="/" aria-label="Inicio" className="flex items-center transition-transform hover:scale-105">
-            <Image src="/images/perro-verde-logo.svg" alt="Logo Ecommerce" width={130} height={90} />
-          </Link>
-        </div>
-        
-        {/* Buscador desktop con animación */}
-        <div className="hidden md:flex justify-center">
-          <form
-            id="headerSearchForm"
-            onSubmit={(e) => { e.preventDefault(); handleSearchSubmit('Buscador'); }}
-            className="flex items-center space-x-2 w-full max-w-lg bg-gray-100 rounded-full px-4 py-2 shadow-inner transition duration-300 ease-in-out transform hover:shadow-md"
-            role="search"
-            aria-label="Buscar productos"
-          >
-            <label htmlFor="Buscador" className="sr-only">Buscar productos</label>
-            <input 
-              type="search"
-              name="Buscador"
-              id="Buscador"
-              placeholder="Buscar productos, marcas o categorías..."
-              className="w-full bg-transparent outline-none transition-all duration-300 focus:scale-105 focus:text-gray-900"
-              required
-              maxLength={100}
-              pattern="[a-zA-Z0-9\s\-]+"
-              title="Solo se permiten letras, números y guiones."
-            />
-            <button 
-              type="submit"
-              className="bg-green-800 text-white px-4 py-2 rounded-full hover:bg-green-900 transition duration-300 transform hover:scale-105 font-medium"
-              aria-label="Enviar búsqueda"
+    <header
+      className={[
+        // pegado arriba, sin offset
+        'fixed top-0 left-0 right-0 z-50',
+        'bg-white/95 backdrop-blur-sm shadow-sm py-2',
+      ].join(' ')}
+    >
+      <div className="mx-auto max-w-screen-xl px-4 md:px-6">
+        {/* Fila superior: móvil = menú | logo | carrito  /  desktop = logo | search | links */}
+        <div className="py-2 md:py-3">
+          {/* móvil */}
+          <div className="flex items-center justify-between md:hidden">
+            <button
+              onClick={openMobileMenu}
+              className="h-10 w-10 grid place-items-center rounded-full border border-neutral-200 bg-white hover:bg-neutral-50 active:scale-95 transition"
+              aria-label="Abrir menú"
             >
-              <IoSearchOutline />
+              <IoMenuOutline className="text-2xl" />
             </button>
+            <Link href="/" aria-label="Inicio" prefetch={false}>
+              <Image src="/images/perro-verde-logo.svg" alt="Perro Verde" width={120} height={30} priority />
+            </Link>
+            <Link
+              href="/carrito"
+              aria-label="Ver carrito"
+              prefetch={false}
+              className="relative h-10 w-10 grid place-items-center rounded-full border border-neutral-200 bg-white hover:bg-neutral-50 active:scale-95 transition"
+            >
+              <IoCartOutline className="text-2xl" />
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full bg-green-700 text-white text-[11px] leading-[18px] font-bold text-center px-1">
+                {cartCount > 99 ? '99+' : cartCount}
+              </span>
+            </Link>
+          </div>
+
+          {/* desktop */}
+          <div className="hidden md:grid md:grid-cols-[auto_1fr_auto] md:items-center md:gap-6">
+            <Link
+              href="/"
+              aria-label="Inicio"
+              prefetch={false}
+              className="flex items-center gap-2 hover:opacity-90 transition"
+            >
+              <Image src="/images/perro-verde-logo.svg" alt="Perro Verde" width={140} height={36} priority />
+            </Link>
+
+            {/* buscador que resalta del fondo */}
+            <form onSubmit={onSubmitDesktop} role="search" aria-label="Buscar productos">
+              <div className="relative w-full rounded-full bg-white shadow-md ring-1 ring-neutral-200 focus-within:ring-2 focus-within:ring-green-600">
+                <input
+                  ref={desktopSearchRef}
+                  type="search"
+                  inputMode="search"
+                  autoComplete="off"
+                  placeholder="Buscar productos, marcas o categorías…"
+                  className="w-full rounded-full bg-transparent pl-5 pr-14 py-3 text-[15px] placeholder:text-neutral-500 focus:outline-none"
+                  aria-label="Buscar"
+                  maxLength={100}
+                />
+                <button
+                  type="submit"
+                  className="absolute right-1.5 top-1.5 grid place-items-center h-10 w-10 rounded-full bg-green-700 text-white hover:bg-green-800 active:scale-95 transition shadow-sm hover:shadow-md"
+                  aria-label="Enviar búsqueda"
+                >
+                  <IoSearchOutline className="text-lg" />
+                </button>
+              </div>
+            </form>
+
+            <div className="flex items-center gap-2">
+              <Link
+                href={catalogHref}
+                prefetch={false}
+                className="relative px-3 py-2 rounded-md font-medium text-neutral-900 hover:text-green-800 transition group"
+              >
+                Catálogo
+                <span className="pointer-events-none absolute left-3 right-3 -bottom-0.5 h-[2px] scale-x-0 bg-green-700/80 group-hover:scale-x-100 transition-transform origin-left rounded-full" />
+              </Link>
+              <a
+                href={`https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-md font-medium text-neutral-900 hover:text-green-800 hover:bg-green-50 transition"
+                aria-label="Contactar por WhatsApp"
+              >
+                <IoLogoWhatsapp className="text-xl text-green-600" />
+                <span>Contacto</span>
+              </a>
+              <Link
+                href="/carrito"
+                aria-label="Ver carrito"
+                prefetch={false}
+                className="relative ml-1 inline-flex items-center justify-center h-10 w-10 rounded-full border border-neutral-200 bg-white hover:bg-neutral-50 active:scale-95 transition"
+              >
+                <IoCartOutline className="text-2xl" />
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full bg-green-700 text-white text-[11px] leading-[18px] font-bold text-center px-1">
+                  {cartCount > 99 ? '99+' : cartCount}
+                </span>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* buscador móvil: segunda fila full width */}
+        <div className="md:hidden pb-3">
+          <form onSubmit={onSubmitMobile} role="search" aria-label="Buscar productos en móvil">
+            <div className="relative rounded-full bg-white shadow-md ring-1 ring-neutral-200 focus-within:ring-2 focus-within:ring-green-600">
+              <input
+                ref={mobileSearchRef}
+                type="search"
+                inputMode="search"
+                autoComplete="off"
+                placeholder="Buscar productos, marcas o categorías…"
+                className="w-full rounded-full bg-transparent pl-5 pr-14 py-3 placeholder:text-neutral-500 focus:outline-none"
+                aria-label="Buscar"
+                maxLength={100}
+              />
+              <button
+                type="submit"
+                className="absolute right-1.5 top-1.5 grid place-items-center h-10 w-10 rounded-full bg-green-700 text-white hover:bg-green-800 active:scale-95 transition shadow-sm hover:shadow-md"
+                aria-label="Enviar búsqueda en móvil"
+              >
+                <IoSearchOutline className="text-lg" />
+              </button>
+            </div>
           </form>
         </div>
+      </div>
 
-        {/* Menú y Carrito */}
-        <div className="flex justify-end items-center space-x-4">
-          <div id="navLinks" className="hidden md:flex space-x-6">
-            <Link href="/catalogo/pagina-1" className="font-semibold text-lg text-gray-800 hover:bg-gray-200 px-3 py-2 rounded transition duration-300" aria-label="Ir al catálogo">
-              Catálogo
-            </Link>
-            {/* Enlace WhatsApp */}
-            <a
-              href={WHATSAPP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-semibold text-lg text-gray-800 hover:bg-gray-200 px-3 py-2 rounded transition duration-300"
-              aria-label="Contactar por WhatsApp"
-            >
-              Contacto
-            </a>
-          </div>
-          <Link href="/carrito" className="relative flex items-center text-gray-800 transition-transform hover:scale-105" aria-label="Ver carrito">
-            <IoCartOutline className="text-3xl" />
-            <span id="cartCount" className="absolute -top-1 -right-2 bg-green-800 text-white text-xs font-bold px-1 rounded-full">
-              {cartCount}
-            </span>
-          </Link>
-          <button 
-            id="menuToggle"
-            onClick={openMobileMenu}
-            className="text-3xl md:hidden hover:text-gray-800 transition-transform transform hover:scale-105"
-            aria-label="Abrir menú de navegación"
-            aria-controls="mobileMenu"
-            aria-expanded={mobileMenuOpen ? 'true' : 'false'}
-          >
-            <IoMenuOutline />
-          </button>
-        </div>
-      </nav>
+      {/* backdrop móvil */}
+      <div
+        className={[
+          'fixed inset-0 bg-black/40 transition-opacity md:hidden',
+          mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
+        ].join(' ')}
+        onClick={closeMobileMenu}
+        aria-hidden="true"
+      />
 
-      {/* Menú móvil */}
+      {/* drawer móvil */}
       <div
         id="mobileMenu"
-        className={`fixed top-0 left-0 w-full bg-white shadow-lg p-6 transform transition-transform duration-300 md:hidden ${mobileMenuOpen ? 'translate-y-0' : '-translate-y-full'}`}
+        className={[
+          'fixed left-0 right-0 top-0 md:hidden z-50',
+          'bg-white shadow-lg transition-transform duration-300',
+          mobileMenuOpen ? 'translate-y-0' : '-translate-y-full',
+        ].join(' ')}
         role="dialog"
         aria-modal="true"
         aria-labelledby="mobileMenuTitle"
       >
-        <div className="flex justify-between items-center">
-          <Link href="/" aria-label="Inicio" className="flex items-center transition-transform hover:scale-105">
-            <Image src="/images/perro-verde-logo.svg" alt="Logo Ecommerce" width={90} height={60} />
+        <div className="px-4 pt-4 pb-3 flex items-center justify-between border-b">
+          <span id="mobileMenuTitle" className="sr-only">Menú de navegación</span>
+          <Link href="/" onClick={closeMobileMenu} aria-label="Inicio" prefetch={false}>
+            <Image src="/images/perro-verde-logo.svg" alt="Perro Verde" width={120} height={30} />
           </Link>
-          <button 
-            id="menuClose"
+          <button
             onClick={closeMobileMenu}
-            className="text-3xl hover:text-red-600 transition-transform transform hover:scale-105"
-            aria-label="Cerrar menú de navegación"
+            className="h-10 w-10 grid place-items-center rounded-full border border-neutral-200 hover:bg-neutral-50 active:scale-95 transition"
+            aria-label="Cerrar menú"
           >
-            <IoCloseOutline />
+            <IoCloseOutline className="text-2xl" />
           </button>
         </div>
-        <div className="mt-6">
-          <form
-            id="mobileHeaderSearchForm"
-            onSubmit={(e) => { 
-              e.preventDefault(); 
-              handleSearchSubmit('MobileBuscador'); 
-              closeMobileMenu(); 
-            }}
-            className="flex items-center space-x-2 bg-gray-100 rounded-full px-4 py-2 shadow-inner transition duration-300 ease-in-out transform hover:shadow-md"
-            role="search"
-            aria-label="Buscar productos en móvil"
+
+        <div className="px-2 pb-4 flex flex-col gap-1">
+          <Link
+            href={catalogHref}
+            prefetch={false}
+            onClick={closeMobileMenu}
+            className="px-4 py-3 rounded-lg font-medium text-neutral-900 hover:bg-green-50 hover:text-green-800 transition"
           >
-            <label htmlFor="MobileBuscador" className="sr-only">Buscar productos</label>
-            <input 
-              type="search"
-              name="MobileBuscador"
-              id="MobileBuscador"
-              placeholder="Buscar productos, marcas o categorías..."
-              className="w-full bg-transparent outline-none transition-all duration-300 focus:scale-105 focus:text-gray-900"
-              required
-              maxLength={100}
-              pattern="[a-zA-Z0-9\s\-]+"
-              title="Solo se permiten letras, números y guiones."
-            />
-            <button 
-              type="submit"
-              className="bg-green-800 text-white px-4 py-2 rounded-full hover:bg-green-900 transition duration-300 transform hover:scale-105 font-medium"
-              aria-label="Enviar búsqueda en móvil"
-            >
-              <IoSearchOutline />
-            </button>
-          </form>
-        </div>
-        <div className="mt-6 flex flex-col space-y-4">
-          <Link href="/catalogo/pagina-1" className="font-medium text-lg text-gray-800 hover:bg-gray-200 px-3 py-2 rounded transition transform hover:scale-105" aria-label="Ir al catálogo">
             Catálogo
           </Link>
-          {/* Enlace WhatsApp en móvil */}
           <a
             href={WHATSAPP_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-lg text-gray-800 hover:bg-gray-200 px-3 py-2 rounded transition transform hover:scale-105"
-            aria-label="Contactar por WhatsApp"
+            onClick={closeMobileMenu}
+            className="px-4 py-3 rounded-lg font-medium text-neutral-900 hover:bg-green-50 hover:text-green-800 transition inline-flex items-center gap-2"
           >
+            <IoLogoWhatsapp className="text-xl text-green-600" />
             Contacto
           </a>
-          <Link href="/carrito" className="flex items-center space-x-2 font-medium text-lg text-gray-800 hover:bg-gray-200 px-3 py-2 rounded transition transform hover:scale-105" aria-label="Ir al carrito">
-            <IoCartOutline className="text-2xl" />
-            <span>Carrito</span>
-            <span id="mobileCartCount" className="bg-green-800 text-white text-xs font-bold px-1 rounded-full">
-              {cartCount}
+          <Link
+            href="/carrito"
+            prefetch={false}
+            onClick={closeMobileMenu}
+            className="px-4 py-3 rounded-lg font-medium text-neutral-900 hover:bg-green-50 hover:text-green-800 transition inline-flex items-center gap-2"
+          >
+            <IoCartOutline className="text-xl" />
+            Carrito
+            <span className="ml-auto inline-flex items-center justify-center min-w-[22px] h-[22px] text-[12px] rounded-full bg-green-700 text-white px-1">
+              {cartCount > 99 ? '99+' : cartCount}
             </span>
           </Link>
         </div>
       </div>
     </header>
   );
-};
-
-export default Header;
+}
