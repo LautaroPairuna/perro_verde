@@ -69,35 +69,26 @@ export function parseUrlSegments(pathname: string): Filters {
  */
 export function buildCatalogPath(filters: Filters, pageOverride?: number): string {
   let href = '/catalogo';
-
-  if (filters.keywords) {
-    href += `/keys-${encodeURIComponent(filters.keywords.trim().replace(/\s+/g, '-'))}`;
-  }
-  if (filters.marca_slug) {
-    href += `/marca-${encodeURIComponent(filters.marca_slug)}`;
-  }
-  if (filters.categoria_slug) {
-    href += `/categoria-${encodeURIComponent(filters.categoria_slug)}`;
-  }
-  if (filters.producto_slug) {
-    href += `/producto-${encodeURIComponent(filters.producto_slug)}`;
-  }
+  if (filters.keywords)   href += `/keys-${encodeURIComponent(filters.keywords.trim().replace(/\s+/g, '-'))}`;
+  if (filters.marca_slug) href += `/marca-${encodeURIComponent(filters.marca_slug)}`;
+  if (filters.categoria_slug) href += `/categoria-${encodeURIComponent(filters.categoria_slug)}`;
+  if (filters.producto_slug)  href += `/producto-${encodeURIComponent(filters.producto_slug)}`;
 
   const raw = typeof pageOverride === 'number' ? pageOverride : filters.page;
   const page = Number.isFinite(raw) ? Number(raw) : 1;
-
-  if (page > 1) {
-    href += `/pagina-${page}`;
-  }
+  if (page > 1) href += `/pagina-${page}`;
 
   return href;
 }
 
-/** (Opcional pero recomendado) reutilizar la misma lógica en la paginación */
+// 🚀 Navegación/UI: SIEMPRE incluye /pagina-N (incluyendo 1)
 export function buildPaginationUrl(filters: Filters, page: number): string {
-  if (page < 1) {
-    console.error('El número de página debe ser un entero positivo. Recibido:', page);
-    page = 1;
-  }
-  return buildCatalogPath(filters, page); // omite /pagina-1
+  let href = '/catalogo';
+  if (filters.keywords)   href += `/keys-${encodeURIComponent(filters.keywords.trim().replace(/\s+/g, '-'))}`;
+  if (filters.marca_slug) href += `/marca-${encodeURIComponent(filters.marca_slug)}`;
+  if (filters.categoria_slug) href += `/categoria-${encodeURIComponent(filters.categoria_slug)}`;
+  if (filters.producto_slug)  href += `/producto-${encodeURIComponent(filters.producto_slug)}`;
+  const n = Math.max(1, Number.isFinite(page) ? Math.floor(page) : 1);
+  href += `/pagina-${n}`;          // 👈 fuerza /pagina-1
+  return href;
 }
