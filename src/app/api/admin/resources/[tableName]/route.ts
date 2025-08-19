@@ -149,8 +149,7 @@ export async function GET(
       model.findMany({ where, orderBy, skip, take: pageSize }),
     ])
     return NextResponse.json({ rows, total, page, pageSize, sortBy, sortDir })
-  } catch (e) {
-    // fallback por si sortBy no existe
+  } catch {
     try {
       const [total, rows] = await Promise.all([
         model.count({ where }),

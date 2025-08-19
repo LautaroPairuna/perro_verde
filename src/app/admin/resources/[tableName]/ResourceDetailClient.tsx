@@ -106,12 +106,6 @@ const compactFilters = (o: UIFilters): Record<string, string | number | boolean>
     Object.entries(o).filter(([, v]) => v !== '' && v !== undefined && v !== null)
   ) as Record<string, string | number | boolean>
 
-function shallowEqual(a: Record<string, unknown>, b: Record<string, unknown>) {
-  const ak = Object.keys(a), bk = Object.keys(b)
-  if (ak.length !== bk.length) return false
-  for (const k of ak) if (a[k] !== b[k]) return false
-  return true
-}
 /* ╭────────────────────── 5. MAIN COMPONENT ────────────────────╮ */
 export default function ResourceDetailClient({ tableName }: { tableName: string }) {
   const readOnly = READ_ONLY_RESOURCES.includes(tableName)
@@ -466,15 +460,6 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
   const setPageSizeSafe = React.useCallback((next: number) => {
     setPageSize(prev => {
       if (prev === next) return prev;
-      setPage(1);
-      return next;
-    });
-  }, []);
-
-  const setFiltersSafe = React.useCallback((next: UIFilters) => {
-    setUIFilters(prev => {
-      // si no cambian los filtros EFECTIVOS, no resetees
-      if (shallowEqual(prev, next)) return prev;
       setPage(1);
       return next;
     });
