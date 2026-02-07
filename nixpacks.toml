@@ -1,19 +1,13 @@
 # nixpacks.toml
 
+[phases.setup]
+nixPkgs = ["node_22", "npm"]
+
 [phases.build]
-# Instala dependencias y construye ambos proyectos
-cmds = ["pnpm install --frozen-lockfile", "pnpm run build"]
+cmds = ["npm ci", "npm run build"]
 
-# Configuración para el servicio de API (backend)
-[start.api]
-# Comando para iniciar la API en producción
-cmd = "pnpm run start:api"
+[start]
+cmd = "npm start"
 
-# Configuración para el servicio Web (frontend)
-[start.web]
-# Comando para iniciar el frontend en producción
-cmd = "pnpm run start:web"
-
-# Variables de entorno que Nixpacks debe conocer
 [variables]
 NODE_ENV = "production"

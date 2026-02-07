@@ -382,8 +382,9 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
     onSuccess: (_, vars) => {
       // Si estamos editando un registro único, cerramos el modal y notificamos
       // Para bulk updates, manejaremos la UI en handleBulk
-      if (ui.editRow && ui.editRow !== 'bulk' && (ui.editRow as Row).id === vars.id) {
-        toast.success(`Registro ${vars.id} actualizado`)
+      // Usamos String() para evitar problemas de tipos (number vs string)
+      if (ui.editRow && ui.editRow !== 'bulk' && String((ui.editRow as Row).id) === String(vars.id)) {
+        toast.success(`Registro actualizado`)
         dispatch({ type: 'openEdit', row: null })
         invalidateAll()
       }
@@ -566,6 +567,16 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
   const humanize = (s: string) =>
     (s || '').replace(/^Cfg/, '').replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
      .replace(/\s+/g, ' ').trim().replace(/\b\w/g, (c) => c.toUpperCase())
+
+  const getRecordName = (r: any) => {
+    if (!r) return ''
+    const candidates = ['producto', 'nombre', 'name', 'titulo', 'marca', 'rubro', 'descripcion', 'email']
+    for (const k of candidates) {
+      const val = r[k]
+      if (val && typeof val === 'string') return val
+    }
+    return `#${r.id}`
+  }
 
   const parentRow = (parentRows as any[]).find(r => r.id === child?.parentId)
   const displayName = parentRow?.producto ?? parentRow?.nombre ?? parentRow?.name ?? `#${child?.parentId}`
@@ -805,26 +816,39 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
                       )
 
                       if (tableName === 'Productos' && !child && col === 'precio') {
-                        const childrenTds = relations.map(rel => (
-                          <td
-                            key={'c-' + rel.childTable}
-                            className="px-4 py-2 whitespace-nowrap text-sm text-gray-800 border-b border-indigo-100"
-                          >
-                            <button
-                              className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs hover:bg-green-200 transition"
-                              onClick={() => setChild({
-                                childTable: rel.childTable,
-                                foreignKey: guessFK(rel.childTable, tableName),
-                                parentId: row.id,
-                              })}
-                              aria-label={`Ver ${
-                                relationLabels[rel.childTable as keyof typeof relationLabels] ?? rel.childTable
-                              } de ${row.id}`}
+                        const childrenTds = relations.map(rel => {
+                          const relLabel = relationLabels[rel.childTable as keyof typeof relationLabels] ?? rel.childTable
+                          const countKeyMap: Record<string, string> = {
+                            ProductoFotos: 'fotos',
+                            ProductoVersiones: 'versiones',
+                            ProductoEspecificaciones: 'especificaciones'
+                          }
+                          const countVal = (row as any)._count?.[countKeyMap[rel.childTable]]
+
+                          return (
+                            <td
+                              key={'c-' + rel.childTable}
+                              className="px-4 py-2 whitespace-nowrap text-sm text-gray-800 border-b border-indigo-100"
                             >
-                              {relationLabels[rel.childTable as keyof typeof relationLabels] ?? rel.childTable}
-                            </button>
-                          </td>
-                        ))
+                              <button
+                                className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs hover:bg-green-200 transition flex items-center gap-1"
+                                onClick={() => setChild({
+                                  childTable: rel.childTable,
+                                  foreignKey: guessFK(rel.childTable, tableName),
+                                  parentId: row.id,
+                                })}
+                                aria-label={`Ver ${relLabel} de ${row.id}`}
+                              >
+                                {relLabel}
+                                {countVal !== undefined && (
+                                  <span className="bg-white/40 px-1.5 rounded-full text-[10px] font-bold min-w-[1.2em] text-center">
+                                    {countVal}
+                                  </span>
+                                )}
+                              </button>
+                            </td>
+                          )
+                        })
                         return [td, ...childrenTds]
                       }
 
@@ -906,7 +930,7 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
       )}
 
       {ui.editRow && ui.editRow !== 'bulk' && (
-        <Modal title={`Editar registro ${(ui.editRow as Row).id}`} onClose={() => dispatch({ type: 'openEdit', row: null })}>
+        <Modal title={`Editar: ${getRecordName(ui.editRow)}`} onClose={() => dispatch({ type: 'openEdit', row: null })}>
           <SmartForm
             resource={resource}
             initial={ui.editRow as Row}

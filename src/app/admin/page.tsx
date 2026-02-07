@@ -265,6 +265,7 @@ export default async function AdminPage() {
           
           {/* Ganancias de la semana */}
           <EarningsCard 
+            title="Ganancias de la semana"
             total={Number(gananciasSemana._sum.total ?? 0)} 
             count={gananciasSemana._count.id ?? 0} 
           />

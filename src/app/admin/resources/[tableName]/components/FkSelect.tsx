@@ -1,5 +1,6 @@
 'use client'
 import React from 'react'
+import { HiChevronDown } from 'react-icons/hi'
 import { useCatalog } from '../hooks/useCatalog'
 import { fkConfig } from '../config'
 
@@ -9,9 +10,10 @@ type FkSelectP = {
   value: string
   fixed: boolean
   onChange: (v: string) => void
+  error?: boolean
 }
 
-export function FkSelect({ col, value, fixed, onChange }: FkSelectP) {
+export function FkSelect({ col, value, fixed, onChange, error }: FkSelectP) {
   const cfg: FkCfg | undefined = (fkConfig as Record<string, FkCfg>)[col]
 
   // Hook SIEMPRE llamado (clave vacía => SWR no fetch)
@@ -23,12 +25,16 @@ export function FkSelect({ col, value, fixed, onChange }: FkSelectP) {
       cfg?.labelKey as string
     ] ?? (value || '')
 
+  const baseClass = `flex h-10 w-full items-center justify-between rounded-md border bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none transition-colors ${
+    error ? 'border-red-500 ring-red-200' : 'border-gray-300'
+  }`
+
   if (!cfg) {
     return (
       <input
         value={value ?? ''}
         onChange={e => onChange(e.target.value)}
-        className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
+        className={baseClass}
       />
     )
   }
@@ -37,29 +43,31 @@ export function FkSelect({ col, value, fixed, onChange }: FkSelectP) {
     return (
       <>
         <input type="hidden" name={col} value={value ?? ''} />
-        <input
-          disabled
-          value={fixedLabel}
-          className="px-3 py-2 border rounded bg-gray-100 text-gray-600"
-        />
+        <div className={`bg-gray-100 text-gray-600 ${baseClass}`}>
+          {fixedLabel}
+        </div>
       </>
     )
   }
 
   return (
-    <select
-      value={value ?? ''}
-      onChange={e => onChange(e.target.value)}
-      className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
-    >
-      <option value="" disabled={isLoading}>
-        {isLoading ? 'Cargando…' : '— Selecciona —'}
-      </option>
-      {safeOptions.map((o: Record<string, unknown>) => (
-        <option key={String(o.id)} value={String(o.id)}>
-          {String(o[cfg.labelKey])}
+    <div className="relative">
+      <select
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value)}
+        className={baseClass}
+        disabled={isLoading}
+      >
+        <option value="" disabled>
+          {isLoading ? 'Cargando datos...' : '— Seleccionar —'}
         </option>
-      ))}
-    </select>
+        {safeOptions.map((o: Record<string, unknown>) => (
+          <option key={String(o.id)} value={String(o.id)}>
+            {String(o[cfg.labelKey])}
+          </option>
+        ))}
+      </select>
+      <HiChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-50 pointer-events-none" />
+    </div>
   )
 }

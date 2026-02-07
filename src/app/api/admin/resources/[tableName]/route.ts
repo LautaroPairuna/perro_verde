@@ -145,18 +145,32 @@ export async function GET(
   if (sortBy) orderBy = { [sortBy]: sortDir }
 
   const skip = (page - 1) * pageSize
+  
+  // Include para contadores en Productos
+  let include: Record<string, any> | undefined
+  if (tableName === 'Productos') {
+    include = {
+      _count: {
+        select: {
+          fotos: true,
+          versiones: true,
+          especificaciones: true
+        }
+      }
+    }
+  }
 
   try {
     const [total, rows] = await Promise.all([
       model.count({ where }),
-      model.findMany({ where, orderBy, skip, take: pageSize }),
+      model.findMany({ where, orderBy, skip, take: pageSize, include }),
     ])
     return NextResponse.json({ rows, total, page, pageSize, sortBy, sortDir })
   } catch {
     try {
       const [total, rows] = await Promise.all([
         model.count({ where }),
-        model.findMany({ where, orderBy: { id: sortDir }, skip, take: pageSize }),
+        model.findMany({ where, orderBy: { id: sortDir }, skip, take: pageSize, include }),
       ])
       return NextResponse.json({ rows, total, page, pageSize, sortBy: 'id', sortDir })
     } catch (err) {
