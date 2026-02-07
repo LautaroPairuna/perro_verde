@@ -8,6 +8,7 @@ import { PhotoSwipeInitializer } from '@/components/unProducto/PhotoSwipeInitial
 import ImageWithFallback from '@/components/ImageWithFallback'
 import type { ProductDetail } from '@/utils/fetchData'
 import type { Metadata } from 'next'
+import { ProductoVersiones } from '../../../../../generated/prisma/client'
 
 export const dynamic = 'force-dynamic'
 
@@ -97,7 +98,7 @@ export default async function ProductDetailPage({
     ...raw,
     descripcion: raw.descripcion || '',
     foto: raw.foto || '',
-    versiones: raw.versiones.map(v => ({ ...v, detalle: v.detalle || '' })),
+    versiones: raw.versiones.map((v: ProductoVersiones) => ({ ...v, detalle: v.detalle || '' })),
     especificaciones: raw.especificaciones,
   }
 
