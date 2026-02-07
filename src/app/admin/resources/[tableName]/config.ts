@@ -1,6 +1,6 @@
 // Config y constantes compartidas por el módulo admin
 
-export const READ_ONLY_RESOURCES: string[] = ['Pedidos']
+export const READ_ONLY_RESOURCES: string[] = ['Pedidos', 'AuditLog']
 
 export const relationMap = {
   Productos: ['ProductoFotos', 'ProductoVersiones', 'ProductoEspecificaciones'],
@@ -57,6 +57,10 @@ export const DEFAULT_COLUMNS = {
     'tarjeta_last4', 'tarjeta_payment_method',
     'mp_error_code', 'mp_error_message', 'mp_response',
     'createdAt', 'updatedAt',
+  ],
+  AuditLog: [
+    'id', 'entity', 'entityId', 'action', 'field',
+    'oldValue', 'newValue', 'user', 'ip', 'createdAt'
   ],
 } as const
 

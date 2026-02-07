@@ -1,11 +1,11 @@
 // schema.prisma
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL")
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../generated/prisma"
 }
 
 model CfgMarcas {
@@ -65,6 +65,21 @@ model CfgSlider {
   @@map("cfgslider")
 }
 
+// Nueva tabla para estados de pedidos
+model CfgEstadoPedido {
+  id          String  @id @map("estado") // 'pendiente', 'approved', etc.
+  descripcion String
+  color       String? // clases de tailwind o hex
+  orden       Int     @default(0)
+  es_final    Boolean @default(false)
+  es_cancel   Boolean @default(false)
+  activo      Boolean @default(true)
+
+  Pedidos     Pedidos[]
+
+  @@map("cfgestadopedidos")
+}
+
 model Productos {
   id          Int                      @id @default(autoincrement())
   marca_id    Int
@@ -86,6 +101,12 @@ model Productos {
   versiones      ProductoVersiones[]
   especificaciones ProductoEspecificaciones[]
 
+  @@index([marca_id])
+  @@index([rubro_id])
+  @@index([destacado])        // Para slider/home
+  @@index([activo, stock])    // Para listados de stock
+  @@index([producto])         // Búsqueda exacta rápida
+  
   @@map("productos")
 }
 
@@ -148,7 +169,27 @@ model Pedidos {
   createdAt              DateTime @default(now())   @db.DateTime(3)
   updatedAt              DateTime @updatedAt       @db.DateTime(3)
 
+  estadoRel              CfgEstadoPedido? @relation(fields: [estado], references: [id])
+
+  @@index([estado])
   @@map("pedidos")
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  entity    String   @db.VarChar(100) // Tabla afectada
+  entityId  String   @db.VarChar(100) // ID del registro
+  action    String   @db.VarChar(20)  // "CREATE", "UPDATE", "DELETE"
+  field     String?  @db.VarChar(100) // Campo afectado
+  oldValue  String?  @db.Text
+  newValue  String?  @db.Text
+  user      String?  // Email o ID
+  ip        String?  // IP
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
 
 model Session {

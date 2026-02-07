@@ -49,8 +49,6 @@ export default function ImageDropzone({
   }
 
   // Resuelve el src a mostrar:
-  // - si hay File => blobUrl
-  // - si hay string => usar resolvePreviewSrc si existe, sino la string tal cual
   const previewSrc: string | null =
     value instanceof File
       ? blobUrl
@@ -59,63 +57,74 @@ export default function ImageDropzone({
           : null)
 
   return (
-    <div className="flex flex-col gap-3">
-      <div
-        onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={onDrop}
-        onClick={() => inputRef.current?.click()}
-        className={[
-          'w-full border-2 border-dashed rounded px-4 py-6 text-center cursor-pointer transition',
-          dragOver ? 'border-indigo-400 bg-indigo-50' : 'border-gray-300 hover:bg-gray-50'
-        ].join(' ')}
-        aria-label="Zona para arrastrar y soltar imagen"
-      >
-        {previewSrc ? (
-          <div className="flex items-center justify-center">
-            <Image
-              src={previewSrc}
-              alt="Preview"
-              width={160}
-              height={160}
-              className="rounded border object-cover"
-              unoptimized
-            />
-          </div>
-        ) : (
-          <div className="text-gray-600">
-            <div className="font-medium">Arrastrá una imagen aquí</div>
-            <div className="text-sm text-gray-500">o hacé clic para seleccionar</div>
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="px-3 py-2 border rounded hover:bg-gray-100 transition"
-        >
-          Subir archivo
-        </button>
-        {value ? (
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            className="px-3 py-2 border rounded hover:bg-gray-100 transition text-gray-600"
-          >
-            Quitar
-          </button>
-        ) : null}
-      </div>
-
+    <div
+      onClick={() => inputRef.current?.click()}
+      onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={onDrop}
+      className={[
+        'relative w-full border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all duration-200 group overflow-hidden',
+        dragOver 
+          ? 'border-indigo-500 bg-indigo-50 shadow-inner' 
+          : 'border-gray-300 hover:border-indigo-400 hover:bg-gray-50'
+      ].join(' ')}
+      aria-label="Zona para arrastrar y soltar imagen"
+    >
       <input
         ref={inputRef}
         type="file"
         accept={accept}
-        onChange={e => handleFiles(e.currentTarget.files)}
+        onChange={e => handleFiles(e.target.files)}
         className="hidden"
       />
+
+      {previewSrc ? (
+        <div className="relative flex items-center justify-center">
+          <div className="relative rounded-lg overflow-hidden border border-gray-200 shadow-sm bg-white p-1">
+             <Image
+              src={previewSrc}
+              alt="Preview"
+              width={200}
+              height={200}
+              className="object-contain max-h-48 w-auto rounded"
+              unoptimized
+            />
+          </div>
+          
+          {/* Overlay con botón al hacer hover sobre la imagen ya cargada */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 transition-opacity rounded-lg">
+             <span className="bg-white text-gray-800 px-4 py-2 rounded-full font-medium shadow-lg transform scale-95 group-hover:scale-100 transition-transform">
+               Cambiar imagen
+             </span>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-4 text-gray-500">
+           <div className="mb-3 p-3 bg-gray-100 rounded-full text-gray-400 group-hover:text-indigo-500 group-hover:bg-indigo-100 transition-colors">
+             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+             </svg>
+           </div>
+           <p className="text-base font-medium text-gray-700">
+             Arrastrá tu imagen aquí
+           </p>
+           <p className="text-sm mt-1 mb-4">
+             o hacé clic para seleccionar
+           </p>
+           
+           <button
+             type="button"
+             className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-indigo-600 transition-colors pointer-events-none"
+           >
+             Seleccionar archivo
+           </button>
+        </div>
+      )}
+
+      {/* Info de peso máximo (absoluto abajo) */}
+      <div className="mt-4 text-xs text-gray-400">
+        Máximo 5MB · Formatos: JPG, PNG, WEBP
+      </div>
     </div>
   )
 }

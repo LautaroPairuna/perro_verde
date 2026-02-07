@@ -1,12 +1,9 @@
-//src/app/api/admin/structure/route.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextResponse } from 'next/server'
+import prisma from '@/lib/prisma'
 
-import { PrismaClient } from '@prisma/client'
-const prisma = new PrismaClient()
-
-/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PrismaModel = { findMany: (args?: any) => Promise<any[]> }
 
-/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 const models: Record<string, PrismaModel> = {
   CfgMarcas: prisma.cfgMarcas,
   CfgRubros: prisma.cfgRubros,
@@ -22,26 +19,24 @@ const models: Record<string, PrismaModel> = {
 
 interface TableStructure {
   tableName: string
-  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   data: any[]
 }
 
-export async function GET(): Promise<Response> {
+export async function GET() {
   try {
     const tableInfo: TableStructure[] = []
 
     for (const tableName of Object.keys(models)) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = await models[tableName].findMany()
       tableInfo.push({ tableName, data })
     }
 
-    return new Response(JSON.stringify(tableInfo), { status: 200 })
+    return NextResponse.json(tableInfo)
   } catch (err) {
     console.error(err)
-    return new Response(
-      JSON.stringify({ error: 'Error fetching database structure' }),
-      { status: 500 },
+    return NextResponse.json(
+      { error: 'Error fetching database structure' },
+      { status: 500 }
     )
   }
 }

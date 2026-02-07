@@ -1,7 +1,7 @@
 // src/app/catalogo/detalle/[slug]/page.tsx
 import { redirect } from 'next/navigation'
 import slugify from '@/utils/slugify'
-import { getSingleProduct } from '@/utils/fetchData'
+import { getSingleProduct, incrementProductVisits } from '@/utils/fetchData'
 import ProductInfo from '@/components/unProducto/ProductInfo'
 import ProductTabs from '@/components/unProducto/ProductTabs'
 import { PhotoSwipeInitializer } from '@/components/unProducto/PhotoSwipeInitializer'
@@ -83,7 +83,12 @@ export default async function ProductDetailPage({
 
   let raw: ProductDetail
   try {
+    // 1) Obtener datos (cacheado)
     raw = await getSingleProduct(productId)
+    
+    // 2) Registrar visita (sin bloquear render excesivamente, pero asegurando ejecución)
+    // En Next.js 15 podríamos usar after() si estuviera habilitado, por ahora await rápido.
+    await incrementProductVisits(productId)
   } catch {
     redirect('/catalogo/not-found')
   }

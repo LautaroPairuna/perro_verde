@@ -1,9 +1,9 @@
-/* eslint-disable react-hooks/rules-of-hooks, @typescript-eslint/no-explicit-any */
+/* eslint-disable react-hooks/rules-of-hooks, @typescript-eslint/no-explicit-any, react-hooks/exhaustive-deps */
 'use client'
 
 /* ────────────────────────────── 1. IMPORTS ─────────────────────────────── */
 import React, { useMemo, useCallback, useReducer, useEffect } from 'react'
-import useSWR, { mutate } from 'swr'
+import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
 import {
   HiChevronLeft, HiChevronRight,
   HiCheckCircle, HiXCircle, HiCalendar, HiDocumentText,
@@ -20,13 +20,130 @@ import { Modal } from './components/Modal'
 import { ConfirmModal } from './components/ConfirmModal'
 import { DetailContent } from './components/DetailContent'
 import { FotoCell } from './components/FotoCell'
-import { Form, BulkForm } from './components/Form'
+import { BulkForm } from './components/Form'
+import { SmartForm } from './components/SmartForm'
 import { Toolbar } from './components/Toolbar'
-import { FiltersBar } from './components/FiltersBar'
+import { FiltersBar, FiltersSummary } from './components/FiltersBar'
+import AdminDropzone from './components/AdminDropzone'
+import AuditLogViewer from './components/AuditLogViewer'
 
 import {
   DEFAULT_COLUMNS, HIDDEN_COLUMNS, READ_ONLY_RESOURCES, relationLabels,
 } from './config'
+
+/* ──────────────────────── COMPONENTES UI EDITABLES ──────────────────────── */
+
+const EditableNumber = ({
+  value,
+  id,
+  field,
+  onUpdate,
+  min = 0,
+  warningThreshold,
+}: {
+  value: number
+  id: number | string
+  field: string
+  onUpdate: (id: string | number, data: Record<string, any>) => void
+  min?: number
+  warningThreshold?: number
+}) => {
+  const [local, setLocal] = React.useState<string>(String(value ?? 0))
+  const [loading, setLoading] = React.useState(false)
+
+  React.useEffect(() => setLocal(String(value ?? 0)), [value])
+
+  const save = async () => {
+    const num = parseFloat(local)
+    if (isNaN(num) || num === value) return
+    
+    setLoading(true)
+    try {
+      // Optimizamos la UI asumiendo éxito (optimistic update local ya hecho)
+      onUpdate(id, { [field]: num })
+    } catch (e) {
+      setLocal(String(value)) // Revertir en error
+      toast.error('Error al actualizar')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Clases semánticas para stock
+  let statusClass = 'text-gray-900 bg-white'
+  if (field === 'stock' && warningThreshold !== undefined) {
+    const n = parseFloat(local)
+    if (n <= warningThreshold) statusClass = 'text-red-700 font-bold bg-red-50 border-red-200'
+    else if (n <= warningThreshold * 2) statusClass = 'text-yellow-700 font-medium bg-yellow-50 border-yellow-200'
+    else statusClass = 'text-green-700 bg-green-50 border-green-200'
+  }
+
+  return (
+    <div className="relative group">
+      <input
+        type="number"
+        value={local}
+        onChange={e => setLocal(e.target.value)}
+        onBlur={save}
+        onKeyDown={e => e.key === 'Enter' && save()}
+        min={min}
+        className={`
+          w-24 px-2 py-1 text-right border rounded transition-colors focus:ring-2 focus:ring-indigo-500 focus:outline-none
+          ${statusClass} ${loading ? 'opacity-50 cursor-wait' : ''}
+        `}
+        disabled={loading}
+      />
+      {loading && <div className="absolute right-1 top-1/2 -translate-y-1/2 animate-spin h-3 w-3 border-2 border-indigo-600 rounded-full border-t-transparent"></div>}
+    </div>
+  )
+}
+
+const EditableToggle = ({
+  value,
+  id,
+  field,
+  onUpdate,
+}: {
+  value: boolean
+  id: number | string
+  field: string
+  onUpdate: (id: string | number, data: Record<string, any>) => void
+}) => {
+  const [loading, setLoading] = React.useState(false)
+
+  const toggle = async () => {
+    if (loading) return
+    setLoading(true)
+    try {
+      await onUpdate(id, { [field]: !value })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <button
+      onClick={toggle}
+      disabled={loading}
+      className={`
+        relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2
+        ${value ? 'bg-green-500' : 'bg-gray-200'}
+        ${loading ? 'opacity-50 cursor-wait' : 'cursor-pointer'}
+      `}
+      title={value ? 'Activo' : 'Inactivo'}
+    >
+      <span
+        className={`
+          inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+          ${value ? 'translate-x-6' : 'translate-x-1'}
+        `}
+      />
+    </button>
+  )
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+
 import { getDefaultColumns, getHiddenColumns } from './utils/adminColumns'
 import { buildFD, sanitize } from './utils/formData'
 import type { Row, IdLike, Json } from './types'
@@ -111,11 +228,11 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
   const readOnly = READ_ONLY_RESOURCES.includes(tableName)
 
   // Para “friendlyTitle” en vista hija necesitamos el parent
-  const { data: parentResp, error: parentError, isValidating: loadingParent } =
-    useSWR<any>(`/api/admin/resources/${tableName}?page=1&pageSize=50`, fetcher, {
-      revalidateOnFocus: false,
-      keepPreviousData: true,
-    })
+  const { data: parentResp, isError: parentError, isFetching: loadingParent } = useQuery({
+    queryKey: ['resource', tableName, 'all-for-parent'],
+    queryFn: () => fetcher(`/api/admin/resources/${tableName}?page=1&pageSize=50`),
+    staleTime: 60000,
+  })
   const parentRows: any[] = Array.isArray(parentResp) ? parentResp : (parentResp?.rows ?? [])
 
   // Relaciones (solo nombres)
@@ -160,6 +277,7 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
   const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>('asc')
   const [search, setSearch] = React.useState('')
   const [uiFilters, setUIFilters] = React.useState<UIFilters>({})
+  const [showFilters, setShowFilters] = React.useState(false)
 
   React.useEffect(() => {
     setPage(1)
@@ -180,7 +298,7 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
         return next
       })
     },
-    []
+    [] // shallowEqual y compactFilters son estables/puros
   )
 
   const { rows: data, total, validating } = useServerTable<Row>(resource, {
@@ -189,7 +307,6 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
     qFields: resource === 'Productos' ? ['producto','descripcion'] : undefined,
     filters: effectiveFilters, // tu objeto limpio
   })
-  const refresh = useCallback(() => mutate(`/api/admin/resources/${resource}?page=${page}&pageSize=${pageSize}`), [resource, page, pageSize])
 
   /* ──────────────── columnas visibles ─────────────── */
   const rawCols = useMemo(() => {
@@ -209,14 +326,45 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
   }, [visibleCols, tableName, child])
 
   /* ╭─────────────────────────── CRUD ─────────────────────────╮ */
-  const refreshAll = useCallback(() => {
-    refresh()
-    mutate(`/api/admin/resources/${tableName}?page=1&pageSize=50`)
-  }, [refresh, tableName])
+  const queryClient = useQueryClient()
 
-  const doUpdate = useCallback(
-    async (id: IdLike, body: Record<string, Json>) => {
-      const url  = `/api/admin/resources/${resource}/${id}`
+  const invalidateAll = useCallback(() => {
+    // Invalida la query principal del recurso
+    queryClient.invalidateQueries({ queryKey: ['resource', resource] })
+  }, [queryClient, resource])
+
+  const createMutation = useMutation({
+    mutationFn: async (raw: Record<string, Json>) => {
+      const clean = (() => {
+        const c = sanitize(raw)
+        delete c.id
+        return c
+      })()
+      const endpoint = `/api/admin/resources/${resource}`
+      const init: RequestInit =
+        clean.foto instanceof File
+          ? { method: 'POST', body: buildFD(clean), headers: csrfHdr() }
+          : {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...csrfHdr() },
+              body: JSON.stringify(clean),
+            }
+      const res = await fetch(endpoint, init)
+      const out = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(out.error || 'Error')
+      return out
+    },
+    onSuccess: () => {
+      toast.success('Registro creado')
+      dispatch({ type: 'openCreate', open: false })
+      invalidateAll()
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, body }: { id: IdLike; body: Record<string, Json> }) => {
+      const url = `/api/admin/resources/${resource}/${id}`
       const data = sanitize(body)
       const init: RequestInit =
         data.foto instanceof File
@@ -229,76 +377,25 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
       const res = await fetch(url, init)
       const out = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(out.error || 'Error')
+      return out
     },
-    [resource],
-  )
-
-  const handleCreate = useCallback(
-    async (raw: Record<string, Json>) => {
-      try {
-        const clean = (() => {
-          const c = sanitize(raw)
-          delete c.id
-          return c
-        })()
-        const endpoint = `/api/admin/resources/${resource}`
-        const init: RequestInit =
-          clean.foto instanceof File
-            ? { method: 'POST', body: buildFD(clean), headers: csrfHdr() }
-            : {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...csrfHdr() },
-                body: JSON.stringify(clean),
-              }
-        const res = await fetch(endpoint, init)
-        const out = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(out.error || 'Error')
-        toast.success('Registro creado')
-        dispatch({ type: 'openCreate', open: false })
-        refreshAll()
-      } catch (e: any) {
-        toast.error(e.message)
-      }
-    },
-    [resource, refreshAll],
-  )
-
-  const handleUpdate = useCallback(
-    async (id: IdLike, raw: Record<string, Json>) => {
-      try {
-        await doUpdate(id, raw)
-        toast.success(`Registro ${id} actualizado`)
+    onSuccess: (_, vars) => {
+      // Si estamos editando un registro único, cerramos el modal y notificamos
+      // Para bulk updates, manejaremos la UI en handleBulk
+      if (ui.editRow && ui.editRow !== 'bulk' && (ui.editRow as Row).id === vars.id) {
+        toast.success(`Registro ${vars.id} actualizado`)
         dispatch({ type: 'openEdit', row: null })
-        refreshAll()
-      } catch (e: any) {
-        toast.error(e.message)
+        invalidateAll()
       }
     },
-    [doUpdate, refreshAll],
-  )
-
-  const handleBulk = useCallback(
-    async (field: string, val: Json) => {
-      if (!field) { toast.error('Definí el campo a modificar'); return }
-      try {
-        const results = await Promise.allSettled(
-          ui.selected.map(id => doUpdate(id, { [field]: val }))
-        )
-        const failed = results.filter(r => r.status === 'rejected')
-        if (failed.length) toast.error(`Fallaron ${failed.length} de ${results.length}`)
-        else toast.success(`Actualizados ${ui.selected.length} registro(s)`)
-        dispatch({ type: 'openEdit', row: null })
-        dispatch({ type: 'resetSelect' })
-        refreshAll()
-      } catch (e: any) {
-        toast.error(e.message)
-      }
+    onError: (e: Error) => {
+      // Solo mostramos error aquí si es edición simple. Bulk maneja sus errores.
+      if (ui.editRow && ui.editRow !== 'bulk') toast.error(e.message)
     },
-    [ui.selected, doUpdate, refreshAll],
-  )
+  })
 
-  const deleteOne = useCallback(
-    async (id: IdLike, forced?: string) => {
+  const deleteMutation = useMutation({
+    mutationFn: async ({ id, forced }: { id: IdLike; forced?: string }) => {
       const tgt = forced || resource
       const res = await fetch(`/api/admin/resources/${tgt}/${id}`, {
         method: 'DELETE',
@@ -306,8 +403,36 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
       })
       const out = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(out.error || 'Error')
+      return out
     },
-    [resource],
+  })
+
+  // Handlers para UI
+  const handleCreate = (raw: Record<string, Json>) => createMutation.mutate(raw)
+  
+  const handleUpdate = (id: IdLike, raw: Record<string, Json>) => 
+    updateMutation.mutate({ id, body: raw })
+
+  const handleBulk = useCallback(
+    async (field: string, val: Json) => {
+      if (!field) { toast.error('Definí el campo a modificar'); return }
+      try {
+        // Usamos mutateAsync para esperar resultados
+        const results = await Promise.allSettled(
+          ui.selected.map(id => updateMutation.mutateAsync({ id, body: { [field]: val } }))
+        )
+        const failed = results.filter(r => r.status === 'rejected')
+        if (failed.length) toast.error(`Fallaron ${failed.length} de ${results.length}`)
+        else toast.success(`Actualizados ${ui.selected.length} registro(s)`)
+        
+        dispatch({ type: 'openEdit', row: null })
+        dispatch({ type: 'resetSelect' })
+        invalidateAll()
+      } catch (e: any) {
+        toast.error(e.message)
+      }
+    },
+    [ui.selected, updateMutation, invalidateAll],
   )
 
   const confirmDelete = useCallback(async () => {
@@ -315,11 +440,11 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
     try {
       const results = await Promise.allSettled(
         ui.confirmRows.map(r =>
-          deleteOne(
-            r.id as IdLike,
-            child ? child.childTable : undefined,
-          ),
-        ),
+          deleteMutation.mutateAsync({
+            id: r.id as IdLike,
+            forced: child ? child.childTable : undefined
+          })
+        )
       )
       const failed = results.filter(r => r.status === 'rejected')
       if (failed.length) toast.error(`Fallaron ${failed.length} eliminaciones`)
@@ -329,9 +454,9 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
     } finally {
       dispatch({ type: 'confirmDelete', rows: null })
       dispatch({ type: 'resetSelect' })
-      refreshAll()
+      invalidateAll()
     }
-  }, [ui.confirmRows, deleteOne, child, refreshAll])
+  }, [ui.confirmRows, deleteMutation, child, invalidateAll])
 
   /* ╭─────────────────────── renderCell ────────────────────────╮ */
   const parsedDatos = useMemo(() => {
@@ -373,8 +498,21 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
           )
       }
 
-      if (col === 'foto' && typeof val === 'string' && val.trim())
-        return <FotoCell tableName={tableName} childRelation={child} fileName={val} />
+      if (col === 'foto') {
+        return (
+          <div onClick={e => e.stopPropagation()}>
+            <AdminDropzone 
+              resourceName={resource}
+              resourceId={rowId}
+              onSuccess={() => invalidateAll()}
+            >
+              {typeof val === 'string' && val.trim() ? (
+                <FotoCell tableName={tableName} childRelation={child} fileName={val} />
+              ) : null}
+            </AdminDropzone>
+          </div>
+        )
+      }
 
       if (val instanceof Date)
         return (
@@ -426,7 +564,7 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
   if (parentError) return <div className="p-4 text-red-500">Error al cargar datos</div>
 
   const humanize = (s: string) =>
-    s.replace(/^Cfg/, '').replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
+    (s || '').replace(/^Cfg/, '').replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
      .replace(/\s+/g, ' ').trim().replace(/\b\w/g, (c) => c.toUpperCase())
 
   const parentRow = (parentRows as any[]).find(r => r.id === child?.parentId)
@@ -515,18 +653,30 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
           setSearch={setSearchSafe}
           pageSize={pageSize}
           setPageSize={setPageSizeSafe}
+          onToggleFilters={() => setShowFilters(true)}
+          activeFiltersCount={Object.keys(baseClean).length}
         />
 
-        <FiltersBar
-          resource={resource}
-          filters={uiFilters}
-          setFilters={setFiltersSmart}
-        />
+        <FiltersSummary filters={uiFilters} setFilters={setFiltersSmart} />
+
+        {showFilters && (
+          <Modal title="Filtros" onClose={() => setShowFilters(false)}>
+            <FiltersBar
+              resource={resource}
+              filters={uiFilters}
+              setFilters={setFiltersSmart}
+              variant="modal"
+              onClose={() => setShowFilters(false)}
+            />
+          </Modal>
+        )}
 
         {/* Tabla */}
         <div className="overflow-x-auto">
           {data.length === 0 ? (
             <div className="p-6 text-center text-gray-500">Sin resultados</div>
+          ) : resource === 'AuditLog' ? (
+            <AuditLogViewer data={data as any[]} />
           ) : (
             <table className="min-w-full divide-y divide-indigo-100" role="grid">
               <thead className="sticky top-0 bg-indigo-600">
@@ -744,24 +894,26 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
 
       {ui.createOpen && (
         <Modal title="Crear registro" onClose={() => dispatch({ type: 'openCreate', open: false })}>
-          <Form
+          <SmartForm
             resource={resource}
             initial={child ? { [child.foreignKey]: child.parentId } : {}}
             columns={getDefaultColumns(DEFAULT_COLUMNS as Record<string, readonly string[]>, resource) ?? orderedColumns}
             fixedFk={child?.foreignKey}
             onSubmit={handleCreate}
+            isSaving={createMutation.isPending}
           />
         </Modal>
       )}
 
       {ui.editRow && ui.editRow !== 'bulk' && (
         <Modal title={`Editar registro ${(ui.editRow as Row).id}`} onClose={() => dispatch({ type: 'openEdit', row: null })}>
-          <Form
+          <SmartForm
             resource={resource}
             initial={ui.editRow as Row}
             columns={getDefaultColumns(DEFAULT_COLUMNS as Record<string, readonly string[]>, resource) ?? orderedColumns}
             fixedFk={child?.foreignKey}
             onSubmit={d => handleUpdate((ui.editRow as Row).id as IdLike, d)}
+            isSaving={updateMutation.isPending}
           />
         </Modal>
       )}

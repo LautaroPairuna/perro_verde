@@ -1,6 +1,6 @@
-import { PrismaClient, Prisma } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { Prisma } from '@prisma/client';
+import { cache } from 'react';
+import prisma from '@/lib/prisma';
 
 /**
  * Filtro de búsqueda para productos
@@ -49,29 +49,33 @@ function serialize<T>(data: T): T {
 
 /**
  * Obtiene datos de filtros (marcas y rubros activos)
+ * Cacheado por request para evitar doble query en generateMetadata + Page
  */
-export async function getFiltersData(): Promise<{
+export const getFiltersData = cache(async (): Promise<{
   marcas: { id: number; marca: string }[];
   rubros: { id: number; rubro: string }[];
-}> {
-  const marcas = await prisma.cfgMarcas.findMany({
-    where: { activo: true },
-    select: { id: true, marca: true },
-  });
-  const rubros = await prisma.cfgRubros.findMany({
-    where: { activo: true },
-    select: { id: true, rubro: true },
-  });
+}> => {
+  const [marcas, rubros] = await Promise.all([
+    prisma.cfgMarcas.findMany({
+      where: { activo: true },
+      select: { id: true, marca: true },
+    }),
+    prisma.cfgRubros.findMany({
+      where: { activo: true },
+      select: { id: true, rubro: true },
+    }),
+  ]);
   return { marcas, rubros };
-}
+});
 
 /**
  * Obtiene productos filtrados con paginación
+ * Cacheado por request
  */
-export async function getFilteredProducts(
+export const getFilteredProducts = cache(async (
   filters: Filters,
   itemsPerPage: number
-): Promise<FilteredProductsResult> {
+): Promise<FilteredProductsResult> => {
   const {
     page = 1,
     keywords = '',
@@ -111,7 +115,7 @@ export async function getFilteredProducts(
   const totalPages = Math.ceil(totalProducts / itemsPerPage);
 
   return { products, totalProducts, totalPages };
-}
+});
 
 /**
  * Campos a incluir en detalle de producto (extiende PRODUCT_INCLUDES)
@@ -127,17 +131,26 @@ const PRODUCT_DETAIL_INCLUDES = {
 export type ProductDetail = Prisma.ProductosGetPayload<{ include: typeof PRODUCT_DETAIL_INCLUDES }>;
 
 /**
- * Obtiene un único producto y actualiza su contador de visitas
+ * Incrementa contador de visitas (Fire & Forget idealmente)
  */
-export async function getSingleProduct(
-  productId: number
-): Promise<ProductDetail> {
-  // Incrementamos visitas
-  await prisma.productos.update({
-    where: { id: productId },
-    data:  { visitas: { increment: 1 } },
-  });
+export async function incrementProductVisits(productId: number) {
+  try {
+    await prisma.productos.update({
+      where: { id: productId },
+      data:  { visitas: { increment: 1 } },
+    });
+  } catch (error) {
+    console.error(`Error incrementando visitas para producto ${productId}:`, error);
+  }
+}
 
+/**
+ * Obtiene un único producto (SOLO LECTURA)
+ * Cacheado por request
+ */
+export const getSingleProduct = cache(async (
+  productId: number
+): Promise<ProductDetail> => {
   const product = await prisma.productos.findUnique({
     where: { id: productId, activo: true },
     include: PRODUCT_DETAIL_INCLUDES,
@@ -148,4 +161,4 @@ export async function getSingleProduct(
   }
 
   return serialize(product);
-}
+});

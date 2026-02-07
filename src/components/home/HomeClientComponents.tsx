@@ -61,6 +61,8 @@ const RubrosGrid = dynamic(() => import("@/components/home/RubrosGrid"), {
   ssr: false,
 });
 
+import ScrollReveal from "@/components/motion/ScrollReveal";
+
 interface HomeClientComponentsProps {
   promotionImages: string[];
   featuredProducts: FeaturedProduct[];
@@ -78,15 +80,20 @@ export default function HomeClientComponents({
 }: HomeClientComponentsProps) {
   return (
     <Suspense fallback={<div className="text-center py-8">Cargando...</div>}>
+      {/* Slider Hero - entra con la transición de página */}
       <PromotionsSlider images={promotionImages} />
 
       <FeaturedProducts products={featuredProducts} />
 
-      <BrandMarquee brands={brands} />
+      <ScrollReveal variant="fade-in" delay={0.2}>
+        <BrandMarquee brands={brands} />
+      </ScrollReveal>
 
       <MostViewedProducts products={mostViewed} />
 
-      <RubrosGrid rubros={rubros} />
+      <ScrollReveal variant="scale-up" delay={0.1}>
+        <RubrosGrid rubros={rubros} />
+      </ScrollReveal>
     </Suspense>
   );
 }

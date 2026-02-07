@@ -5,14 +5,9 @@ import fs from 'fs/promises'
 import path from 'path'
 import { lookup as mimeLookup } from 'mime-types'
 import { PrismaClient } from '@prisma/client'
+import prisma from '@/lib/prisma'
 
 export const runtime = 'nodejs' // usamos fs nativo
-
-// ───────────────── Prisma singleton (sin `var`) ────────────────
-type GlobalWithPrisma = typeof globalThis & { __prisma?: PrismaClient }
-const g = globalThis as GlobalWithPrisma
-const prisma = g.__prisma ?? new PrismaClient()
-if (process.env.NODE_ENV !== 'production') g.__prisma = prisma
 
 // ──────────────── carpeta ⇄ tabla ────────────────
 const TABLE_TO_FOLDER = {

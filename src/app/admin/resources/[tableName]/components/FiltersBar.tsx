@@ -13,6 +13,8 @@ type Props = {
   resource: string
   filters: Filters
   setFilters: (f: Filters) => void
+  variant?: 'default' | 'modal'
+  onClose?: () => void
 }
 
 /* Utils */
@@ -90,15 +92,46 @@ function TriToggle({
 }
 
 /* ───────────────────────── COMPONENTE ───────────────────────── */
-export function FiltersBar({ resource, filters, setFilters }: Props) {
-  const [open, setOpen] = React.useState(true)
+export function FiltersSummary({ filters, setFilters }: { filters: Filters, setFilters: (f: Filters) => void }) {
+  const activeEntries = React.useMemo(() => Object.entries(compact(filters)), [filters])
+  const activeCount = activeEntries.length
+
+  const onRemoveChip = (key: string) => {
+    const next = { ...filters }; delete next[key]; setFilters(next)
+  }
+  const onClear = () => setFilters({})
+
+  if (activeCount === 0) return null
+
+  return (
+    <div className="flex flex-wrap gap-2 mb-2">
+      {activeEntries.map(([k, v]) => (
+        <Chip key={k} k={k} v={v} onRemove={onRemoveChip} />
+      ))}
+      <button
+        type="button"
+        onClick={onClear}
+        className="text-xs text-gray-600 hover:text-gray-800 underline self-center"
+        title="Limpiar todos los filtros"
+      >
+        Limpiar todo
+      </button>
+    </div>
+  )
+}
+
+export function FiltersBar({ resource, filters, setFilters, variant = 'default', onClose }: Props) {
+  const [open, setOpen] = React.useState(variant === 'default')
   const [draft, setDraft] = React.useState<Filters>(filters)
   React.useEffect(() => setDraft(filters), [filters, resource])
 
   const activeEntries = React.useMemo(() => Object.entries(compact(filters)), [filters])
   const activeCount   = activeEntries.length
 
-  const onApply = () => setFilters(compact(draft))
+  const onApply = () => {
+    setFilters(compact(draft))
+    if (variant === 'modal' && onClose) onClose()
+  }
   const onClear = () => { setDraft({}); setFilters({}) }
   const onRemoveChip = (key: string) => {
     const next = { ...filters }; delete next[key]; setFilters(next)
@@ -106,6 +139,40 @@ export function FiltersBar({ resource, filters, setFilters }: Props) {
   const set = (k: string, v: any) => setDraft(d => ({ ...d, [k]: v }))
 
   const isProductos = resource === 'Productos'
+  const isModal = variant === 'modal'
+
+  if (isModal) {
+    return (
+      <div className="space-y-4">
+        {/* En modal mostramos directo el form sin chips ni toggles */}
+        <div className="mb-4">
+          <p className="text-sm text-gray-500">
+            Ajustá los criterios y presioná <span className="font-medium text-gray-700">Aplicar</span>.
+          </p>
+        </div>
+        
+        {renderFields(isProductos, draft, set)}
+
+        {/* Pie de acciones Modal */}
+        <div className="mt-6 flex items-center justify-end gap-3 pt-4 border-t">
+          <button
+            type="button"
+            onClick={onClear}
+            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 underline"
+          >
+            Limpiar filtros
+          </button>
+          <button
+            type="button"
+            onClick={onApply}
+            className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm"
+          >
+            Aplicar filtros
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <section className="space-y-3">
@@ -170,145 +237,9 @@ export function FiltersBar({ resource, filters, setFilters }: Props) {
             </p>
           </div>
 
-          {/* Campos */}
-          {isProductos ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Marca */}
-              <div className="flex flex-col">
-                <label className="mb-1 text-xs font-medium text-gray-700 flex items-center gap-1">
-                  <HiTag className="h-4 w-4 text-indigo-500" /> Marca
-                </label>
-                <FkSelect
-                  col="marca_id"
-                  value={String(draft.marca_id ?? '')}
-                  fixed={false}
-                  onChange={(v: string) => set('marca_id', v || undefined)}
-                />
-              </div>
+          {renderFields(isProductos, draft, set)}
 
-              {/* Rubro */}
-              <div className="flex flex-col">
-                <label className="mb-1 text-xs font-medium text-gray-700 flex items-center gap-1">
-                  <HiCollection className="h-4 w-4 text-indigo-500" /> Rubro
-                </label>
-                <FkSelect
-                  col="rubro_id"
-                  value={String(draft.rubro_id ?? '')}
-                  fixed={false}
-                  onChange={(v: string) => set('rubro_id', v || undefined)}
-                />
-              </div>
-
-              {/* Moneda */}
-              <div className="flex flex-col">
-                <label className="mb-1 text-xs font-medium text-gray-700 flex items-center gap-1">
-                  <HiCurrencyDollar className="h-4 w-4 text-indigo-500" /> Moneda
-                </label>
-                <FkSelect
-                  col="moneda_id"
-                  value={String(draft.moneda_id ?? '')}
-                  fixed={false}
-                  onChange={(v: string) => set('moneda_id', v || undefined)}
-                />
-              </div>
-
-              {/* Activo (tri-toggle) */}
-              <div className="flex flex-col">
-                <label className="mb-1 text-xs font-medium text-gray-700">Activo</label>
-                <TriToggle
-                  value={draft.activo as boolean | undefined}
-                  onChange={(v) => set('activo', v)}
-                  ariaLabel="Filtrar por activo"
-                />
-              </div>
-
-              {/* Destacado (tri-toggle) */}
-              <div className="flex flex-col">
-                <label className="mb-1 text-xs font-medium text-gray-700">Destacado</label>
-                <TriToggle
-                  value={draft.destacado as boolean | undefined}
-                  onChange={(v) => set('destacado', v)}
-                  ariaLabel="Filtrar por destacado"
-                />
-              </div>
-
-              {/* Precio ≥ */}
-              <div className="flex flex-col">
-                <label className="mb-1 text-xs font-medium text-gray-700 flex items-center gap-1">
-                  <HiCurrencyDollar className="h-4 w-4 text-indigo-500" /> Precio ≥
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    placeholder="0"
-                    value={String(draft.precioMin ?? '')}
-                    onChange={e => set('precioMin', e.target.value ? Number(e.target.value) : undefined)}
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                  />
-                </div>
-              </div>
-
-              {/* Precio ≤ */}
-              <div className="flex flex-col">
-                <label className="mb-1 text-xs font-medium text-gray-700 flex items-center gap-1">
-                  <HiCurrencyDollar className="h-4 w-4 text-indigo-500" /> Precio ≤
-                </label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  placeholder="999999"
-                  value={String(draft.precioMax ?? '')}
-                  onChange={e => set('precioMax', e.target.value ? Number(e.target.value) : undefined)}
-                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
-              </div>
-
-              {/* Stock ≥ */}
-              <div className="flex flex-col">
-                <label className="mb-1 text-xs font-medium text-gray-700 flex items-center gap-1">
-                  <HiCube className="h-4 w-4 text-indigo-500" /> Stock ≥
-                </label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  placeholder="0"
-                  value={String(draft.stockMin ?? '')}
-                  onChange={e => set('stockMin', e.target.value ? Number(e.target.value) : undefined)}
-                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
-              </div>
-
-              {/* Stock ≤ */}
-              <div className="flex flex-col">
-                <label className="mb-1 text-xs font-medium text-gray-700 flex items-center gap-1">
-                  <HiCube className="h-4 w-4 text-indigo-500" /> Stock ≤
-                </label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  placeholder="999999"
-                  value={String(draft.stockMax ?? '')}
-                  onChange={e => set('stockMax', e.target.value ? Number(e.target.value) : undefined)}
-                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
-              </div>
-            </div>
-          ) : (
-            // Fallback genérico
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="flex flex-col">
-                <label className="mb-1 text-xs font-medium text-gray-700">Activo</label>
-                <TriToggle
-                  value={draft.activo as boolean | undefined}
-                  onChange={(v) => set('activo', v)}
-                  ariaLabel="Filtrar por activo"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Pie de acciones */}
+          {/* Pie de acciones Default */}
           <div className="mt-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <div className="text-xs text-gray-500">
               {activeCount > 0 ? `${activeCount} filtro(s) activo(s)` : 'Sin filtros activos'}
@@ -335,6 +266,131 @@ export function FiltersBar({ resource, filters, setFilters }: Props) {
         </div>
       </div>
     </section>
+  )
+}
+
+function renderFields(isProductos: boolean, draft: Filters, set: (k: string, v: any) => void) {
+  return isProductos ? (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Marca */}
+      <div className="flex flex-col">
+        <label className="mb-1 text-xs font-medium text-gray-700 flex items-center gap-1">
+          <HiTag className="h-4 w-4 text-indigo-500" /> Marca
+        </label>
+        <FkSelect
+          col="marca_id"
+          value={String(draft.marca_id ?? '')}
+          fixed={false}
+          onChange={(v: string) => set('marca_id', v || undefined)}
+        />
+      </div>
+
+      {/* Rubro */}
+      <div className="flex flex-col">
+        <label className="mb-1 text-xs font-medium text-gray-700 flex items-center gap-1">
+          <HiCollection className="h-4 w-4 text-indigo-500" /> Rubro
+        </label>
+        <FkSelect
+          col="rubro_id"
+          value={String(draft.rubro_id ?? '')}
+          fixed={false}
+          onChange={(v: string) => set('rubro_id', v || undefined)}
+        />
+      </div>
+
+      {/* Moneda */}
+      <div className="flex flex-col">
+        <label className="mb-1 text-xs font-medium text-gray-700 flex items-center gap-1">
+          <HiCurrencyDollar className="h-4 w-4 text-indigo-500" /> Moneda
+        </label>
+        <FkSelect
+          col="moneda_id"
+          value={String(draft.moneda_id ?? '')}
+          fixed={false}
+          onChange={(v: string) => set('moneda_id', v || undefined)}
+        />
+      </div>
+
+      {/* Activo (tri-toggle) */}
+      <div className="flex flex-col">
+        <label className="mb-1 text-xs font-medium text-gray-700">Activo</label>
+        <TriToggle
+          value={draft.activo as boolean | undefined}
+          onChange={(v) => set('activo', v)}
+          ariaLabel="Filtrar por activo"
+        />
+      </div>
+
+      {/* Destacado (tri-toggle) */}
+      <div className="flex flex-col">
+        <label className="mb-1 text-xs font-medium text-gray-700">Destacado</label>
+        <TriToggle
+          value={draft.destacado as boolean | undefined}
+          onChange={(v) => set('destacado', v)}
+          ariaLabel="Filtrar por destacado"
+        />
+      </div>
+
+      {/* Precio Range */}
+      <div className="flex flex-col sm:col-span-2 lg:col-span-1">
+         <label className="mb-1 text-xs font-medium text-gray-700 flex items-center gap-1">
+           <HiCurrencyDollar className="h-4 w-4 text-indigo-500" /> Precio
+         </label>
+         <div className="flex items-center gap-2">
+            <input
+              type="number"
+              placeholder="Min"
+              value={String(draft.precioMin ?? '')}
+              onChange={e => set('precioMin', e.target.value ? Number(e.target.value) : undefined)}
+              className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
+            />
+            <span className="text-gray-400">-</span>
+            <input
+              type="number"
+              placeholder="Max"
+              value={String(draft.precioMax ?? '')}
+              onChange={e => set('precioMax', e.target.value ? Number(e.target.value) : undefined)}
+              className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
+            />
+         </div>
+      </div>
+
+      {/* Stock Range */}
+      <div className="flex flex-col sm:col-span-2 lg:col-span-1">
+         <label className="mb-1 text-xs font-medium text-gray-700 flex items-center gap-1">
+           <HiCube className="h-4 w-4 text-indigo-500" /> Stock
+         </label>
+         <div className="flex items-center gap-2">
+            <input
+              type="number"
+              placeholder="Min"
+              value={String(draft.stockMin ?? '')}
+              onChange={e => set('stockMin', e.target.value ? Number(e.target.value) : undefined)}
+              className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
+            />
+            <span className="text-gray-400">-</span>
+            <input
+              type="number"
+              placeholder="Max"
+              value={String(draft.stockMax ?? '')}
+              onChange={e => set('stockMax', e.target.value ? Number(e.target.value) : undefined)}
+              className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
+            />
+         </div>
+      </div>
+    </div>
+  ) : (
+    // Fallback genérico
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="flex flex-col">
+        <label className="mb-1 text-xs font-medium text-gray-700">Activo</label>
+        <TriToggle
+          value={draft.activo as boolean | undefined}
+          onChange={(v) => set('activo', v)}
+          ariaLabel="Filtrar por activo"
+        />
+      </div>
+    </div>
   )
 }
 

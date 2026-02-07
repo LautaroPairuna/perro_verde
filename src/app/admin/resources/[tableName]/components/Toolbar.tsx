@@ -1,7 +1,7 @@
 'use client'
 import React, { memo, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  HiPlus, HiTrash, HiAdjustments, HiSearch, HiX,
+  HiPlus, HiTrash, HiAdjustments, HiSearch, HiX, HiFilter
 } from 'react-icons/hi'
 
 type Props = {
@@ -14,6 +14,8 @@ type Props = {
   setSearch: (v: string) => void
   pageSize: number
   setPageSize: (n: number) => void
+  onToggleFilters: () => void
+  activeFiltersCount: number
 }
 
 export const Toolbar = memo(function Toolbar({
@@ -26,6 +28,8 @@ export const Toolbar = memo(function Toolbar({
   setSearch,
   pageSize,
   setPageSize,
+  onToggleFilters,
+  activeFiltersCount,
 }: Props) {
   /* estado local para debounce del buscador */
   const [q, setQ] = useState(search)
@@ -98,6 +102,25 @@ export const Toolbar = memo(function Toolbar({
       </div>
 
       <div className="flex items-center gap-2">
+        <button
+          onClick={onToggleFilters}
+          className={`
+            relative p-2 rounded-lg border transition
+            ${activeFiltersCount > 0
+              ? 'bg-indigo-50 border-indigo-200 text-indigo-600 hover:bg-indigo-100'
+              : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+            }
+          `}
+          title="Filtros"
+        >
+          <HiFilter className="h-5 w-5" />
+          {activeFiltersCount > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-600 text-[10px] text-white">
+              {activeFiltersCount}
+            </span>
+          )}
+        </button>
+
         {/* Search con icono y clear */}
         <div className="relative">
           <HiSearch className="absolute left-2 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />

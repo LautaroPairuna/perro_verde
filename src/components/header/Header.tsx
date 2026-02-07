@@ -11,17 +11,30 @@ import {
   IoCartOutline,
   IoLogoWhatsapp,
 } from 'react-icons/io5';
-import { buildPaginationUrl } from '@/utils/urlUtils'; // -> garantiza /pagina-1
+import { buildPaginationUrl } from '@/utils/urlUtils';
+import { useCartStore } from '@/store/useCartStore';
 
 const WHATSAPP_NUMBER = '5493875354360';
 const WHATSAPP_URL = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}`;
 
 export default function Header() {
   const router = useRouter();
+  const cart = useCartStore((state) => state.cart);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [cartCount, setCartCount] = useState(0);
   const desktopSearchRef = useRef<HTMLInputElement>(null);
   const mobileSearchRef = useRef<HTMLInputElement>(null);
+
+  // Derivar cantidad del carrito desde el store
+  // Zustand maneja la reactividad automáticamente, pero para evitar problemas de hidratación
+  // en componentes persistidos, a veces se usa un useEffect o un store hook custom.
+  // Aquí usamos 'cart' directo, Next.js manejará el re-render.
+  // Nota: Si hay hydration mismatch, usar un componente wrapper 'ClientOnly' o useEffect.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const cartCount = mounted 
+    ? cart.reduce((acc, item) => acc + (item.quantity || 0), 0) 
+    : 0;
 
   // abrir/cerrar menú móvil
   const openMobileMenu = useCallback(() => {
@@ -33,22 +46,7 @@ export default function Header() {
     document.body.classList.remove('overflow-hidden');
   }, []);
 
-  // contador carrito (event-driven)
-  const updateCartCount = useCallback(() => {
-    try {
-      const raw = localStorage.getItem('cart');
-      const cart: Array<{ quantity?: number }> = raw ? JSON.parse(raw) : [];
-      const next = cart.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0);
-      setCartCount(next);
-    } catch {
-      setCartCount(0);
-    }
-  }, []);
-
   useEffect(() => {
-    updateCartCount();
-    const onCartUpdated = () => updateCartCount();
-    const onStorage = (e: StorageEvent) => e.key === 'cart' && updateCartCount();
     const onKey = (e: KeyboardEvent) => {
       if ((e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) ||
           ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) {
@@ -57,15 +55,11 @@ export default function Header() {
       }
       if (e.key === 'Escape' && mobileMenuOpen) closeMobileMenu();
     };
-    document.addEventListener('cartUpdated', onCartUpdated as EventListener);
-    window.addEventListener('storage', onStorage);
     document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('cartUpdated', onCartUpdated as EventListener);
-      window.removeEventListener('storage', onStorage);
       document.removeEventListener('keydown', onKey);
     };
-  }, [mobileMenuOpen, closeMobileMenu, updateCartCount]);
+  }, [mobileMenuOpen, closeMobileMenu]);
 
   // búsqueda -> /catalogo/(keys?)/pagina-1
   const goSearch = useCallback((keywords: string) => {
@@ -155,7 +149,7 @@ export default function Header() {
                 />
                 <button
                   type="submit"
-                  className="absolute right-1.5 top-1.5 grid place-items-center h-10 w-10 rounded-full bg-green-700 text-white hover:bg-green-800 active:scale-95 transition shadow-sm hover:shadow-md"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 grid place-items-center h-10 w-10 rounded-full bg-green-700 text-white hover:bg-green-800 active:scale-95 transition shadow-sm hover:shadow-md"
                   aria-label="Enviar búsqueda"
                 >
                   <IoSearchOutline className="text-lg" />
@@ -213,7 +207,7 @@ export default function Header() {
               />
               <button
                 type="submit"
-                className="absolute right-1.5 top-1.5 grid place-items-center h-10 w-10 rounded-full bg-green-700 text-white hover:bg-green-800 active:scale-95 transition shadow-sm hover:shadow-md"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 grid place-items-center h-10 w-10 rounded-full bg-green-700 text-white hover:bg-green-800 active:scale-95 transition shadow-sm hover:shadow-md"
                 aria-label="Enviar búsqueda en móvil"
               >
                 <IoSearchOutline className="text-lg" />

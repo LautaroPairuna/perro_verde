@@ -3,7 +3,7 @@
 
 import React, { useMemo, useState, ChangeEvent } from 'react';
 import ErrorBoundary from './ErrorBoundary';
-import { useCart } from '@/context/CartContext';
+import { useCartStore } from '@/store/useCartStore';
 import type { ProductDetail } from '@/utils/fetchData';
 import Link from 'next/link';
 import toast from 'react-hot-toast';   // <-- import
@@ -13,7 +13,7 @@ interface ProductInfoProps {
 }
 
 const ProductInfo: React.FC<ProductInfoProps> = ({ product }) => {
-  const { cart, updateCart } = useCart();
+  const addItem = useCartStore((state) => state.addItem);
 
   const sanitizedProduct = useMemo(() => ({
     ...product,
@@ -35,23 +35,15 @@ const ProductInfo: React.FC<ProductInfoProps> = ({ product }) => {
   };
 
   const handleAddToCart = () => {
-    const newCart = [...cart];
-    const idStr = sanitizedProduct.id.toString();
-    const idx = newCart.findIndex(item => item.id === idStr);
-    if (idx === -1) {
-      newCart.push({
-        id: idStr,
-        name: sanitizedProduct.producto,
-        price: sanitizedProduct.precio,
-        thumbnail: `/images/productos/thumbs/${sanitizedProduct.foto ?? 'placeholder.jpg'}`,
-        quantity,
-      });
-    } else {
-      newCart[idx].quantity += quantity;
-    }
-    updateCart(newCart);
+    addItem({
+      id: sanitizedProduct.id.toString(),
+      name: sanitizedProduct.producto,
+      price: sanitizedProduct.precio,
+      thumbnail: `/images/productos/thumbs/${sanitizedProduct.foto ?? 'placeholder.jpg'}`,
+      quantity,
+    });
     setQuantity(1);
-    toast.success(`Añadiste ${quantity} × "${sanitizedProduct.producto}" al carrito`);  // <-- toast
+    toast.success(`Añadiste ${quantity} × "${sanitizedProduct.producto}" al carrito`);
   };
 
   return (

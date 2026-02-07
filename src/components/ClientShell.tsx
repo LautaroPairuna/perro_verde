@@ -4,7 +4,6 @@ import { useEffect }    from 'react'
 import Header       from '@/components/header/Header'
 import Footer       from '@/components/footer/Footer'
 import WhatsappLink from '@/components/WhatsappLink'
-import { CartProvider } from '@/context/CartContext'
 
 export default function ClientShell({ children }: { children: React.ReactNode }) {
   const pathname   = usePathname() ?? ''
@@ -20,11 +19,11 @@ export default function ClientShell({ children }: { children: React.ReactNode })
 
   /* ------- sitio público -------------------- */
   return (
-    <CartProvider>
+    <>
       <Header />
       {children}
       <WhatsappLink />
       <Footer />
-    </CartProvider>
+    </>
   )
 }

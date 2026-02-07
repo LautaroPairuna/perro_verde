@@ -3,7 +3,6 @@
 
 import React, {
   useState,
-  useMemo,
   useCallback,
   useEffect,
   ChangeEvent,
@@ -11,16 +10,23 @@ import React, {
 import Script from 'next/script';
 import { useRouter } from 'next/navigation';
 import toast, { Toaster } from 'react-hot-toast';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   MapPin,
-  ClipboardCheck,
   CreditCard,
   CheckCircle2,
+  ChevronRight,
+  ChevronLeft,
+  ShoppingCart,
+  Loader2,
+  ShieldCheck
 } from 'lucide-react';
-import { useCart } from '@/context/CartContext';
+import { useCartStore } from '@/store/useCartStore';
 import { PaymentMethodSelector } from './PaymentMethodSelector';
 import type { CreatePedidoDTO, MetodoPago } from '@/types/payment';
+import Image from 'next/image';
+
+// --- Interfaces & Types ---
 
 interface CardBrickController {
   getFormData(): Promise<{
@@ -47,23 +53,71 @@ type CardData = {
   installments: number;
 };
 
+// --- Animations ---
+
+const slideVariants = {
+  enter: (direction: number) => ({
+    x: direction > 0 ? 50 : -50,
+    opacity: 0,
+  }),
+  center: {
+    zIndex: 1,
+    x: 0,
+    opacity: 1,
+  },
+  exit: (direction: number) => ({
+    zIndex: 0,
+    x: direction < 0 ? 50 : -50,
+    opacity: 0,
+  }),
+};
+
+// Helper for inputs
+const InputField = ({ 
+  label, 
+  value, 
+  onChange, 
+  type = "text", 
+  required = false,
+  placeholder = "" 
+}: { 
+  label: string, 
+  value: string, 
+  onChange: (val: string) => void, 
+  type?: string, 
+  required?: boolean,
+  placeholder?: string
+}) => (
+  <div className="flex flex-col gap-1.5">
+    <label className="text-sm font-medium text-gray-700">
+      {label} {required && <span className="text-red-500">*</span>}
+    </label>
+    <input
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all outline-none"
+    />
+  </div>
+);
+
+// --- Components ---
+
 export default function CheckoutWizard(): React.ReactElement {
   const router = useRouter();
-  const { cart, updateCart } = useCart();
+  const { cart, clearCart, getTotalPrice } = useCartStore();
+  const total = getTotalPrice();
 
-  const total = useMemo(
-    () => cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
-    [cart]
-  );
-
+  // Steps configuration
   const steps = [
-    { label: 'Envío', icon: <MapPin size={20} /> },
-    { label: 'Revisión', icon: <ClipboardCheck size={20} /> },
-    { label: 'Pago', icon: <CreditCard size={20} /> },
-    { label: 'Gracias', icon: <CheckCircle2 size={20} /> },
+    { id: 1, label: 'Envío', icon: <MapPin size={20} /> },
+    { id: 2, label: 'Pago', icon: <CreditCard size={20} /> },
+    { id: 3, label: 'Listo', icon: <CheckCircle2 size={20} /> },
   ];
 
   const [step, setStep] = useState(1);
+  const [direction, setDirection] = useState(0); // For animation direction
   const [shipping, setShipping] = useState<ShippingInfo>({
     nombre: '',
     email: '',
@@ -78,20 +132,32 @@ export default function CheckoutWizard(): React.ReactElement {
   const [cardCtrl, setCardCtrl] = useState<CardBrickController | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const emptyCart = useCallback(() => updateCart([]), [updateCart]);
+  const emptyCart = useCallback(() => clearCart(), [clearCart]);
+
+  // Validation
   const validateShipping = () =>
-    !!shipping.nombre && !!shipping.email && !!shipping.direccion;
+    shipping.nombre.trim().length > 0 &&
+    shipping.email.trim().length > 0 &&
+    shipping.direccion.trim().length > 0;
+
+  // Navigation
   const next = () => {
     if (step === 1 && !validateShipping()) {
-      toast.error('Completa los datos de envío');
+      toast.error('Por favor completa todos los campos obligatorios (*)');
       return;
     }
+    setDirection(1);
     setStep((s) => Math.min(s + 1, steps.length));
   };
-  const back = () => setStep((s) => Math.max(s - 1, 1));
 
+  const back = () => {
+    setDirection(-1);
+    setStep((s) => Math.max(s - 1, 1));
+  };
+
+  // MercadoPago Brick Integration
   useEffect(() => {
-    if (step !== 3 || paymentMethod !== 'tarjeta' || !mpReady) return;
+    if (step !== 2 || paymentMethod !== 'tarjeta' || !mpReady) return;
 
     const mp = new window.MercadoPago(
       process.env.NEXT_PUBLIC_MP_PUBLIC_KEY as string,
@@ -99,7 +165,7 @@ export default function CheckoutWizard(): React.ReactElement {
     );
     let activeCtrl: CardBrickController | null = null;
 
-    (async () => {
+    const renderBrick = async () => {
       try {
         const raw = await mp.bricks().create(
           'cardPayment',
@@ -108,10 +174,10 @@ export default function CheckoutWizard(): React.ReactElement {
             initialization: { amount: total },
             customization: { visual: { hidePaymentButton: true } },
             callbacks: {
-              onReady: () => toast.success('Formulario listo'),
+              onReady: () => {},
               onError: (e: unknown) => {
                 console.error(e);
-                toast.error('Error en el formulario');
+                toast.error('Error cargando el formulario de tarjeta');
               },
             },
           }
@@ -120,9 +186,11 @@ export default function CheckoutWizard(): React.ReactElement {
         setCardCtrl(activeCtrl);
       } catch (e: unknown) {
         console.error(e);
-        toast.error('No se pudo cargar el Brick');
+        toast.error('No se pudo cargar el módulo de pago');
       }
-    })();
+    };
+
+    renderBrick();
 
     return () => {
       activeCtrl?.unmount();
@@ -130,6 +198,7 @@ export default function CheckoutWizard(): React.ReactElement {
     };
   }, [step, paymentMethod, mpReady, total]);
 
+  // Order Submission
   const submitOrder = useCallback(
     async (cardData?: CardData) => {
       setLoading(true);
@@ -158,8 +227,7 @@ export default function CheckoutWizard(): React.ReactElement {
         };
 
         const idempotencyKey = crypto.randomUUID();
-        console.log('➡️ Payload /api/pedidos:', { payload, idempotencyKey });
-
+        
         const res = await fetch('/api/pedidos', {
           method: 'POST',
           headers: {
@@ -170,15 +238,15 @@ export default function CheckoutWizard(): React.ReactElement {
         });
 
         const json = await res.json();
-        console.log('⬅️ /api/pedidos response:', json);
-
         const { data, message } = json;
+
         if (!res.ok) throw new Error(message ?? 'Error creando pedido');
 
         setOrderId(data.orderId);
         emptyCart();
-        toast.success('Pedido confirmado');
-        setStep(4);
+        toast.success('¡Pedido confirmado con éxito!');
+        setDirection(1);
+        setStep(3); // Go to Success Step
       } catch (e: unknown) {
         console.error(e);
         toast.error(e instanceof Error ? e.message : 'Error procesando pedido');
@@ -189,238 +257,325 @@ export default function CheckoutWizard(): React.ReactElement {
     [cart, emptyCart, paymentMethod, shipping, transferRef, total]
   );
 
-  const progress = ((step - 1) / (steps.length - 1)) * 100;
-
   return (
     <>
-      <Toaster position="top-center" />
+      <Toaster position="top-center" reverseOrder={false} />
       <Script
         src="https://sdk.mercadopago.com/js/v2"
         onLoad={() => setMpReady(true)}
       />
 
-      <div className="bg-green-50 flex justify-center p-4">
-        <div className="w-full max-w-xl bg-white p-6 space-y-6 rounded-2xl shadow-lg">
-          <h1 className="text-2xl font-bold text-center text-green-700">
-            Checkout
-          </h1>
-
-          <ul className="flex justify-between mb-4">
-            {steps.map((s, i) => (
-              <li key={s.label} className="flex-1 text-center">
-                <div
-                  className={`inline-block p-2 border-2 rounded-full ${
-                    step > i + 1
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-200 text-gray-500'
-                  }`}
-                >
-                  {s.icon}
+      <div className="min-h-screen py-8 lg:py-12">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
+            
+            {/* LEFT COLUMN: WIZARD STEPS */}
+            <div className="lg:col-span-8 space-y-8">
+              
+              {/* Steps Indicator */}
+              <div className="relative">
+                <div className="absolute top-1/2 left-0 w-full h-1 bg-gray-200 -translate-y-1/2 rounded-full z-0" />
+                <div 
+                  className="absolute top-1/2 left-0 h-1 bg-green-600 -translate-y-1/2 rounded-full z-0 transition-all duration-500"
+                  style={{ width: `${((step - 1) / (steps.length - 1)) * 100}%` }}
+                />
+                
+                <div className="relative z-10 flex justify-between">
+                  {steps.map((s, i) => {
+                    const isActive = step >= s.id;
+                    const isCurrent = step === s.id;
+                    return (
+                      <div key={s.id} className="flex flex-col items-center gap-2">
+                        <div 
+                          className={`
+                            w-10 h-10 flex items-center justify-center rounded-full border-2 transition-all duration-300
+                            ${isActive ? 'bg-green-600 border-green-600 text-white shadow-lg scale-110' : 'bg-white border-gray-300 text-gray-400'}
+                          `}
+                        >
+                          {s.icon}
+                        </div>
+                        <span className={`text-xs font-semibold uppercase tracking-wider ${isActive ? 'text-green-700' : 'text-gray-400'}`}>
+                          {s.label}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
-                <p
-                  className={`mt-1 text-xs ${
-                    step >= i + 1 ? 'text-green-700' : 'text-gray-500'
-                  }`}
-                >
-                  {s.label}
-                </p>
-              </li>
-            ))}
-          </ul>
+              </div>
 
-          <div className="h-1 bg-gray-200 rounded-full overflow-hidden mb-6">
-            <motion.div
-              className="h-full bg-green-600 rounded-full"
-              style={{ width: `${progress}%` }}
-            />
+              {/* Form Container with Animation */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 overflow-hidden relative min-h-[400px]">
+                <AnimatePresence initial={false} custom={direction} mode="wait">
+                  
+                  {/* STEP 1: ENVÍO */}
+                  {step === 1 && (
+                    <motion.div
+                      key="step1"
+                      custom={direction}
+                      variants={slideVariants}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                      className="space-y-6"
+                    >
+                      <div className="border-b pb-4 mb-6">
+                        <h2 className="text-xl font-bold text-gray-900">Datos de Envío</h2>
+                        <p className="text-sm text-gray-500">Ingresa tus datos para recibir el pedido.</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <InputField
+                          label="Nombre Completo"
+                          value={shipping.nombre}
+                          onChange={(v) => setShipping(s => ({ ...s, nombre: v }))}
+                          required
+                          placeholder="Juan Pérez"
+                        />
+                        <InputField
+                          label="Email"
+                          type="email"
+                          value={shipping.email}
+                          onChange={(v) => setShipping(s => ({ ...s, email: v }))}
+                          required
+                          placeholder="juan@email.com"
+                        />
+                        <InputField
+                          label="Teléfono"
+                          type="tel"
+                          value={shipping.telefono}
+                          onChange={(v) => setShipping(s => ({ ...s, telefono: v }))}
+                          placeholder="11 1234 5678"
+                        />
+                        <InputField
+                          label="Dirección de Envío"
+                          value={shipping.direccion}
+                          onChange={(v) => setShipping(s => ({ ...s, direccion: v }))}
+                          required
+                          placeholder="Av. Siempre Viva 123"
+                        />
+                      </div>
+
+                      <div className="flex justify-end pt-6">
+                        <button
+                          onClick={next}
+                          className="group flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-full font-semibold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5"
+                        >
+                          Continuar al Pago
+                          <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* STEP 2: PAGO */}
+                  {step === 2 && (
+                    <motion.div
+                      key="step2"
+                      custom={direction}
+                      variants={slideVariants}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                      className="space-y-6"
+                    >
+                      <div className="border-b pb-4 mb-6">
+                        <h2 className="text-xl font-bold text-gray-900">Método de Pago</h2>
+                        <p className="text-sm text-gray-500">Selecciona cómo deseas abonar tu pedido.</p>
+                      </div>
+
+                      <PaymentMethodSelector
+                        selected={paymentMethod}
+                        onChange={(m) => setPaymentMethod(m as MetodoPago)}
+                      />
+
+                      <div className="mt-8 p-6 bg-gray-50 rounded-xl border border-gray-200">
+                        {paymentMethod === 'tarjeta' && (
+                          <div className="space-y-4">
+                            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                              <CreditCard size={18} /> Tarjeta de Crédito/Débito
+                            </h3>
+                            <div id="card-brick-container" className="min-h-[200px]" />
+                            <button
+                              disabled={!cardCtrl || loading}
+                              onClick={async () => {
+                                if (!cardCtrl) return;
+                                try {
+                                  setLoading(true);
+                                  const formData = await cardCtrl.getFormData();
+                                  await submitOrder({
+                                    cardToken: formData.token,
+                                    payment_method_id: formData.payment_method_id,
+                                    installments: formData.installments,
+                                  });
+                                } catch (e) {
+                                  console.error(e);
+                                  toast.error('Verifica los datos de la tarjeta');
+                                  setLoading(false);
+                                }
+                              }}
+                              className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-4 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                            >
+                              {loading ? <Loader2 className="animate-spin" /> : 'Pagar Ahora'}
+                            </button>
+                          </div>
+                        )}
+
+                        {paymentMethod === 'transferencia' && (
+                          <div className="space-y-4">
+                            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                              <ShieldCheck size={18} /> Transferencia Bancaria
+                            </h3>
+                            <p className="text-sm text-gray-600 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                              Realiza la transferencia a la cuenta que te enviaremos por email y adjunta el comprobante o referencia aquí.
+                            </p>
+                            <InputField
+                              label="Número de Comprobante / Referencia"
+                              value={transferRef}
+                              onChange={setTransferRef}
+                              placeholder="Ej: 12345678"
+                            />
+                            <button
+                              disabled={loading}
+                              onClick={() => submitOrder()}
+                              className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-4 rounded-xl font-bold transition-all disabled:opacity-50 shadow-md"
+                            >
+                              {loading ? <Loader2 className="animate-spin" /> : 'Confirmar Pedido'}
+                            </button>
+                          </div>
+                        )}
+
+                        {paymentMethod === 'efectivo' && (
+                          <div className="space-y-4">
+                             <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                              <CheckCircle2 size={18} /> Pago en Efectivo
+                            </h3>
+                            <p className="text-sm text-gray-600 bg-yellow-50 p-4 rounded-lg border border-yellow-100">
+                              Abonarás al momento de la entrega o retiro.
+                            </p>
+                            <button
+                              disabled={loading}
+                              onClick={() => submitOrder()}
+                              className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-4 rounded-xl font-bold transition-all disabled:opacity-50 shadow-md"
+                            >
+                              {loading ? <Loader2 className="animate-spin" /> : 'Confirmar Pedido'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex justify-start pt-4">
+                         <button
+                          onClick={back}
+                          className="text-gray-500 hover:text-gray-800 flex items-center gap-1 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                          <ChevronLeft size={16} /> Volver a Envío
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* STEP 3: GRACIAS */}
+                  {step === 3 && (
+                    <motion.div
+                      key="step3"
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: "spring", duration: 0.8 }}
+                      className="flex flex-col items-center justify-center text-center py-12 space-y-6"
+                    >
+                      <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-4">
+                        <CheckCircle2 size={48} />
+                      </div>
+                      <div>
+                        <h2 className="text-3xl font-bold text-gray-900 mb-2">¡Gracias por tu compra!</h2>
+                        <p className="text-gray-500 text-lg">Tu pedido <span className="font-mono font-bold text-gray-800">#{orderId}</span> ha sido confirmado.</p>
+                      </div>
+                      <p className="text-gray-600 max-w-md mx-auto">
+                        Te enviamos un email con los detalles. Nos pondremos en contacto contigo pronto para coordinar el envío.
+                      </p>
+                      <button
+                        onClick={() => router.push('/')}
+                        className="bg-gray-900 hover:bg-black text-white px-8 py-3 rounded-full font-semibold transition-all shadow-lg hover:shadow-xl mt-8"
+                      >
+                        Volver a la Tienda
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN: ORDER SUMMARY (Sticky) */}
+            <div className="lg:col-span-4">
+               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 sticky top-8">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-6 pb-4 border-b">
+                    <ShoppingCart size={20} className="text-green-600" />
+                    Resumen del Pedido
+                  </h3>
+
+                  {cart.length === 0 && step < 3 ? (
+                    <p className="text-gray-500 text-sm text-center py-4">Tu carrito está vacío.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      <ul className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                        {cart.map((item) => (
+                          <li key={item.id} className="flex gap-4">
+                             <div className="relative w-16 h-16 rounded-md overflow-hidden bg-gray-100 flex-shrink-0 border border-gray-200">
+                               <Image 
+                                 src={item.thumbnail.startsWith('http') ? item.thumbnail : `/images/productos/${item.thumbnail}`}
+                                 alt={item.name}
+                                 fill
+                                 className="object-cover"
+                                 sizes="64px"
+                                 onError={(e) => {
+                                   // fallback logic handled by next/image or parent component usually
+                                 }}
+                               />
+                             </div>
+                             <div className="flex-1 min-w-0">
+                               <h4 className="text-sm font-medium text-gray-900 truncate">{item.name}</h4>
+                               <p className="text-xs text-gray-500">Cantidad: {item.quantity}</p>
+                               <p className="text-sm font-semibold text-green-700 mt-1">
+                                 ${(item.price * item.quantity).toFixed(2)}
+                               </p>
+                             </div>
+                          </li>
+                        ))}
+                      </ul>
+
+                      <div className="border-t pt-4 space-y-2">
+                        <div className="flex justify-between text-gray-600">
+                          <span>Subtotal</span>
+                          <span>${total.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-gray-600">
+                          <span>Envío</span>
+                          <span className="text-green-600 font-medium">A convenir</span>
+                        </div>
+                        <div className="flex justify-between text-xl font-bold text-gray-900 pt-2 border-t mt-2">
+                          <span>Total</span>
+                          <span>${total.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {step < 3 && (
+                     <div className="mt-6 pt-4 border-t text-center">
+                        <p className="text-xs text-gray-400 flex items-center justify-center gap-1">
+                          <ShieldCheck size={14} /> Compra 100% Segura
+                        </p>
+                     </div>
+                  )}
+               </div>
+            </div>
+
           </div>
-
-          {/* STEP 1: ENVÍO */}
-          {step === 1 && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                next();
-              }}
-              className="space-y-4 animate-fadeIn"
-            >
-              {(['nombre', 'email', 'telefono', 'direccion'] as const).map(
-                (field) => (
-                  <div key={field}>
-                    <label className="block text-sm font-medium capitalize">
-                      {field}
-                    </label>
-                    <input
-                      type={field === 'email' ? 'email' : 'text'}
-                      value={shipping[field]}
-                      onChange={(
-                        e: ChangeEvent<HTMLInputElement>
-                      ) =>
-                        setShipping((s) => ({
-                          ...s,
-                          [field]: e.target.value,
-                        }))
-                      }
-                      required={field !== 'telefono'}
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
-                    />
-                  </div>
-                )
-              )}
-              <div className="text-right">
-                <button className="px-4 py-2 bg-green-600 text-white rounded-md">
-                  Siguiente
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* STEP 2: REVISIÓN */}
-          {step === 2 && (
-            <div className="space-y-4 animate-fadeIn">
-              <h2 className="text-lg font-semibold">Revisa tu pedido</h2>
-              <ul className="divide-y">
-                {cart.map((p) => (
-                  <li
-                    key={p.id}
-                    className="flex justify-between py-2 text-sm"
-                  >
-                    <span>
-                      {p.name} x{p.quantity}
-                    </span>
-                    <span>${(p.price * p.quantity).toFixed(2)}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="text-right font-semibold">
-                Total: ${total.toFixed(2)}
-              </div>
-              <button
-                onClick={next}
-                className="w-full px-4 py-3 bg-green-600 text-white rounded-md"
-              >
-                Continuar al pago
-              </button>
-              <button
-                onClick={back}
-                className="w-full px-4 py-2 border mt-2 rounded-md"
-              >
-                Atrás
-              </button>
-            </div>
-          )}
-
-          {/* STEP 3: PAGO */}
-          {step === 3 && (
-            <div className="space-y-6 animate-fadeIn">
-              <PaymentMethodSelector
-                selected={paymentMethod}
-                onChange={(m) => setPaymentMethod(m as MetodoPago)}
-              />
-
-              {paymentMethod === 'tarjeta' && (
-                <div className="space-y-4">
-                  <div
-                    id="card-brick-container"
-                    style={{ minHeight: 200 }}
-                  />
-                  <button
-                    disabled={!cardCtrl || loading}
-                    onClick={async () => {
-                      if (!cardCtrl) return;
-                      try {
-                        setLoading(true);
-                        const formData = await cardCtrl.getFormData();
-                        console.log('🔥 Bricks.getFormData →', formData);
-                        await submitOrder({
-                          cardToken:        formData.token,
-                          payment_method_id: formData.payment_method_id,
-                          installments:     formData.installments,
-                        });
-                      } catch (e) {
-                        console.error(e);
-                        toast.error('No se pudo generar el token');
-                      } finally {
-                        setLoading(false);
-                      }
-                    }}
-                    className="w-full px-4 py-3 bg-green-600 text-white rounded-md"
-                  >
-                    {loading ? 'Procesando…' : 'Pagar con tarjeta'}
-                  </button>
-                </div>
-              )}
-
-              {paymentMethod === 'transferencia' && (
-                <div className="space-y-4">
-                  <input
-                    type="text"
-                    placeholder="Referencia de transferencia"
-                    value={transferRef}
-                    onChange={(
-                      e: ChangeEvent<HTMLInputElement>
-                    ) => setTransferRef(e.target.value)}
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-300"
-                  />
-                  <button
-                    disabled={loading}
-                    onClick={() => submitOrder()}
-                    className="w-full px-4 py-3 bg-green-600 text-white rounded-md"
-                  >
-                    {loading ? 'Procesando…' : 'Registrar pago'}
-                  </button>
-                </div>
-              )}
-
-              {paymentMethod === 'efectivo' && (
-                <button
-                  disabled={loading}
-                  onClick={() => submitOrder()}
-                  className="w-full px-4 py-3 bg-green-600 text-white rounded-md"
-                >
-                  {loading ? 'Procesando…' : 'Confirmar pago en efectivo'}
-                </button>
-              )}
-
-              <button onClick={back} className="px-4 py-2 border rounded-md">
-                Atrás
-              </button>
-            </div>
-          )}
-
-          {/* STEP 4: GRACIAS */}
-          {step === 4 && (
-            <div className="text-center space-y-4 animate-fadeIn">
-              <h2 className="text-xl font-semibold text-green-700">
-                ¡Gracias!
-              </h2>
-              <p>Tu pedido (ID: {orderId}) ha sido confirmado.</p>
-              <button
-                onClick={() => router.push('/')}
-                className="px-4 py-2 bg-green-600 text-white rounded-md"
-              >
-                Volver al inicio
-              </button>
-            </div>
-          )}
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.5s ease-out;
-        }
-      `}</style>
     </>
   );
 }

@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import slugify from "@/utils/slugify";
-import { useCart } from "@/context/CartContext";
+import { useCartStore } from "@/store/useCartStore";
 import toast from "react-hot-toast";
 import { HiShoppingCart, HiArrowRight } from "react-icons/hi";
 
@@ -28,7 +28,7 @@ export interface ProductCardProps {
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
-  const { cart, updateCart } = useCart();
+  const addItem = useCartStore((state) => state.addItem);
 
   const DEFAULT_IMG = "placeholder.jpg";
   const initialFile = product.foto && product.foto.trim() ? product.foto : DEFAULT_IMG;
@@ -44,21 +44,13 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const productUrl = `/catalogo/detalle/${productSlug}-${product.id}`;
 
   const handleAddToCart = (): void => {
-    const newCart = [...cart];
-    const productIdStr = product.id.toString();
-    const index = newCart.findIndex((item) => item.id === productIdStr);
-    if (index === -1) {
-      newCart.push({
-        id: productIdStr,
-        name: product.producto,
-        price: product.precio ?? 0,
-        thumbnail: `/images/productos/thumbs/${initialFile}`,
-        quantity: 1,
-      });
-    } else {
-      newCart[index].quantity += 1;
-    }
-    updateCart(newCart);
+    addItem({
+      id: product.id.toString(),
+      name: product.producto,
+      price: product.precio ?? 0,
+      thumbnail: `/images/productos/thumbs/${initialFile}`,
+      quantity: 1,
+    });
     toast.success(`Añadido "${product.producto}" al carrito`);
   };
 

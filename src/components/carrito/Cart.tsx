@@ -1,39 +1,34 @@
 // src/components/carrito/Cart.tsx
 'use client';
 
-import React, { ChangeEvent } from 'react';
-import { useCart, CartItem } from '@/context/CartContext';
+import React, { ChangeEvent, useEffect, useState } from 'react';
+import { useCartStore, CartItem } from '@/store/useCartStore';
 import ImageWithFallback from '@/components/ImageWithFallback';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import emptyCart from  "../../../public/images/empty-cart.svg";
 
 export default function Cart() {
-  const { cart, updateCart } = useCart();
+  const { cart, removeItem, updateQuantity, clearCart, getTotalPrice } = useCartStore();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
 
-  const removeItem = (id: string) => {
-    const updatedCart = cart.filter((item: CartItem) => item.id !== id);
-    updateCart(updatedCart);
-  };
-
-  const updateQuantity = (id: string, quantity: number) => {
-    const updatedCart = cart.map((item: CartItem) =>
-      item.id === id ? { ...item, quantity: quantity < 1 ? 1 : quantity } : item
-    );
-    updateCart(updatedCart);
-  };
+  useEffect(() => setMounted(true), []);
 
   const handleQuantityChange = (e: ChangeEvent<HTMLInputElement>, id: string) => {
-    const qty = parseInt(e.target.value, 10);
-    updateQuantity(id, qty);
+    const val = e.target.value;
+    const qty = parseInt(val, 10);
+    const finalQty = isNaN(qty) ? 1 : qty;
+    updateQuantity(id, finalQty);
   };
 
-  // Convertir item.price a número para poder usar toFixed
-  const total = cart.reduce((acc, item: CartItem) => acc + Number(item.price) * item.quantity, 0);
+  // Evitar hydration mismatch renderizando null o skeleton hasta montar
+  if (!mounted) return <div className="p-10 text-center">Cargando carrito...</div>;
+
+  const total = getTotalPrice();
 
   const handleEmptyCart = () => {
-    updateCart([]);
+    clearCart();
   };
 
   return (

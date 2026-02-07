@@ -1,6 +1,6 @@
 // src/app/admin/resources/[tableName]/hooks/useServerTable.ts
 'use client'
-import useSWR from 'swr'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 
 export type Primitive = string | number | boolean
 export type FilterValue = Primitive | Primitive[]
@@ -56,20 +56,21 @@ export function useServerTable<T extends Record<string, unknown>>(
   const filtersJson = Object.keys(filters).length ? stableStringify(filters) : ''
   if (filtersJson) qs.set('filters', filtersJson)
 
-  const key = resource
+  const endpoint = resource
     ? `/api/admin/resources/${encodeURIComponent(resource)}?${qs.toString()}`
     : null
 
-  const { data, isValidating, mutate } = useSWR<{ rows: T[]; total: number }>(
-    key,
-    fetcher,
-    { keepPreviousData: true, revalidateOnFocus: false }
-  )
+  const { data, isFetching, refetch } = useQuery<{ rows: T[]; total: number }>({
+    queryKey: ['resource', resource, qs.toString()],
+    queryFn: () => fetcher(endpoint!),
+    enabled: !!endpoint,
+    placeholderData: keepPreviousData,
+  })
 
   return {
     rows: data?.rows ?? [],
     total: data?.total ?? 0,
-    validating: isValidating,
-    refresh: () => { void mutate() },
+    validating: isFetching,
+    refresh: () => { void refetch() },
   }
 }

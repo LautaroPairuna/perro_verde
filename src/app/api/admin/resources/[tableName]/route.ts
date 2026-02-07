@@ -1,13 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient }              from '@prisma/client'
 import fs                            from 'fs/promises'
 import path                          from 'path'
 import slugify                       from 'slugify'
 import sharp                         from 'sharp'
 import { folderNames }               from '@/lib/adminConstants'
-
-const prisma = new PrismaClient()
+import { schemaByResource }          from '@/app/admin/resources/[tableName]/schemas'
+import prisma                        from '@/lib/prisma'
+import { auth }                      from '@/auth'
+import { logAudit }                  from '@/lib/audit'
 
 const models: Record<string, any> = {
   CfgMarcas:                 prisma.cfgMarcas,
@@ -20,6 +21,7 @@ const models: Record<string, any> = {
   ProductoVersiones:         prisma.productoVersiones,
   ProductoEspecificaciones:  prisma.productoEspecificaciones,
   Pedidos:                   prisma.pedidos,
+  AuditLog:                  prisma.auditLog, 
 }
 
 // Campos booleanos
@@ -126,6 +128,7 @@ export async function GET(
       'comprador_nombre', 'comprador_email', 'comprador_telefono',
       'direccion_envio', 'metodo_pago', 'estado'
     ],
+    AuditLog: ['entity', 'entityId', 'action', 'user', 'field'],
   }
 
   const qFields = qFieldsParam.length
@@ -211,6 +214,9 @@ export async function POST(req: NextRequest,
       await sharp(buf).resize(200).webp().toFile(thumbPath)
 
       data.foto = name
+      if (tableName === 'CfgSlider') {
+        data.thumbs = name
+      }
     }
   } else {
     data = await req.json()
@@ -222,10 +228,26 @@ export async function POST(req: NextRequest,
   }
 
   try {
-    const created = await model.create({ data })
+    const schema = schemaByResource[tableName]
+    const validated = schema ? schema.parse(data) : data
+
+    const created = await model.create({ data: validated })
+
+    if (tableName !== 'AuditLog') {
+       const session = await auth()
+       await logAudit({
+          entity: tableName,
+          entityId: created.id,
+          action: 'CREATE',
+          user: session?.user?.email,
+          newValue: validated
+       })
+    }
+
     return NextResponse.json(created, { status: 201 })
-  } catch (e) {
+  } catch (e: any) {
     console.error(e)
-    return NextResponse.json({ error: 'Error al crear registro' }, { status: 500 })
+    const msg = e?.issues?.[0]?.message ?? e?.message ?? 'Error al crear registro'
+    return NextResponse.json({ error: msg }, { status: 400 })
   }
 }

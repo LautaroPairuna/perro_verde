@@ -7,23 +7,64 @@ import Link                                    from 'next/link'
 import type { IconType }                       from 'react-icons'
 import {
   HiTag, HiCollection, HiCurrencyDollar, HiPhotograph,
-  HiShoppingCart, HiUsers, HiMenu, HiX, HiLogout,
+  HiShoppingCart, HiUsers, HiMenu, HiX, HiLogout, HiHome,
+  HiCube, HiClipboardList
 } from 'react-icons/hi'
 import { UserBadgeIcon } from './resources/[tableName]/components/icons/UserBadgeIcon'
-const RESOURCES = [
-  'CfgMarcas',
-  'CfgRubros',
-  'CfgFormasPagos',
-  'CfgMonedas',
-  'CfgSlider',
-  'Productos',
-  'Pedidos',
-] as const
+import AdminQueryProvider from './AdminQueryProvider'
+
+const NAV_SECTIONS: {
+  title: string
+  items: {
+    label: string
+    resource?: string
+    href?: string
+    icon: IconType
+    exact?: boolean
+  }[]
+}[] = [
+  {
+    title: 'General',
+    items: [
+      { label: 'Dashboard', href: '/admin', icon: HiHome, exact: true },
+    ]
+  },
+  {
+    title: 'Gestión',
+    items: [
+      { label: 'Productos', resource: 'Productos', icon: HiCube },
+      { label: 'Pedidos', href: '/admin/pedidos', icon: HiShoppingCart },
+    ]
+  },
+  {
+    title: 'Contenido',
+    items: [
+      { label: 'Banners', resource: 'CfgSlider', icon: HiPhotograph },
+    ]
+  },
+  {
+    title: 'Maestros',
+    items: [
+      { label: 'Marcas', resource: 'CfgMarcas', icon: HiTag },
+      { label: 'Rubros', resource: 'CfgRubros', icon: HiCollection },
+      { label: 'Formas de Pago', resource: 'CfgFormasPagos', icon: HiCurrencyDollar },
+      { label: 'Monedas', resource: 'CfgMonedas', icon: HiCurrencyDollar },
+    ]
+  },
+  {
+    title: 'Sistema',
+    items: [
+      { label: 'Auditoría', href: '/admin/audit', icon: HiClipboardList },
+    ]
+  }
+]
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <SessionProvider>
-      <AdminLayoutContent>{children}</AdminLayoutContent>
+      <AdminQueryProvider>
+        <AdminLayoutContent>{children}</AdminLayoutContent>
+      </AdminQueryProvider>
     </SessionProvider>
   )
 }
@@ -61,14 +102,6 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
   const avatarUrl   = session?.user?.image ?? '/avatar-placeholder.png'
   const displayName = session?.user?.name  ?? 'Usuario'
 
-  const iconFor = (name: string): IconType => {
-    if (/Fotos|Photograph/.test(name))     return HiPhotograph
-    if (/Rubros|Collection/.test(name))    return HiCollection
-    if (/Pedidos|ShoppingCart/.test(name)) return HiShoppingCart
-    if (/Monedas|Currency/.test(name))     return HiCurrencyDollar
-    return HiTag
-  }
-
   return (
     <div className="flex h-screen bg-gray-100 text-gray-800">
       {/* ---------- Barra móvil ----------------------------- */}
@@ -94,64 +127,83 @@ function AdminLayoutContent({ children }: { children: ReactNode }) {
       <aside
         className={`
           fixed inset-y-0 left-0 z-20 transform
-          ${isRoot ? 'w-full' : 'w-64'} transition-transform duration-200
+          w-64 transition-transform duration-200
           bg-gradient-to-b from-indigo-800 to-indigo-900 text-white shadow-lg
           md:static md:translate-x-0
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
         <div className="h-full flex flex-col">
           <div className="hidden md:flex items-center px-6 py-6 border-b border-indigo-700">
             <HiUsers className="h-8 w-8 text-white"/>
-            <span className="ml-3 text-2xl font-bold text-white">Admin</span>
+            <span className="ml-3 text-xl font-bold text-white">Panel Admin</span>
           </div>
 
-          <nav className="flex-1 overflow-y-auto px-2 py-6 space-y-2">
-            {RESOURCES.map(r => {
-              const path   = `/admin/resources/${r}`
-              const active = rawPath === path
-              const label  = r.startsWith('Cfg') ? r.slice(3) : r
-              const Icon   = iconFor(r)
+          <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
+            {NAV_SECTIONS.map((section, idx) => (
+              <div key={idx}>
+                {section.title && (
+                  <h3 className="px-2 text-xs font-semibold text-indigo-300 uppercase tracking-wider mb-2">
+                    {section.title}
+                  </h3>
+                )}
+                <div className="space-y-1">
+                  {section.items.map((item) => {
+                    const href = item.href ?? `/admin/resources/${item.resource}`
+                    const active = item.exact 
+                      ? rawPath === href
+                      : rawPath.startsWith(href)
+                    
+                    const Icon = item.icon
 
-              return (
-                <Link
-                  key={r}
-                  href={path}
-                  onClick={() => setMobileOpen(false)}
-                  className={`
-                    flex items-center px-4 py-3 rounded-lg transition
-                    ${active
-                      ? 'bg-indigo-700 text-white font-semibold'
-                      : 'text-indigo-200 hover:bg-indigo-700 hover:text-white'}
-                  `}
-                >
-                  <Icon className="h-5 w-5 flex-shrink-0"/>
-                  <span className="ml-3">{label}</span>
-                </Link>
-              )
-            })}
+                    return (
+                      <Link
+                        key={href}
+                        href={href}
+                        onClick={() => setMobileOpen(false)}
+                        className={`
+                          flex items-center px-3 py-2 rounded-md transition-colors text-sm font-medium
+                          ${active
+                            ? 'bg-indigo-700 text-white'
+                            : 'text-indigo-100 hover:bg-indigo-700 hover:text-white'}
+                        `}
+                      >
+                        <Icon className="h-5 w-5 flex-shrink-0 mr-3 opacity-80"/>
+                        {item.label}
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
 
           <div className="border-t border-indigo-700 p-4">
+            {/* Perfil de usuario */}
+            <div className="flex items-center mb-4 px-2">
+              <div className="h-10 w-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+                {displayName.charAt(0).toUpperCase()}
+              </div>
+              <div className="ml-3 overflow-hidden">
+                <p className="text-sm font-medium text-white truncate">{displayName}</p>
+                <p className="text-xs text-indigo-300 truncate">Online</p>
+              </div>
+            </div>
+            
             <button
               onClick={() => signOut({ callbackUrl: '/admin/auth' })}
-              className="w-full flex items-center px-4 py-3 bg-indigo-700 hover:bg-indigo-600 rounded-lg transition"
+              className="w-full flex items-center px-4 py-2 bg-indigo-800 hover:bg-indigo-700 rounded-lg transition text-sm border border-indigo-700"
             >
-              <HiLogout className="h-5 w-5 text-white"/>
-              <span className="ml-3 text-white font-medium">Cerrar sesión</span>
+              <HiLogout className="h-5 w-5 text-indigo-300"/>
+              <span className="ml-3 text-indigo-200">Cerrar sesión</span>
             </button>
           </div>
         </div>
       </aside>
 
       {/* ---------- Contenido principal ---------------------- */}
-      <main className={`${isRoot ? 'hidden' : 'flex-1 flex flex-col overflow-auto'}`}>
-        <header className="hidden md:flex items-center justify-between bg-white border-b px-8 py-4 shadow-sm">
-          <h1 className="text-xl font-semibold">{rawPath.split('/').pop()}</h1>
-          <div className="flex items-center space-x-3">
-            <span className="text-gray-600">¡Hola, {displayName}!</span>
-            <UserBadgeIcon className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
-          </div>
-        </header>
+      <main className="flex-1 flex flex-col overflow-auto">
+        {/* Header eliminado por requerimiento */}
 
         {/* === MEJORA DE LA SECCIÓN BLANCA (solo wrapper) === */}
         <div className="flex-1 relative">

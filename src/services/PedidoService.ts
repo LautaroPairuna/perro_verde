@@ -1,6 +1,9 @@
 // src/services/PedidoService.ts
 
-import { PrismaClient, Prisma } from '@prisma/client';
+import prisma from '../lib/prisma';
+import type { Prisma } from '../../generated/prisma/client'
+import { logAudit } from '../lib/audit';
+
 import { CreatePedidoDTO, PaymentResponse } from '../types/payment';
 import { CashStrategy } from '../strategies/CashStrategy';
 import { TransferStrategy } from '../strategies/TransferStrategy';
@@ -8,7 +11,7 @@ import { CardStrategy } from '../strategies/CardStrategy';
 import { PaymentStrategy } from '../strategies/PaymentStrategy';
 
 export class PedidoService {
-  private prisma = new PrismaClient();
+  private prisma = prisma;
 
   /**
    * Procesa un nuevo pedido:
@@ -33,6 +36,15 @@ export class PedidoService {
       },
     });
 
+    // Auditoría de creación
+    await logAudit({
+      entity: 'Pedidos',
+      entityId: pedido.id,
+      action: 'CREATE',
+      user: dto.comprador_email,
+      newValue: `Pedido creado por ${dto.total} (${dto.metodo_pago})`
+    }).catch(console.error);
+
     // 2) Elijo la estrategia de pago adecuada
     const strategy: PaymentStrategy = this.getStrategy(dto.metodo_pago);
 
@@ -46,7 +58,7 @@ export class PedidoService {
 
       // Armo dinámicamente los campos a actualizar
       const updateData: Prisma.PedidosUpdateInput = {
-        estado:                 pago.status,
+        estadoRel:              { connect: { id: pago.status } },
         mp_response:            pago.responseToClient as unknown as Prisma.InputJsonValue,
         transferencia_ref:      pago.transferenciaRef ?? null,
         tarjeta_last4:          pago.cardLast4 ?? null,
@@ -63,6 +75,17 @@ export class PedidoService {
         where: { id: pedido.id },
         data: updateData,
       });
+
+      // Auditoría de actualización (Pago)
+      await logAudit({
+        entity: 'Pedidos',
+        entityId: pedido.id,
+        action: 'UPDATE',
+        field: 'estado',
+        oldValue: 'pendiente',
+        newValue: String(pago.status),
+        user: dto.comprador_email
+      }).catch(console.error);
 
       return pago.responseToClient;
     } catch (err: unknown) {
@@ -81,12 +104,23 @@ export class PedidoService {
       await this.prisma.pedidos.update({
         where: { id: pedido.id },
         data: {
-          estado:           'cancelado',
+          estadoRel:        { connect: { id: 'cancelado' } },
           mp_error_code:    mpCode,
           mp_error_message: mpMessage,
           mp_response:      errorData as unknown as Prisma.InputJsonValue,
         },
       });
+
+      // Auditoría de error
+      await logAudit({
+        entity: 'Pedidos',
+        entityId: pedido.id,
+        action: 'UPDATE',
+        field: 'estado',
+        oldValue: 'pendiente',
+        newValue: `cancelado (${mpMessage})`,
+        user: dto.comprador_email
+      }).catch(console.error);
 
       throw new Error(mpMessage);
     }
@@ -114,9 +148,19 @@ export class PedidoService {
       where: { id: orderId },
       data: {
         transferencia_ref: transferenciaRef,
-        estado:            'pagado',
+        estadoRel:         { connect: { id: 'pagado' } },
       },
     });
+
+    await logAudit({
+      entity: 'Pedidos',
+      entityId: orderId,
+      action: 'UPDATE',
+      field: 'estado',
+      oldValue: 'iniciado',
+      newValue: 'pagado (Transferencia Confirmada)',
+      user: 'Admin/System'
+    }).catch(console.error);
   }
 
   /** Confirma pago con tarjeta para un pedido existente. */
@@ -156,7 +200,7 @@ export class PedidoService {
       );
 
       const updateData: Prisma.PedidosUpdateInput = {
-        estado:                 pago.status,
+        estadoRel:              { connect: { id: pago.status } },
         mp_response:            pago.responseToClient as unknown as Prisma.InputJsonValue,
         tarjeta_last4:          pago.cardLast4 ?? null,
         tarjeta_payment_method: pago.cardLast4 ? cardToken : null,
@@ -170,6 +214,17 @@ export class PedidoService {
         where: { id: orderId },
         data: updateData,
       });
+
+      await logAudit({
+        entity: 'Pedidos',
+        entityId: orderId,
+        action: 'UPDATE',
+        field: 'estado',
+        oldValue: pedido.estado,
+        newValue: String(pago.status),
+        user: pedido.comprador_email
+      }).catch(console.error);
+
     } catch (err: unknown) {
       interface MPError {
         cause?: { error?: string; message?: string };
@@ -184,12 +239,22 @@ export class PedidoService {
       await this.prisma.pedidos.update({
         where: { id: orderId },
         data: {
-          estado:           'cancelado',
+          estadoRel:        { connect: { id: 'cancelado' } },
           mp_error_code:    mpCode,
           mp_error_message: mpMessage,
           mp_response:      { code: mpCode, message: mpMessage } as unknown as Prisma.InputJsonValue,
         },
       });
+
+      await logAudit({
+        entity: 'Pedidos',
+        entityId: orderId,
+        action: 'UPDATE',
+        field: 'estado',
+        oldValue: pedido.estado,
+        newValue: `cancelado (${mpMessage})`,
+        user: pedido.comprador_email
+      }).catch(console.error);
 
       throw new Error(mpMessage);
     }

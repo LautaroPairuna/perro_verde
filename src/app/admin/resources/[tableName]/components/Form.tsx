@@ -40,6 +40,12 @@ export function Form({ initial, columns, fixedFk, onSubmit, resource }: FormP) {
       autoComplete="off"
     >
       {columns.map(col => {
+        // Ocultar ID siempre (es autoincremental/interno)
+        if (col === 'id') return null
+        
+        // Ocultar 'thumbs' en CfgSlider porque se genera automático
+        if (resource === 'CfgSlider' && col === 'thumbs') return null
+
         /* FK */
         if (col in fkConfig) {
           const fixed = fixedFk === col
