@@ -1,7 +1,7 @@
 # nixpacks.toml
 
 [phases.setup]
-nixPkgs = ["node_22", "npm"]
+nixPkgs = ["nodejs_20", "npm"]
 
 [phases.build]
 cmds = ["npm ci", "npm run build"]
