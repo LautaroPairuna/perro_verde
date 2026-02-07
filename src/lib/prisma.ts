@@ -1,31 +1,57 @@
 // src/lib/prisma.ts
 import 'server-only'
-import 'dotenv/config'
-
 import { PrismaClient } from '../../generated/prisma/client'
 import { PrismaMariaDb } from '@prisma/adapter-mariadb'
 
-const globalForPrisma = globalThis as unknown as { prisma_v2?: PrismaClient }
+declare global {
+  // eslint-disable-next-line no-var
+  var __prisma_v2: PrismaClient | undefined
+}
 
-const connectionString = process.env.DATABASE_URL!
-const url = new URL(connectionString)
+function makePrisma() {
+  const connectionString = process.env.DATABASE_URL
+  if (!connectionString) {
+    // Importante: esto evita que el build explote por URL(undefined)
+    throw new Error('DATABASE_URL is missing (Prisma not initialized)')
+  }
 
-const adapter = new PrismaMariaDb({
-  host: url.hostname,
-  user: url.username,
-  password: url.password,
-  database: url.pathname.slice(1),
-  port: Number(url.port) || 3306,
-  connectionLimit: 5,
-})
+  const url = new URL(connectionString)
 
-export const prisma =
-  globalForPrisma.prisma_v2 ??
-  new PrismaClient({
-    adapter,
-    log: process.env.NODE_ENV === 'development' ? ['query', 'warn', 'error'] : ['error'],
+  const adapter = new PrismaMariaDb({
+    host: url.hostname,
+    user: url.username,
+    password: url.password,
+    database: url.pathname.slice(1),
+    port: Number(url.port) || 3306,
+    connectionLimit: 5,
   })
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma_v2 = prisma
+  return new PrismaClient({
+    adapter,
+    log:
+      process.env.NODE_ENV === 'development'
+        ? ['query', 'warn', 'error']
+        : ['error'],
+  })
+}
+
+/**
+ * Getter: no inicializa Prisma hasta que realmente se use.
+ * En dev reusa instancia global para evitar múltiples conexiones.
+ */
+export function getPrisma(): PrismaClient {
+  if (process.env.NODE_ENV === 'production') return makePrisma()
+
+  if (!global.__prisma_v2) global.__prisma_v2 = makePrisma()
+  return global.__prisma_v2
+}
+
+// Compat: si ya tenías imports `import prisma from ...` o `import { prisma } ...`
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    // cada acceso resuelve la instancia real
+    return (getPrisma() as any)[prop]
+  },
+})
 
 export default prisma
