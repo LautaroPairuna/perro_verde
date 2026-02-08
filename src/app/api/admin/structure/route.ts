@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
+import {prisma} from '@/lib/prisma'
 
 type PrismaModel = { findMany: (args?: any) => Promise<any[]> }
 

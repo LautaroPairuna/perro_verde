@@ -6,7 +6,7 @@ import slugify                       from 'slugify'
 import sharp                         from 'sharp'
 import { folderNames }               from '@/lib/adminConstants'
 import { schemaByResource }          from '@/app/admin/resources/[tableName]/schemas'
-import prisma                        from '@/lib/prisma'
+import {prisma}                       from '@/lib/prisma'
 import { auth }                      from '@/auth'
 import { logAudit }                  from '@/lib/audit'
 
