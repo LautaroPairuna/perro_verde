@@ -1,61 +1,47 @@
-// src/lib/prisma.ts
-import 'server-only'
-import { PrismaClient } from '../../generated/prisma/client'
-import { PrismaMariaDb } from '@prisma/adapter-mariadb'
-import mariadb from 'mariadb'
+import { PrismaClient } from "../../generated/prisma/client";
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import { PHASE_PRODUCTION_BUILD } from "next/constants";
 
 declare global {
   // eslint-disable-next-line no-var
-  var __prisma_v2: PrismaClient | undefined
+  var __prisma: PrismaClient | undefined;
 }
 
-function makePrisma() {
-  const connectionString = process.env.DATABASE_URL
-  if (!connectionString) {
-    // Importante: esto evita que el build explote por URL(undefined)
-    throw new Error('DATABASE_URL is missing (Prisma not initialized)')
-  }
+function createClient(): PrismaClient {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL is missing");
 
-  const url = new URL(connectionString)
+  // Algunos setups prefieren mariadb:// para el driver; si te falla, descomentá:
+  // const adapterUrl = url.replace(/^mysql:\/\//, "mariadb://");
+  // const adapter = new PrismaMariaDb(adapterUrl);
 
-  // Pasar configuración directa al adapter (que gestiona el pool internamente)
-  const adapter = new PrismaMariaDb({
-    host: url.hostname,
-    user: url.username,
-    password: url.password,
-    database: url.pathname.slice(1),
-    port: Number(url.port) || 3306,
-    connectionLimit: 10,
-    connectTimeout: 10000,
-    acquireTimeout: 10000
-  })
+  const adapter = new PrismaMariaDb(url);
 
   return new PrismaClient({
     adapter,
-    log:
-      process.env.NODE_ENV === 'development'
-        ? ['query', 'warn', 'error']
-        : ['error'],
-  })
+    log: process.env.NODE_ENV === "development" ? ["query", "warn", "error"] : ["error"],
+  });
 }
 
 /**
- * Getter: no inicializa Prisma hasta que realmente se use.
- * En dev reusa instancia global para evitar múltiples conexiones.
+ * Proxy: evita que Prisma se construya al importar el módulo.
+ * Se construye recién cuando accedés a prisma.<algo>.
  */
-export function getPrisma(): PrismaClient {
-  if (process.env.NODE_ENV === 'production') return makePrisma()
-
-  if (!global.__prisma_v2) global.__prisma_v2 = makePrisma()
-  return global.__prisma_v2
-}
-
-// Compat: si ya tenías imports `import prisma from ...` o `import { prisma } ...`
-export const prisma = new Proxy({} as PrismaClient, {
+export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
   get(_target, prop) {
-    // cada acceso resuelve la instancia real
-    return (getPrisma() as any)[prop]
+    if (!global.__prisma) {
+      // Si alguien intenta usar Prisma DURANTE el build sin env, damos error claro.
+      if (!process.env.DATABASE_URL && process.env.NEXT_PHASE === PHASE_PRODUCTION_BUILD) {
+        throw new Error(
+          "Prisma was accessed during next build, but DATABASE_URL is not set. " +
+            "Set DATABASE_URL for build or avoid DB access at build time."
+        );
+      }
+      global.__prisma = createClient();
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (global.__prisma as any)[prop];
   },
-})
+});
 
-export default prisma
+export default prisma;
