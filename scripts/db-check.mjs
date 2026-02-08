@@ -1,5 +1,5 @@
 // scripts/db-check.mjs
-import { PrismaClient } from "../src/generated/prisma/client";
+import { PrismaClient } from "../generated/prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 
 const raw = process.env.DATABASE_URL;
