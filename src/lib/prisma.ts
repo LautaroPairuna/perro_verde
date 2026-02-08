@@ -1,4 +1,3 @@
-// src/lib/prisma.ts
 import "server-only";
 
 import { PrismaClient } from "../../generated/prisma/client";
@@ -34,8 +33,11 @@ function buildAdapterFromDatabaseUrl() {
     password,
     database,
 
-    // Ajustá según tu VPS/uso. Para un Next típico en un VPS chico:
-    connectionLimit: Number(process.env.DB_CONNECTION_LIMIT || "5"),
+    // Ajustes críticos para evitar pool timeout en contenedores
+    connectionLimit: Number(process.env.DB_CONNECTION_LIMIT || "10"), // Aumentado a 10 por defecto
+    connectTimeout: 60000, // 60s para conectar
+    acquireTimeout: 60000, // 60s para obtener conexión del pool
+    idleTimeout: 30000,    // 30s antes de cerrar conexión inactiva
   });
 }
 
