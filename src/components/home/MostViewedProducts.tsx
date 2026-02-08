@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import ProductCard from '../catalogo/ProductCard';
 import Link from 'next/link';
 import type { ViewedProduct } from './HomeClientComponents';

@@ -1,4 +1,4 @@
-import prisma from '@/lib/prisma'
+import {prisma} from '@/lib/prisma'
 import FeaturedProducts from '@/components/home/FeaturedProducts'
 
 export default async function HomeFeatured() {

@@ -1,7 +1,6 @@
 // src/components/home/BrandMarquee.tsx
 'use client';
 
-import React from 'react';
 import slugify from '@/utils/slugify';
 import Image from 'next/image';
 import Link from 'next/link';

@@ -1,5 +1,3 @@
-import React from 'react'
-
 export function PromotionsSkeleton() {
   return (
     <div className="w-full h-[300px] md:h-[400px] bg-gray-200 animate-pulse rounded-xl" />

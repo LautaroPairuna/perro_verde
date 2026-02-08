@@ -6,7 +6,6 @@ import React, {
   useEffect,
   useRef,
   useCallback,
-  useMemo,
   useId,
 } from "react";
 import Image from "next/image";

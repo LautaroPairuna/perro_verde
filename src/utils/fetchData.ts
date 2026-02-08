@@ -1,6 +1,6 @@
 import { Prisma } from '../../generated/prisma/client';
 import { cache } from 'react';
-import prisma from '@/lib/prisma';
+import {prisma} from '@/lib/prisma';
 
 /**
  * Filtro de búsqueda para productos

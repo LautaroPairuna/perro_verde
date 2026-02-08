@@ -1,4 +1,4 @@
-import prisma from '@/lib/prisma'
+import {prisma} from '@/lib/prisma'
 import RubrosGrid from '@/components/home/RubrosGrid'
 
 export default async function HomeRubros() {

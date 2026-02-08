@@ -5,7 +5,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import { lookup as mimeLookup } from 'mime-types'
 import { PrismaClient } from '../../../../../generated/prisma/client'
-import prisma from '@/lib/prisma'
+import {prisma} from '@/lib/prisma'
 
 export const runtime = 'nodejs' // usamos fs nativo
 

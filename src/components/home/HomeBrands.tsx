@@ -1,4 +1,4 @@
-import prisma from '@/lib/prisma'
+import {prisma} from '@/lib/prisma'
 import BrandMarquee from '@/components/home/BrandMarquee'
 
 export default async function HomeBrands() {

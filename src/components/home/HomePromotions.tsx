@@ -1,4 +1,4 @@
-import prisma from '@/lib/prisma'
+import {prisma} from '@/lib/prisma'
 import PromotionsSlider from '@/components/home/PromotionsSlider'
 
 export default async function HomePromotions() {

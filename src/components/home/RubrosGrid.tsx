@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import clsx from 'clsx';
 import slugify from '@/utils/slugify';
 import Link from 'next/link';

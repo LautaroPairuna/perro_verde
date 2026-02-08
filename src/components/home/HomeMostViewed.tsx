@@ -1,4 +1,4 @@
-import prisma from '@/lib/prisma'
+import {prisma} from '@/lib/prisma'
 import MostViewedProducts from '@/components/home/MostViewedProducts'
 
 export default async function HomeMostViewed() {
