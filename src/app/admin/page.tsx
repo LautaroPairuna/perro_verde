@@ -1,42 +1,37 @@
-import { auth } from '@/auth'
-import { redirect } from 'next/navigation'
-import { prisma } from '@/lib/prisma'
-import Link from 'next/link'
-import { startOfWeek, endOfWeek } from 'date-fns'
-import EarningsCard from './components/EarningsCard'
-import { 
-  HiShoppingCart, 
-  HiCube, 
-  HiExclamationCircle, 
+// src/app/admin/page.tsx
+import { auth } from "@/auth";
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import Link from "next/link";
+import { startOfWeek, endOfWeek } from "date-fns";
+import EarningsCard from "./components/EarningsCard";
+import {
+  HiShoppingCart,
+  HiCube,
+  HiExclamationCircle,
   HiCurrencyDollar,
   HiCheckCircle,
-  HiXCircle
-} from 'react-icons/hi'
-import SalesChart from './components/SalesChart'
+  HiXCircle,
+} from "react-icons/hi";
+import SalesChart from "./components/SalesChart";
 
 export default async function AdminPage() {
-  const session = await auth()
-  if (!session) return redirect('/admin/auth')
+  const session = await auth();
+  if (!session) return redirect("/admin/auth");
 
   // Fechas para gráfico (últimos 7 días)
-  const today = new Date()
-  const sevenDaysAgo = new Date(today)
-  sevenDaysAgo.setDate(today.getDate() - 6) // -6 para incluir hoy y ser 7 días
-  sevenDaysAgo.setHours(0, 0, 0, 0)
+  const today = new Date();
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(today.getDate() - 6);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
 
-  // Calcular semana actual para ganancias
-  const startWeek = startOfWeek(today, { weekStartsOn: 1 })
-  const endWeek = endOfWeek(today, { weekStartsOn: 1 })
+  // Semana actual para ganancias
+  const startWeek = startOfWeek(today, { weekStartsOn: 1 });
+  const endWeek = endOfWeek(today, { weekStartsOn: 1 });
 
-  // Obtener estados de cancelación dinámicamente
-  const estadosCancelacion = await prisma.cfgEstadoPedido.findMany({
-    where: { es_cancel: true },
-    select: { id: true }
-  })
-  const idsCancel = estadosCancelacion.map(e => e.id)
-  const notInEstados = [...idsCancel, 'pendiente']
+  // ✅ Estados que NO deben contar como "ganancia real"
+  const notInEstados = ["pendiente", "cancelado", "rejected"];
 
-  // Fetch data
   const [
     productosCount,
     lowStockCount,
@@ -46,129 +41,116 @@ export default async function AdminPage() {
     pedidosRechazados,
     ultimosPedidos,
     ventasSemana,
-    gananciasSemana
+    gananciasSemana,
   ] = await Promise.all([
     // KPIs básicos
     prisma.productos.count({ where: { activo: true } }),
     prisma.productos.count({ where: { stock: { lte: 5 }, activo: true } }),
-    
+
     // Conteo Pedidos
     prisma.pedidos.count(),
-    prisma.pedidos.count({ where: { estado: 'pendiente' } }),
-    prisma.pedidos.count({ 
-      where: { 
-        OR: [
-          { estado: 'pagado' },
-          { estado: 'approved' }
-        ]
-      } 
-    }), 
-    prisma.pedidos.count({ 
-      where: { 
-        OR: [
-          { estado: 'cancelado' },
-          { estado: 'rejected' }
-        ]
-      } 
+    prisma.pedidos.count({ where: { estado: "pendiente" } }),
+    prisma.pedidos.count({
+      where: {
+        OR: [{ estado: "pagado" }, { estado: "approved" }],
+      },
+    }),
+    prisma.pedidos.count({
+      where: {
+        OR: [{ estado: "cancelado" }, { estado: "rejected" }],
+      },
     }),
 
-    // Últimos pedidos tabla
+    // Últimos pedidos (SIN estadoRel)
     prisma.pedidos.findMany({
       take: 5,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       select: {
         id: true,
         comprador_nombre: true,
         total: true,
         estado: true,
         createdAt: true,
-        estadoRel: {
-          select: {
-            descripcion: true,
-            color: true
-          }
-        }
-      }
+      },
     }),
 
     // Ventas para gráfico
     prisma.pedidos.findMany({
       where: {
         createdAt: { gte: sevenDaysAgo },
-        // Consideramos ventas reales las pagadas o aprobadas
-        OR: [
-          { estado: 'pagado' },
-          { estado: 'approved' }
-        ]
+        OR: [{ estado: "pagado" }, { estado: "approved" }],
       },
       select: {
         createdAt: true,
-        total: true
-      }
+        total: true,
+      },
     }),
 
-    // Ganancias de la semana (Nueva lógica dinámica)
+    // Ganancias de la semana (excluye pendientes/cancelados/rejected)
     prisma.pedidos.aggregate({
       _sum: { total: true },
       _count: { id: true },
       where: {
         createdAt: { gte: startWeek, lte: endWeek },
-        estado: { notIn: notInEstados }
-      }
-    })
-  ])
+        estado: { notIn: notInEstados },
+      },
+    }),
+  ]);
 
-  // Procesar datos para gráfico: Agrupar por día
-  const chartDataMap = new Map<string, number>()
-  
-  // Inicializar los 7 días en 0
-  for (let i = 0; i < 7; i++) {
-    const d = new Date()
-    d.setDate(today.getDate() - i)
-    const label = d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric' }) // Lun 10
-    chartDataMap.set(label, 0)
-  }
-
-  // Sumar totales (recorremos inverso para llenar el map correctamente si usáramos fechas ISO, pero aquí usaremos labels simples)
-  // Nota: Para ordenar cronológicamente en el gráfico, necesitamos un array ordenado.
-  
+  // Armar dataset de 7 días
   const chartData = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(sevenDaysAgo)
-    d.setDate(d.getDate() + i)
+    const d = new Date(sevenDaysAgo);
+    d.setDate(d.getDate() + i);
     return {
       dateObj: d,
-      dateLabel: d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric' }),
-      total: 0
-    }
-  })
+      dateLabel: d.toLocaleDateString("es-AR", { weekday: "short", day: "numeric" }),
+      total: 0,
+    };
+  });
 
-  ventasSemana.forEach(venta => {
-    const ventaDate = new Date(venta.createdAt)
-    const label = ventaDate.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric' })
-    const found = chartData.find(d => d.dateLabel === label)
-    if (found) {
-      found.total += Number(venta.total)
-    }
-  })
+  ventasSemana.forEach((venta) => {
+    const ventaDate = new Date(venta.createdAt);
+    const label = ventaDate.toLocaleDateString("es-AR", { weekday: "short", day: "numeric" });
+    const found = chartData.find((d) => d.dateLabel === label);
+    if (found) found.total += Number(venta.total);
+  });
 
-  const finalChartData = chartData.map(d => ({ date: d.dateLabel, total: d.total }))
+  const finalChartData = chartData.map((d) => ({ date: d.dateLabel, total: d.total }));
 
   const cards = [
     {
-      title: 'Productos Activos',
+      title: "Productos Activos",
       value: productosCount,
       icon: HiCube,
-      color: 'bg-blue-500',
-      href: '/admin/resources/Productos'
+      color: "bg-blue-500",
+      href: "/admin/resources/Productos",
     },
     {
-      title: 'Stock Bajo',
+      title: "Stock Bajo",
       value: lowStockCount,
       icon: HiExclamationCircle,
-      color: 'bg-red-500',
-      href: '/admin/resources/Productos?filter=low_stock'
-    }
-  ]
+      color: "bg-red-500",
+      href: "/admin/resources/Productos?filter=low_stock",
+    },
+  ];
+
+  const badgeClassByEstado = (estado: string) => {
+    if (estado === "pendiente") return "bg-yellow-100 text-yellow-800 border-yellow-200";
+    if (estado === "approved" || estado === "pagado")
+      return "bg-green-100 text-green-800 border-green-200";
+    if (estado === "cancelado" || estado === "rejected")
+      return "bg-red-100 text-red-800 border-red-200";
+    return "bg-gray-100 text-gray-800 border-gray-200";
+  };
+
+  const labelByEstado = (estado: string) => {
+    if (estado === "approved") return "Aceptado";
+    if (estado === "pagado") return "Pagado";
+    if (estado === "rejected") return "Rechazado";
+    if (estado === "cancelado") return "Cancelado";
+    if (estado === "pendiente") return "Pendiente";
+    return estado.charAt(0).toUpperCase() + estado.slice(1);
+  };
 
   return (
     <div className="space-y-6">
@@ -178,13 +160,13 @@ export default async function AdminPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Columna Izquierda: KPIs Inventario + Tabla Resumen Pedidos */}
+        {/* Columna Izquierda */}
         <div className="lg:col-span-2 space-y-6">
           {/* Inventario Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {cards.map((card, i) => (
-              <Link 
-                key={i} 
+              <Link
+                key={i}
                 href={card.href}
                 className="bg-white rounded-xl shadow-sm p-6 flex items-center transition hover:shadow-md"
               >
@@ -202,17 +184,18 @@ export default async function AdminPage() {
           {/* Gráfico de Ventas */}
           <SalesChart data={finalChartData} />
 
-           {/* Recent Orders */}
+          {/* Recent Orders */}
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
               <h2 className="text-lg font-semibold text-gray-800">Últimos Pedidos</h2>
-              <Link 
-                href="/admin/resources/Pedidos" 
+              <Link
+                href="/admin/resources/Pedidos"
                 className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
               >
                 Ver todos
               </Link>
             </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-gray-50">
@@ -237,17 +220,17 @@ export default async function AdminPage() {
                         <td className="px-6 py-3 text-gray-900 font-medium">#{pedido.id}</td>
                         <td className="px-6 py-3 text-gray-600">{pedido.comprador_nombre}</td>
                         <td className="px-6 py-3">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
-                            pedido.estadoRel?.color 
-                              ? pedido.estadoRel.color 
-                              : (pedido.estado === 'pendiente' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
-                                 pedido.estado === 'approved' ? 'bg-green-100 text-green-800 border-green-200' :
-                                 'bg-red-100 text-red-800 border-red-200')
-                          }`}>
-                            {pedido.estadoRel?.descripcion || (pedido.estado === 'approved' ? 'Aceptado' : pedido.estado.charAt(0).toUpperCase() + pedido.estado.slice(1))}
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium border ${badgeClassByEstado(
+                              pedido.estado
+                            )}`}
+                          >
+                            {labelByEstado(pedido.estado)}
                           </span>
                         </td>
-                        <td className="px-6 py-3 text-gray-900">${Number(pedido.total).toFixed(2)}</td>
+                        <td className="px-6 py-3 text-gray-900">
+                          ${Number(pedido.total).toFixed(2)}
+                        </td>
                         <td className="px-6 py-3 text-gray-500">
                           {new Date(pedido.createdAt).toLocaleDateString()}
                         </td>
@@ -260,21 +243,18 @@ export default async function AdminPage() {
           </div>
         </div>
 
-        {/* Columna Derecha: Resumen Pedidos */}
+        {/* Columna Derecha */}
         <div className="lg:col-span-1 space-y-6">
-          
-          {/* Ganancias de la semana */}
-          <EarningsCard 
+          <EarningsCard
             title="Ganancias de la semana"
-            total={Number(gananciasSemana._sum.total ?? 0)} 
-            count={gananciasSemana._count.id ?? 0} 
+            total={Number(gananciasSemana._sum.total ?? 0)}
+            count={gananciasSemana._count.id ?? 0}
           />
 
           <div className="bg-white rounded-xl shadow-sm p-6 sticky top-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-6">Resumen de Pedidos</h2>
-            
+
             <div className="space-y-6">
-              {/* Total */}
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <div className="flex items-center">
                   <div className="p-3 bg-indigo-100 text-indigo-600 rounded-full">
@@ -285,7 +265,6 @@ export default async function AdminPage() {
                 <span className="text-2xl font-bold text-gray-800">{pedidosTotal}</span>
               </div>
 
-              {/* Pendientes */}
               <div className="flex items-center justify-between p-4 bg-yellow-50 rounded-lg">
                 <div className="flex items-center">
                   <div className="p-3 bg-yellow-100 text-yellow-600 rounded-full">
@@ -296,7 +275,6 @@ export default async function AdminPage() {
                 <span className="text-2xl font-bold text-gray-800">{pedidosPendientes}</span>
               </div>
 
-              {/* Aceptados */}
               <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
                 <div className="flex items-center">
                   <div className="p-3 bg-green-100 text-green-600 rounded-full">
@@ -307,7 +285,6 @@ export default async function AdminPage() {
                 <span className="text-2xl font-bold text-gray-800">{pedidosAceptados}</span>
               </div>
 
-              {/* Rechazados */}
               <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg">
                 <div className="flex items-center">
                   <div className="p-3 bg-red-100 text-red-600 rounded-full">
@@ -320,7 +297,7 @@ export default async function AdminPage() {
             </div>
 
             <div className="mt-8 pt-6 border-t border-gray-100">
-               <Link
+              <Link
                 href="/admin/pedidos"
                 className="block w-full text-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
@@ -331,5 +308,5 @@ export default async function AdminPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }
