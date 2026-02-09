@@ -4,7 +4,7 @@ import { PrismaClient } from "../../generated/prisma/client";
 import { withAccelerate } from "@prisma/extension-accelerate";
 
 const globalForPrisma = globalThis as unknown as {
-  prisma?: ReturnType<typeof makePrisma>;
+  prisma?: PrismaClient;
 };
 
 function makePrisma() {
@@ -13,9 +13,9 @@ function makePrisma() {
   // Si existe accelerateUrl, usamos la extensión
   if (accelerateUrl) {
     return new PrismaClient({
-      accelerateUrl,
+      datasources: { db: { url: accelerateUrl } },
       log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
-    } as any).$extends(withAccelerate());
+    } as any).$extends(withAccelerate()) as unknown as PrismaClient;
   }
 
   // Fallback: Cliente estándar sin aceleración (para build o si no hay URL)
@@ -26,7 +26,7 @@ function makePrisma() {
 }
 
 // Usamos any temporalmente para evitar problemas de tipos cíclicos/complejos entre extend y base
-export const prisma = globalForPrisma.prisma ?? (makePrisma() as any);
+export const prisma = globalForPrisma.prisma ?? makePrisma();
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
