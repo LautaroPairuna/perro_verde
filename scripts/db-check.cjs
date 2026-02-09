@@ -1,33 +1,52 @@
 // scripts/db-check.cjs
+/**
+ * Prisma 7 + MySQL (Driver Adapters) DB check
+ *
+ * - CommonJS (porque no tenés "type": "module")
+ * - Loguea causa real (cause) y props no-enumerables
+ * - Soporta Prisma Client generado con output custom (../generated/prisma/client)
+ *   y también el default (@prisma/client) si existe.
+ */
+
 const util = require("node:util");
+const path = require("node:path");
 
 function dumpError(err) {
   console.error("=== Prisma DB CHECK ERROR ===");
-  console.error("message:", err?.message);
-  console.error("name:", err?.name);
-  console.error("code:", err?.code);
-  console.error("clientVersion:", err?.clientVersion);
-  console.error("digest:", err?.digest);
 
-  // cause puede venir como string, Error u objeto
-  const causeMsg =
-    err?.cause?.message ? err.cause.message : err?.cause ? String(err.cause) : undefined;
-  if (causeMsg) console.error("cause:", causeMsg);
-
-  // Algunas veces el adapter guarda info útil en props no-enumerables
   try {
-    const props = Object.getOwnPropertyNames(err || {});
-    console.error("ownProps:", props);
+    console.error("name:", err?.name);
+    console.error("message:", err?.message);
+    console.error("code:", err?.code);
+    console.error("clientVersion:", err?.clientVersion);
+    console.error("digest:", err?.digest);
 
-    const picked = {};
-    for (const k of props) picked[k] = err[k];
-    console.error("ownProps values:", util.inspect(picked, { depth: 10, colors: false }));
-  } catch {}
+    // cause puede venir como string, Error u objeto
+    const causeMsg =
+      err?.cause?.message
+        ? err.cause.message
+        : err?.cause
+          ? String(err.cause)
+          : undefined;
+
+    if (causeMsg) console.error("cause:", causeMsg);
+
+    // props no-enumerables (muy útil en errores del adapter)
+    const props = err && typeof err === "object" ? Object.getOwnPropertyNames(err) : [];
+    if (props.length) {
+      console.error("ownProps:", props);
+      const picked = {};
+      for (const k of props) picked[k] = err[k];
+      console.error("ownProps values:", util.inspect(picked, { depth: 10, colors: false }));
+    }
+  } catch (metaErr) {
+    console.error("Error while extracting error metadata:", metaErr);
+  }
 
   // Dump completo
   console.error("full:", util.inspect(err, { depth: 15, colors: false }));
 
-  // Si hay error anidado
+  // Dump del cause anidado (si es objeto)
   if (err?.cause && typeof err.cause === "object") {
     console.error("nested cause full:", util.inspect(err.cause, { depth: 15, colors: false }));
   }
@@ -35,9 +54,47 @@ function dumpError(err) {
   console.error("=== END ERROR ===");
 }
 
+function loadPrismaClientCtor() {
+  // 1) Intentar client generado con output custom (tu caso típico)
+  //    Ajustá esta ruta si tu generator output difiere.
+  const generatedPath = path.resolve(__dirname, "../generated/prisma/client");
+  try {
+    // eslint-disable-next-line import/no-dynamic-require, global-require
+    const mod = require(generatedPath);
+    if (mod?.PrismaClient) return mod.PrismaClient;
+  } catch {
+    // ignore: probamos fallback
+  }
+
+  // 2) Fallback al default client (@prisma/client) si existe
+  //    (Esto requiere que se haya corrido `prisma generate` con output default)
+  // eslint-disable-next-line global-require
+  const mod = require("@prisma/client");
+  if (!mod?.PrismaClient) {
+    throw new Error("PrismaClient not found. Did you run `prisma generate`?");
+  }
+  return mod.PrismaClient;
+}
+
 async function main() {
-  const { PrismaClient } = require("@prisma/client");
-  const { PrismaMariaDb } = require("@prisma/adapter-mariadb");
+  let PrismaClient;
+  try {
+    PrismaClient = loadPrismaClientCtor();
+  } catch (e) {
+    // Este es el error que vos viste: ".prisma/client/default" no existe
+    dumpError(e);
+    process.exit(1);
+  }
+
+  let PrismaMariaDb;
+  try {
+    // eslint-disable-next-line global-require
+    ({ PrismaMariaDb } = require("@prisma/adapter-mariadb"));
+  } catch (e) {
+    console.error("Missing dependency: @prisma/adapter-mariadb");
+    dumpError(e);
+    process.exit(1);
+  }
 
   const raw = process.env.DATABASE_URL;
   if (!raw) {
@@ -45,7 +102,14 @@ async function main() {
     process.exit(1);
   }
 
-  const url = new URL(raw);
+  let url;
+  try {
+    url = new URL(raw);
+  } catch (e) {
+    console.error("DATABASE_URL is not a valid URL:", raw);
+    dumpError(e);
+    process.exit(1);
+  }
 
   const adapter = new PrismaMariaDb({
     host: url.hostname,
@@ -62,6 +126,7 @@ async function main() {
   });
 
   try {
+    // Query simple y barato
     await prisma.$queryRaw`SELECT 1`;
     console.log("Prisma DB OK");
     process.exit(0);
