@@ -48,7 +48,13 @@ export default async function HomeJsonLd() {
     precio: Number(p.precio),
   }))
 
-  const toProductLd = (p: typeof featuredProducts[number]) => ({
+  const toProductLd = (p: {
+    id: number;
+    producto: string;
+    descripcion: string | null;
+    foto: string | null;
+    precio: number;
+  }) => ({
     '@type': 'Product',
     name: p.producto,
     description: p.descripcion ?? undefined,
