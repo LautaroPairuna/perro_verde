@@ -1,25 +1,17 @@
 import "server-only";
-
 import { PrismaClient } from "../../generated/prisma/client";
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 
-declare global {
-  // eslint-disable-next-line no-var
-  var __prisma: PrismaClient | undefined;
-}
+const raw = process.env.DATABASE_URL!;
+const url = new URL(raw);
 
-function createPrismaClient() {
-  return new PrismaClient({
-    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
-    // En Prisma 6 nativo, el pool se maneja en Rust.
-    // Los timeouts se configuran en el connection string si es necesario.
-  });
-}
+const adapter = new PrismaMariaDb({
+  host: url.hostname,
+  port: Number(url.port || 3306),
+  user: decodeURIComponent(url.username),
+  password: decodeURIComponent(url.password),
+  database: url.pathname.replace(/^\//, ""),
+  connectionLimit: Number(process.env.DB_CONNECTION_LIMIT || 5),
+});
 
-// Singleton global
-export const prisma = global.__prisma ?? createPrismaClient();
-
-if (process.env.NODE_ENV !== "production") {
-  global.__prisma = prisma;
-}
-
-export default prisma;
+export const prisma = new PrismaClient({ adapter });
