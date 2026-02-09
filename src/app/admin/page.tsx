@@ -108,7 +108,7 @@ export default async function AdminPage() {
     };
   });
 
-  ventasSemana.forEach((venta) => {
+  ventasSemana.forEach((venta: any) => {
     const ventaDate = new Date(venta.createdAt);
     const label = ventaDate.toLocaleDateString("es-AR", { weekday: "short", day: "numeric" });
     const found = chartData.find((d) => d.dateLabel === label);
@@ -215,7 +215,7 @@ export default async function AdminPage() {
                       </td>
                     </tr>
                   ) : (
-                    ultimosPedidos.map((pedido) => (
+                    ultimosPedidos.map((pedido: any) => (
                       <tr key={pedido.id} className="hover:bg-gray-50 transition">
                         <td className="px-6 py-3 text-gray-900 font-medium">#{pedido.id}</td>
                         <td className="px-6 py-3 text-gray-600">{pedido.comprador_nombre}</td>

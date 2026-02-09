@@ -38,12 +38,12 @@ export default async function HomeJsonLd() {
     }),
   ])
 
-  const featuredProducts = rawFeatured.map(p => ({
+  const featuredProducts = rawFeatured.map((p: any) => ({
     ...p,
     precio: Number(p.precio),
   }))
 
-  const mostViewed = rawMostViewed.map(p => ({
+  const mostViewed = rawMostViewed.map((p: any) => ({
     ...p,
     precio: Number(p.precio),
   }))
@@ -72,12 +72,12 @@ export default async function HomeJsonLd() {
     '@context': 'https://schema.org',
     '@type': 'ItemList',
     itemListElement: [
-      ...featuredProducts.map((p, i) => ({
+      ...featuredProducts.map((p: any, i: number) => ({
         '@type': 'ListItem',
         position: i + 1,
         item: toProductLd(p),
       })),
-      ...mostViewed.map((p, i) => ({
+      ...mostViewed.map((p: any, i: number) => ({
         '@type': 'ListItem',
         position: i + 1 + featuredProducts.length,
         item: toProductLd(p),

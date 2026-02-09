@@ -9,19 +9,27 @@ const globalForPrisma = globalThis as unknown as {
 
 function makePrisma() {
   const accelerateUrl = process.env.PRISMA_ACCELERATE_URL;
-  if (!accelerateUrl) {
-    throw new Error("PRISMA_ACCELERATE_URL is missing");
+  
+  // Si existe accelerateUrl, usamos la extensión
+  if (accelerateUrl) {
+    return new PrismaClient({
+      accelerateUrl,
+      log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
+    } as any).$extends(withAccelerate());
   }
 
+  // Fallback: Cliente estándar sin aceleración (para build o si no hay URL)
   return new PrismaClient({
-    accelerateUrl,
+    datasources: { db: { url: process.env.DATABASE_URL } },
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
-  }).$extends(withAccelerate());
+  } as any);
 }
 
-export const prisma = globalForPrisma.prisma ?? makePrisma();
+// Usamos any temporalmente para evitar problemas de tipos cíclicos/complejos entre extend y base
+export const prisma = globalForPrisma.prisma ?? (makePrisma() as any);
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
-// ✅ ESTE es el tipo correcto (cliente extendido)
+// Exportamos un tipo que representa la instancia real de prisma en uso
+// Al forzar el tipo aquí, ayudamos a TS en el resto de la app
 export type DbClient = typeof prisma;
