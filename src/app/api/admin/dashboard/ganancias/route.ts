@@ -35,7 +35,7 @@ export async function GET() {
       where: { es_cancel: true },
       select: { id: true }
     })
-    const idsCancel = estadosCancelacion.map(e => e.id)
+    const idsCancel = estadosCancelacion.map((e: any) => e.id)
     
     // Filtro final: Ni cancelados, ni pendiente.
     const notIn = [...idsCancel, 'pendiente']
