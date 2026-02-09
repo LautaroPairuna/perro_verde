@@ -3,13 +3,13 @@
 import ProductCard from '../catalogo/ProductCard';
 import Link from 'next/link';
 import type { ViewedProduct } from './HomeClientComponents';
-import { motion } from 'framer-motion';
+import { motion, Variants } from 'framer-motion';
 
 interface Props {
   products: ViewedProduct[];
 }
 
-const container = {
+const container: Variants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
@@ -20,7 +20,7 @@ const container = {
   }
 };
 
-const item = {
+const item: Variants = {
   hidden: { opacity: 0, y: 30 },
   show: { 
     opacity: 1, 

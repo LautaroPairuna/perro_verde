@@ -10,7 +10,7 @@
     "build": "prisma generate && next build",
     "prestart": "node scripts/db-check.mjs",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --max-warnings 0 --ignore-pattern .next --ignore-pattern out --ignore-pattern build --ignore-pattern dist",
     "postinstall": "prisma generate"
   },
   "dependencies": {
