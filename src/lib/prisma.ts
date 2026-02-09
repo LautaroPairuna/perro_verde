@@ -13,14 +13,14 @@ function makePrisma() {
   // Si existe accelerateUrl, usamos la extensión
   if (accelerateUrl) {
     return new PrismaClient({
-      datasources: { db: { url: accelerateUrl } },
+      datasourceUrl: accelerateUrl,
       log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
     } as any).$extends(withAccelerate()) as unknown as PrismaClient;
   }
 
   // Fallback: Cliente estándar sin aceleración (para build o si no hay URL)
   return new PrismaClient({
-    datasources: { db: { url: process.env.DATABASE_URL } },
+    datasourceUrl: process.env.DATABASE_URL,
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   } as any);
 }
