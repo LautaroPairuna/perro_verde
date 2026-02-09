@@ -25,7 +25,7 @@ export default async function AuditPage() {
       </div>
 
       <div className="relative border-l-2 border-indigo-100 ml-4 space-y-8 py-2 pb-12">
-        {logs.map((log) => (
+        {logs.map((log: any) => (
           <AuditTimelineItem key={log.id} log={log} />
         ))}
         
