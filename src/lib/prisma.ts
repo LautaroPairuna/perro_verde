@@ -1,17 +1,15 @@
 import "server-only";
 import { PrismaClient } from "../../generated/prisma/client";
-import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 
-const raw = process.env.DATABASE_URL!;
-const url = new URL(raw);
+declare global {
+  // eslint-disable-next-line no-var
+  var __prisma: PrismaClient | undefined;
+}
 
-const adapter = new PrismaMariaDb({
-  host: url.hostname,
-  port: Number(url.port || 3306),
-  user: decodeURIComponent(url.username),
-  password: decodeURIComponent(url.password),
-  database: url.pathname.replace(/^\//, ""),
-  connectionLimit: Number(process.env.DB_CONNECTION_LIMIT || 5),
-});
+export const prisma =
+  global.__prisma ??
+  new PrismaClient({
+    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
+  });
 
-export const prisma = new PrismaClient({ adapter });
+if (process.env.NODE_ENV !== "production") global.__prisma = prisma;
