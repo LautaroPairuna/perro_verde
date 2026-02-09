@@ -38,7 +38,7 @@ export async function GET() {
       select: { rubro: true },
       orderBy: { rubro: 'asc' },
     })
-    rubrosEntries = rubros.map(r => ({
+    rubrosEntries = rubros.map((r: any) => ({
       loc: `/catalogo/${slugify(r.rubro)}`,
       changefreq: 'weekly',
       priority: '0.7',
@@ -56,7 +56,7 @@ export async function GET() {
       orderBy: { id: 'desc' },    // orden estable; quita si no te importa
       // take: 50000 // si tenés muchísimos, luego pasamos a sitemap index
     })
-    productEntries = products.map(p => ({
+    productEntries = products.map((p: any) => ({
       loc: `/detalle/${slugify(p.producto)}`, // confirmá que esta es tu ruta real
       changefreq: 'weekly',
       priority: '0.7',
