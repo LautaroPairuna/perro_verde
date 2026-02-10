@@ -55,19 +55,7 @@ function dumpError(err) {
 }
 
 function loadPrismaClientCtor() {
-  // 1) Intentar client generado con output custom (tu caso típico)
-  //    Ajustá esta ruta si tu generator output difiere.
-  const generatedPath = path.resolve(__dirname, "../generated/prisma/client");
-  try {
-    // eslint-disable-next-line import/no-dynamic-require, global-require
-    const mod = require(generatedPath);
-    if (mod?.PrismaClient) return mod.PrismaClient;
-  } catch {
-    // ignore: probamos fallback
-  }
-
-  // 2) Fallback al default client (@prisma/client) si existe
-  //    (Esto requiere que se haya corrido `prisma generate` con output default)
+  // 1) Usar siempre el default client (@prisma/client)
   // eslint-disable-next-line global-require
   const mod = require("@prisma/client");
   if (!mod?.PrismaClient) {

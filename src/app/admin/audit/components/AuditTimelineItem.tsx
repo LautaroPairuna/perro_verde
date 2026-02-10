@@ -5,7 +5,7 @@ import {
   HiPlus, HiPencil, HiTrash, HiChevronDown, HiChevronUp, 
   HiDesktopComputer, HiShoppingCart, HiTag, HiCog, HiShieldCheck, HiUser 
 } from 'react-icons/hi'
-import type { AuditLog } from '../../../../../generated/prisma/client'
+import type { AuditLog } from '@prisma/client'
 
 // Mapeo de acciones a colores e iconos
 const ACTION_CONFIG: Record<string, { color: string; icon: any; label: string }> = {
