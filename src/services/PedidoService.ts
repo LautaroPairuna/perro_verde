@@ -1,6 +1,6 @@
 // src/services/PedidoService.ts
 import { prisma } from "../lib/prisma";
-import type { Prisma } from "../../generated/prisma/client";
+import type { Prisma } from "@prisma/client";
 import { logAudit } from "../lib/audit";
 
 import type { DbClient } from "@/lib/prisma";

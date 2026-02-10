@@ -8,7 +8,7 @@ import { PhotoSwipeInitializer } from '@/components/unProducto/PhotoSwipeInitial
 import ImageWithFallback from '@/components/ImageWithFallback'
 import type { ProductDetail } from '@/utils/fetchData'
 import type { Metadata } from 'next'
-import { ProductoVersiones } from '../../../../../generated/prisma/client'
+import { ProductoVersiones } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 

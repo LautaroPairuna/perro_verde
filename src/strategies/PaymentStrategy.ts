@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from '../../generated/prisma/client'
+import type { Prisma, PrismaClient } from '@prisma/client'
 import type { CreatePedidoDTO, PaymentResponse } from '@/types/payment'
 import type { DbClient as AppDbClient } from '@/lib/prisma'
 
