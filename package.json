@@ -14,7 +14,6 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.1.1",
-    "@prisma/adapter-mariadb": "^7.3.0",
     "@prisma/client": "^6.19.2",
     "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-slot": "^1.2.3",
@@ -32,7 +31,6 @@
     "http-proxy-middleware": "^3.0.5",
     "lodash-es": "^4.17.21",
     "lucide-react": "^0.525.0",
-    "mariadb": "^3.4.5",
     "mercadopago": "^2.4.0",
     "mime-types": "^3.0.1",
     "mysql2": "^3.14.0",

@@ -1,21 +1,6 @@
 
 import 'dotenv/config'
-import { PrismaClient } from '../generated/prisma/client'
-import { PrismaMariaDb } from '@prisma/adapter-mariadb'
-
-const connectionString = process.env.DATABASE_URL!
-const url = new URL(connectionString)
-
-const adapter = new PrismaMariaDb({
-  host: url.hostname,
-  user: url.username,
-  password: url.password,
-  database: url.pathname.slice(1),
-  port: Number(url.port) || 3306,
-  connectionLimit: 1,
-})
-
-const prisma = new PrismaClient({ adapter })
+import { prisma } from '../src/lib/prisma-client'
 
 async function main() {
   const estados = [

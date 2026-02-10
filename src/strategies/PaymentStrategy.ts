@@ -4,6 +4,7 @@ import type { DbClient as AppDbClient } from '@/lib/prisma'
 
 export type DbClient = AppDbClient | Prisma.TransactionClient | PrismaClient
 
+
 export type PaymentResult = {
   status: string
   responseToClient: PaymentResponse
