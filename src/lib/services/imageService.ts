@@ -4,7 +4,7 @@ import sharp from 'sharp'
 import slugify from 'slugify'
 import { folderNames } from '@/lib/adminConstants'
 
-const BASE_DIR = path.join(process.cwd(), 'public', 'images')
+const BASE_DIR = path.join(process.cwd(), 'public', 'uploads')
 export const MAX_IMAGE_SIZE_MB = 50 // 50MB límite
 
 /**

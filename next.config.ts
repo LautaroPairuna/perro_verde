@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
         protocol: 'http',
         hostname: 'localhost',
         port:     '3000',
-        pathname: '/images/**',
+        pathname: '/uploads/**',
       },
     ],
   },
@@ -21,7 +21,7 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        source: '/images/:path*',
+        source: '/uploads/:path*',
         destination: '/api/disk-images/:path*',
       },
     ]

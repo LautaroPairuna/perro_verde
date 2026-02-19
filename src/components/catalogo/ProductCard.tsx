@@ -32,7 +32,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
   const DEFAULT_IMG = "placeholder.jpg";
   const initialFile = product.foto && product.foto.trim() ? product.foto : DEFAULT_IMG;
-  const initialSrc = `/images/productos/${initialFile}`;
+  // Si es placeholder, usar /images; si es real, /uploads
+  const isPlaceholder = initialFile === DEFAULT_IMG;
+  const initialSrc = isPlaceholder 
+    ? `/images/productos/${initialFile}` 
+    : `/uploads/productos/${initialFile}`;
+
   const [imgSrc, setImgSrc] = useState(initialSrc);
 
   const displayPrice =
@@ -48,7 +53,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       id: product.id.toString(),
       name: product.producto,
       price: product.precio ?? 0,
-      thumbnail: `/images/productos/thumbs/${initialFile}`,
+      thumbnail: isPlaceholder ? `/images/productos/thumbs/${initialFile}` : `/uploads/productos/thumbs/${initialFile}`,
       quantity: 1,
     });
     toast.success(`Añadido "${product.producto}" al carrito`);
@@ -56,14 +61,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
   return (
     <article className="group relative flex flex-col bg-white rounded-2xl shadow-md transition-transform duration-300 hover:-translate-y-1 hover:shadow-2xl">
-      <div className="relative aspect-[4/5] overflow-hidden rounded-t-2xl bg-green-50">
-        <Link href={productUrl} className="block">
+      <div className="relative aspect-[4/5] overflow-hidden rounded-t-2xl bg-gray-100">
+        <Link href={productUrl} className="block w-full h-full">
           <Image
             src={imgSrc}
             alt={product.producto || "Imagen no disponible"}
             fill
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             unoptimized
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            className="object-contain p-4 transition-transform duration-500 group-hover:scale-105 mix-blend-multiply"
             onError={() => setImgSrc(`/images/productos/${DEFAULT_IMG}`)}
           />
         </Link>

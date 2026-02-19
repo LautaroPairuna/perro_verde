@@ -106,25 +106,26 @@ export default async function ProductDetailPage({
   const canonical = `${slugify(product.producto)}-${product.id}`
   if (slug !== canonical) redirect(`/catalogo/detalle/${canonical}`)
 
+  const FALLBACK = '/images/productos/placeholder.jpg'
+  const prodImg = (foto?: string | null) => foto ? `/uploads/productos/${foto}` : FALLBACK
+
   // Images para galería
   const images = [
     {
-      src: `/images/productos/${product.foto}`,
-      thumb: `/images/productos/${product.foto}`,
+      src: prodImg(product.foto),
+      thumb: product.foto ? `/uploads/productos/thumbs/${product.foto}` : FALLBACK,
       alt: product.producto,
       width: 1200,
-      height: 1200,
+      height: 800,
     },
     ...product.fotos.map(f => ({
-      src: `/images/producto-fotos/${f.foto}`,
-      thumb: `/images/producto-fotos/${f.foto}`,
+      src: `/uploads/producto-fotos/${f.foto}`,
+      thumb: `/uploads/producto-fotos/${f.foto}`,
       alt: product.producto,
       width: 1200,
       height: 800,
     })),
   ]
-
-  const FALLBACK = '/images/productos/placeholder.jpg'
 
   // JSON-LD Product (sin offers)
   const productLd = {

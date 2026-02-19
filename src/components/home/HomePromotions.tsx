@@ -7,6 +7,6 @@ export default async function HomePromotions() {
     orderBy: { orden: 'asc' },
     select: { foto: true },
   })
-  const images = slidersData.map(s => `/images/slider/${s.foto}`)
+  const images = slidersData.map(s => `/uploads/slider/${s.foto}`)
   return <PromotionsSlider images={images} id="promociones-slider" />
 }

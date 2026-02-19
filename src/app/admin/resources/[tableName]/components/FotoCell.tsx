@@ -26,8 +26,8 @@ export function FotoCell({
   fileName: string
 }) {
   const key      = (folderNames as Record<string, string>)[childRelation?.childTable ?? tableName]
-  const thumbSrc = `/images/${key}/thumbs/${fileName}`
-  const fullSrc  = `/images/${key}/${fileName}`
+  const thumbSrc = `/uploads/${key}/thumbs/${fileName}`
+  const fullSrc  = `/uploads/${key}/${fileName}`
 
   const [src, setSrc]       = React.useState<string>(thumbSrc)
   const [isPlaceholder, setIsPlaceholder] = React.useState(false)

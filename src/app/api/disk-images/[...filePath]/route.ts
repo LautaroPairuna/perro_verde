@@ -36,7 +36,7 @@ const IMAGE_FIELD_BY_TABLE: Partial<Record<TableName, string>> = {
 }
 
 const ALLOWED_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif', '.svg'])
-const BASE_DIR = path.join(process.cwd(), 'public', 'images')
+const BASE_DIR = path.join(process.cwd(), 'public', 'uploads')
 
 // ───────────────── Micro-cache (evita Prisma en cada hit) ─────────────────
 type CacheVal = { ok: boolean; ts: number }

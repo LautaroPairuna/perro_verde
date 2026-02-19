@@ -43,7 +43,7 @@ export default function BrandMarquee({ brands }: Props) {
                 <Link href={`/catalogo/marca-${slugify(brand.marca)}/pagina-1`}>
                   <div className="relative aspect-square w-full transition-transform duration-300 hover:scale-110">
                     <Image
-                      src={`/images/marcas/thumbs/${brand.foto || 'placeholder.jpg'}`}
+                      src={`/uploads/marcas/thumbs/${brand.foto || 'placeholder.jpg'}`}
                       alt={`Logo de ${brand.marca}`}
                       loading="lazy"
                       fill

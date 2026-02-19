@@ -48,7 +48,7 @@ export default function RubrosGrid({ rubros }: RubrosGridProps) {
             {fila.map(({ id, rubro, foto }) => {
               const imgSrc =
                 foto && !/^https?:/.test(foto)
-                  ? `/images/rubros/${foto}`
+                  ? `/uploads/rubros/${foto}`
                   : foto || '/images/placeholder.png';
               const href = `/catalogo/categoria-${slugify(rubro)}/pagina-1`;
 
