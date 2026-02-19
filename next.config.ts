@@ -5,7 +5,6 @@ import dotenv from 'dotenv'
 dotenv.config()
 
 const nextConfig: NextConfig = {
-  output: 'standalone',
   reactStrictMode: true,
 
   images: {
