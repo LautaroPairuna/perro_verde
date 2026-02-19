@@ -126,6 +126,13 @@ export async function PUT(
     const schema = schemaByResource[tableName]
     const validated = schema ? schema.partial().parse(data) : data
 
+    // Sanitizar campos que no deben actualizarse
+    const v = validated as Record<string, any>
+    delete v.id
+    delete v._count
+    delete v.createdAt
+    delete v.updatedAt
+
     // Loggear cambios de campos
     if (existing && tableName !== 'AuditLog') {
       for (const [field, newVal] of Object.entries(validated)) {
