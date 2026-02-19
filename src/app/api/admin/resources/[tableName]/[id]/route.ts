@@ -88,7 +88,16 @@ export async function PUT(
         if (k === FILE_FIELD && isFileLike(v)) {
           file = v as File
         } else if (typeof v === 'string') {
-          data[k] = /^\d+$/.test(v) ? Number(v) : v
+          // Intentar parsear JSON (para objetos complejos que vienen stringified)
+          if ((v.startsWith('{') && v.endsWith('}')) || (v.startsWith('[') && v.endsWith(']'))) {
+             try {
+               data[k] = JSON.parse(v)
+             } catch {
+               data[k] = v // fallback
+             }
+          } else {
+             data[k] = /^\d+$/.test(v) ? Number(v) : v
+          }
         }
       }
       normalizeBooleans(data)
@@ -132,6 +141,16 @@ export async function PUT(
     delete v._count
     delete v.createdAt
     delete v.updatedAt
+
+    // Sanitizar campos relacionales que Prisma no debe recibir directamente
+    // (marca, rubro, moneda, fotos, versiones, especificaciones, etc.)
+    for (const key in v) {
+      if (typeof v[key] === 'object' && v[key] !== null && !Array.isArray(v[key])) {
+        // Si parece un objeto relacional (no array), lo eliminamos
+        // porque Prisma update espera IDs (marca_id) no objetos (marca)
+        delete v[key]
+      }
+    }
 
     // Loggear cambios de campos
     if (existing && tableName !== 'AuditLog') {
