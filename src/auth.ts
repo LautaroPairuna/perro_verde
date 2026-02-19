@@ -8,6 +8,7 @@ const ADMIN_EMAIL = "admin@perroverde.com";
 const ADMIN_PASSWORD_HASH = "$2b$10$azuGYbIH.l1RzY995XjezubvA1X.B3Fy3NzEYqptgguO1Bs5f7yZG";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true,
   providers: [
     Credentials({
       name: "Administrador",
