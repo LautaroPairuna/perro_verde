@@ -1,14 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
-import fs                            from 'fs/promises'
-import path                          from 'path'
-import slugify                       from 'slugify'
-import sharp                         from 'sharp'
-import { folderNames }               from '@/lib/adminConstants'
 import { schemaByResource }          from '@/app/admin/resources/[tableName]/schemas'
-import {prisma}                        from '@/lib/prisma'
+import { prisma }                    from '@/lib/prisma'
 import { logAudit }                  from '@/lib/audit'
 import { auth }                      from '@/auth'
+import { ImageService }              from '@/lib/services/imageService'
 
 export const runtime = 'nodejs'
 
@@ -45,50 +41,6 @@ function normalizeBooleans(obj: Record<string, unknown>) {
   }
 }
 
-function makeTimestamp() {
-  const d = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return (
-    d.getFullYear().toString() +
-    pad(d.getMonth() + 1) +
-    pad(d.getDate()) +
-    '-' +
-    pad(d.getHours()) +
-    pad(d.getMinutes()) +
-    pad(d.getSeconds())
-  )
-}
-
-async function saveFotoIfAny(tableName: string, file: File | null, data: Record<string, any>, existingFileName?: string | null) {
-  if (!file) return
-  const baseDir = path.join(process.cwd(), 'public', 'images')
-  const keyDir  = (folderNames as Record<string, string>)[tableName] || tableName.toLowerCase()
-  const dir     = path.join(baseDir, keyDir)
-  const thumbs  = path.join(dir, 'thumbs')
-
-  await fs.mkdir(dir,    { recursive: true })
-  await fs.mkdir(thumbs, { recursive: true })
-
-  // eliminar viejo si existe
-  if (existingFileName) {
-    await fs.rm(path.join(dir,    existingFileName), { force: true }).catch(() => {})
-    await fs.rm(path.join(thumbs, existingFileName), { force: true }).catch(() => {})
-  }
-
-  const hint = data.titulo ?? data.producto ?? tableName
-  const slug = slugify(String(hint), { lower: true, strict: true })
-  const name = `${slug}-${makeTimestamp()}.webp`
-  const buf  = Buffer.from(await file.arrayBuffer())
-
-  await sharp(buf).webp().toFile(path.join(dir, name))
-  await sharp(buf).resize(200).webp().toFile(path.join(thumbs, name))
-  
-  data.foto = name
-  // Si es CfgSlider, actualizamos también el campo thumbs con el mismo nombre
-  if (tableName === 'CfgSlider') {
-    data.thumbs = name
-  }
-}
 
 export async function GET(
   _req: NextRequest,
@@ -154,7 +106,14 @@ export async function PUT(
         })
       }
       
-      await saveFotoIfAny(tableName, file, data, existing?.[FILE_FIELD] ?? null)
+      if (file) {
+        const hint = data.titulo ?? data.producto ?? tableName
+        const savedName = await ImageService.save(file, tableName, String(hint), existing?.[FILE_FIELD])
+        data.foto = savedName
+        if (tableName === 'CfgSlider') {
+          data.thumbs = savedName
+        }
+      }
     } else {
       data = await req.json()
       for (const k in data) {
@@ -212,12 +171,7 @@ export async function DELETE(
 
   // borrar archivos si hay
   if (existing?.[FILE_FIELD]) {
-    const baseDir = path.join(process.cwd(), 'public', 'images')
-    const keyDir  = (folderNames as Record<string, string>)[tableName] || tableName.toLowerCase()
-    const dir     = path.join(baseDir, keyDir)
-    const thumbs  = path.join(dir, 'thumbs')
-    await fs.rm(path.join(dir,    existing[FILE_FIELD]), { force: true }).catch(() => {})
-    await fs.rm(path.join(thumbs, existing[FILE_FIELD]), { force: true }).catch(() => {})
+    await ImageService.delete(existing[FILE_FIELD], tableName)
   }
 
   try {

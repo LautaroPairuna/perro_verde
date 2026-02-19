@@ -54,7 +54,7 @@ export default function AuthPage() {
       >
         <div className="px-8 py-6">
           <h2 className="text-3xl font-bold text-indigo-800 mb-6 text-center">
-            Panel Admin
+            Panel Administrativo
           </h2>
 
           {error && (

@@ -543,8 +543,7 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
       if (LONG_TEXT_COLS.has(colLower)) {
         return (
           <span
-            className="block whitespace-normal break-words text-gray-800"
-            style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+            className="block text-gray-800 line-clamp-3 min-w-[200px]"
             title={s}
           >
             {s}
@@ -553,7 +552,7 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
       }
 
       return (
-        <span className="block whitespace-normal break-words truncate" title={s}>
+        <span className="block truncate min-w-[120px]" title={s}>
           {s}
         </span>
       )
@@ -616,21 +615,30 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
 
   /* ╭────────────────────────── RENDER ────────────────────────╮ */
   return (
-    <div className="space-y-6">
-      {/* HEADER */}
-      <header className="flex items-center justify-between">
-        <div className="flex flex-col">
-          <span className="text-[18px] uppercase tracking-wide text-indigo-600/80">
-            {eyebrow}
-          </span>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
-            {friendlyTitle}
-          </h1>
+    <div className="space-y-8">
+      {/* HEADER REDISEÑADO */}
+      <div className="flex flex-col space-y-2 md:flex-row md:items-center md:justify-between md:space-y-0 pb-4 border-b border-gray-200/60">
+        <div>
+           <div className="flex items-center space-x-2 text-xs font-semibold text-indigo-600 uppercase tracking-widest">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+              <span>{eyebrow}</span>
+           </div>
+           <h1 className="mt-1 text-3xl font-black text-gray-900 tracking-tight sm:text-4xl bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-700">
+              {friendlyTitle}
+           </h1>
         </div>
+        
+        {/* Indicador de estado discreto */}
         {(loadingParent || validating) && (
-          <span className="text-indigo-600 text-sm animate-pulse">cargando…</span>
+           <div className="flex items-center px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs font-semibold shadow-sm ring-1 ring-indigo-100">
+              <svg className="animate-spin -ml-1 mr-2 h-3 w-3 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Sincronizando...
+           </div>
         )}
-      </header>
+      </div>
 
       {/* BREADCRUMB cuando hay hijo */}
       {child && (
@@ -646,7 +654,7 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
 
       {/* ╭──────────────────── CARD PRINCIPAL ───────────────────╮ */}
       <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl ring-1 ring-indigo-200 p-4 md:p-6 space-y-4">
-        <ToastContainer position="top-right" autoClose={3000} />
+        <ToastContainer position="top-right" autoClose={3000} style={{ zIndex: 99999 }} />
 
         {/* Toolbar + Filtros (server-side) */}
         <Toolbar
@@ -717,7 +725,7 @@ export default function ResourceDetailClient({ tableName }: { tableName: string 
                         onClick={() => toggleSort(col)}
                         aria-sort={sortBy === col ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
                         scope="col"
-                        className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider cursor-pointer select-none"
+                        className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider cursor-pointer select-none whitespace-nowrap"
                       >
                         {col}
                         {sortBy === col &&

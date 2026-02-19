@@ -1,14 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
-import fs                            from 'fs/promises'
-import path                          from 'path'
-import slugify                       from 'slugify'
-import sharp                         from 'sharp'
-import { folderNames }               from '@/lib/adminConstants'
 import { schemaByResource }          from '@/app/admin/resources/[tableName]/schemas'
 import {prisma}                       from '@/lib/prisma'
 import { auth }                      from '@/auth'
 import { logAudit }                  from '@/lib/audit'
+import { ImageService }              from '@/lib/services/imageService'
 
 const models: Record<string, any> = {
   CfgMarcas:                 prisma.cfgMarcas,
@@ -45,19 +41,7 @@ function normalizeBooleans(obj: Record<string, unknown>) {
   }
 }
 
-function makeTimestamp() {
-  const d = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return (
-    d.getFullYear().toString() +
-    pad(d.getMonth() + 1) +
-    pad(d.getDate()) +
-    '-' +
-    pad(d.getHours()) +
-    pad(d.getMinutes()) +
-    pad(d.getSeconds())
-  )
-}
+
 
 /* ───────────────────────── GET (server-side table) ───────────────────────── */
 export async function GET(
@@ -208,28 +192,12 @@ export async function POST(req: NextRequest,
     normalizeBooleans(data)
 
     if (file) {
-      const baseDir = path.join(process.cwd(), 'public', 'images')
-      const key     = folderNames[tableName] || tableName.toLowerCase()
-      const dir     = path.join(baseDir, key)
-      const thumbs  = path.join(dir, 'thumbs')
-
-      await fs.mkdir(dir,    { recursive: true })
-      await fs.mkdir(thumbs, { recursive: true })
-
       const hint = data.titulo ?? data.producto ?? tableName
-      const slug = slugify(String(hint), { lower: true, strict: true })
-      const name = `${slug}-${makeTimestamp()}.webp`
-      const buf  = Buffer.from(await file.arrayBuffer())
+      const fileName = await ImageService.save(file, tableName, String(hint))
 
-      const fullPath  = path.join(dir, name)
-      await sharp(buf).webp().toFile(fullPath)
-
-      const thumbPath = path.join(thumbs, name)
-      await sharp(buf).resize(200).webp().toFile(thumbPath)
-
-      data.foto = name
+      data.foto = fileName
       if (tableName === 'CfgSlider') {
-        data.thumbs = name
+        data.thumbs = fileName
       }
     }
   } else {

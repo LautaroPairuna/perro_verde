@@ -56,7 +56,8 @@ export function SmartForm({ initial, columns, fixedFk, onSubmit, resource, isSav
 
   const onInvalid = (errors: any) => {
     console.error('Errores de validación:', errors)
-    toast.error('Por favor revisa los campos marcados en rojo')
+    const campos = Object.keys(errors).join(', ')
+    toast.error(`Revisa los campos marcados en rojo: ${campos}`)
   }
 
   return (

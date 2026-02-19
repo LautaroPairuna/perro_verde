@@ -24,7 +24,7 @@ export const CfgMarcasSchema = z.object({
   keywords: z.string().optional().nullable(),
   foto: zFoto,
   activo: zBool.default(true),
-}).strict()
+}).passthrough()
 
 export const CfgRubrosSchema = z.object({
   id: zInt.optional(),
@@ -33,7 +33,7 @@ export const CfgRubrosSchema = z.object({
   keywords: z.string().optional().nullable(),
   foto: zFoto,
   activo: zBool.default(true),
-}).strict()
+}).passthrough()
 
 export const CfgFormasPagosSchema = z.object({
   id: zInt.optional(),
@@ -41,14 +41,14 @@ export const CfgFormasPagosSchema = z.object({
   descripcion: z.string().optional().nullable(),
   permite_cuotas: zBool.default(false),
   activo: zBool.default(true),
-}).strict()
+}).passthrough()
 
 export const CfgMonedasSchema = z.object({
   id: zInt.optional(),
   moneda: z.string().min(1),
   moneda_des: z.string().min(1),
   activo: zBool.default(true),
-}).strict()
+}).passthrough()
 
 export const CfgSliderSchema = z.object({
   id: zInt.optional(),
@@ -57,7 +57,7 @@ export const CfgSliderSchema = z.object({
   foto: zFoto,
   orden: zInt.optional(),
   activo: zBool.default(true),
-}).strict()
+}).passthrough()
 
 /** Productos + hijas */
 export const ProductosSchema = z.object({
@@ -73,7 +73,7 @@ export const ProductosSchema = z.object({
   destacado: zBool.default(false),
   activo: zBool.default(true),
   visitas: zInt.optional(),
-}).strict()
+}).passthrough()
 
 export const ProductoFotosSchema = z.object({
   id: zInt.optional(),
@@ -82,7 +82,7 @@ export const ProductoFotosSchema = z.object({
   foto: zFoto, // ahora opcional/file
   orden: zInt.optional(),
   activo: zBool.default(true),
-}).strict()
+}).passthrough()
 
 export const ProductoVersionesSchema = z.object({
   id: zInt.optional(),
@@ -91,7 +91,7 @@ export const ProductoVersionesSchema = z.object({
   detalle: z.string().optional().nullable(),
   orden: zInt.optional(),
   activo: zBool.default(true),
-}).strict()
+}).passthrough()
 
 export const ProductoEspecificacionesSchema = z.object({
   id: zInt.optional(),
@@ -100,7 +100,7 @@ export const ProductoEspecificacionesSchema = z.object({
   especificaciones: z.string().optional().nullable(),
   orden: zInt.optional(),
   activo: zBool.default(true),
-}).strict()
+}).passthrough()
 
 export const AuditLogSchema = z.object({
   id: zInt.optional(),
@@ -113,7 +113,7 @@ export const AuditLogSchema = z.object({
   user: z.string().optional().nullable(),
   ip: z.string().optional().nullable(),
   createdAt: z.date().optional(), // Prisma devuelve Date
-}).strict()
+}).passthrough()
 
 /** Mapa de schemas por recurso (OJO: AnyZodObject para habilitar omit/partial) */
 export const schemaByResource: Record<string, z.AnyZodObject> = {
