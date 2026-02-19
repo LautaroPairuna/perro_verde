@@ -185,7 +185,16 @@ export async function POST(req: NextRequest,
       if (k === FILE_FIELD && isFileLike(v)) {
         file = v
       } else if (typeof v === 'string') {
-        data[k] = /^\d+$/.test(v) ? Number(v) : v
+        // Intentar parsear JSON (para objetos complejos que vienen stringified)
+        if ((v.startsWith('{') && v.endsWith('}')) || (v.startsWith('[') && v.endsWith(']'))) {
+            try {
+              data[k] = JSON.parse(v)
+            } catch {
+              data[k] = v // fallback
+            }
+        } else {
+            data[k] = /^\d+$/.test(v) ? Number(v) : v
+        }
       }
     }
     delete data.id
@@ -212,6 +221,15 @@ export async function POST(req: NextRequest,
   try {
     const schema = schemaByResource[tableName]
     const validated = schema ? schema.parse(data) : data
+
+    // Sanitizar campos relacionales que Prisma no debe recibir directamente
+    const v = validated as Record<string, any>
+    for (const key in v) {
+      if (typeof v[key] === 'object' && v[key] !== null && !Array.isArray(v[key])) {
+        // Si parece un objeto relacional (no array), lo eliminamos
+        delete v[key]
+      }
+    }
 
     const created = await model.create({ data: validated })
 
